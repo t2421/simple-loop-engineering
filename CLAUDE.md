@@ -14,6 +14,7 @@
 | `progress/archive/` | 完了した進捗 |
 | `src/` | 実装（これから置く） |
 | `tests/` | テスト（これから置く） |
+| `.github/workflows/` | CI。`npm run ci` を実行する |
 
 仕様と進捗は同名で対にする。例: `specs/math-add.md` と `progress/math-add.md`。
 
@@ -31,12 +32,24 @@
 
 1. **Plan** — `progress/` から次の 1 作業を選ぶ。何をするか 1〜3 行で宣言する
 2. **Implement** — 完了条件を満たす最小差分だけ実装する
-3. **Verify (自己)** — 対象仕様の完了条件に対して検証する。テスト等のコマンドを実行し、出力を会話に貼る
+3. **Verify (自己)** — [共通の検証](#共通の検証)（CI と同じコマンド）を実行する。続けて対象仕様の完了条件に対して検証する。出力を会話に貼る
 4. **Verify (外部)** — 進捗に書いたレビューサブエージェントへ依頼する
 5. **Fix** — Critical 指摘がゼロになるまで 3〜4 を繰り返す
 6. **Record** — 進捗の Status・チェック・試行ログを更新する。完了したら [アーカイブ](#アーカイブ) する
 
 Critical が残っている状態で「完了」と報告しない。Status を Done にしない。アーカイブもしない。
+
+## 共通の検証
+
+定義は `package.json` の `scripts`。CI（`.github/workflows/ci.yml`）はそれを実行するだけ。progress には書かない。
+
+コードを編集したら、マージ前に CI と同じコマンドをローカルで実行する。失敗したまま次の工程に進まない。出力は会話に貼る。
+
+```
+npm run ci
+```
+
+型チェッカーや Linter を導入したら、`package.json` の `scripts` に足して `ci` から呼ぶ。progress には戻さない。
 
 ## 仕様
 
@@ -50,6 +63,8 @@ Critical が残っている状態で「完了」と報告しない。Status を 
 - `progress/TEMPLATE.md` をコピーして埋める
 - Target Spec / Branch / Status は欠かさない
 - チェック: `[ ]` 未着手、`[/]` 進行中、`[x]` 完了
+- チェックリストは作業固有の項目だけ書く（仕様確認、テスト作成、実装、レビュー、PR）
+- 構文チェック・テスト実行など全作業共通の検証は progress に書かない。`npm run ci` が強制する
 - 試行ログは追記する。失敗と解消も残す。消して体裁を整えない
 
 ## アーカイブ
@@ -81,6 +96,8 @@ Critical が残っている状態で「完了」と報告しない。Status を 
 - `specs/` の完了条件と例の期待値
 - `specs/TEMPLATE.md` と `progress/TEMPLATE.md`
 - `tests/` 配下のテストコードと期待値（存在するようになったら）
+- `package.json` の `scripts`（検証コマンド）
+- `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
 
 ## コーディング規約
 

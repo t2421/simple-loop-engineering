@@ -28,8 +28,7 @@ Figma からの JSON・PNG など抽出物は、対応する進捗ファイル�
 
 現在の作業:
 
-- `progress/calc-page.md` — 計算ページの追加。In Progress (Phase: Awaiting Merge)
-- 直近の完了: `progress/archive/math-sub.md` — `sub` の追加。Done
+- 直近の完了: `progress/archive/calc-page.md` — 計算ページの追加。Done
 
 ## 開発ループ
 
@@ -80,7 +79,7 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 
 見た目のテストは `npm run ci` が回す。progress には書かない。描画して計算スタイルを読むランナーを入れるときは、他の検証と同じく `ci` から呼ぶ。
 
-見た目の変更を含む PR には、実装後の該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない。GitHub の PR 添付（`user-attachments`）に上げて本文から参照する。Figma 抽出 PNG の再利用ではなく、ブラウザで描画した画面を使う。仕様に状態があるなら、レビューに必要な状態分を添える。
+見た目の変更を含む PR には、実装後の該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない。GitHub の PR 添付（`user-attachments`）に上げて本文から参照する。手順は `.claude/skills/gh-pr-attach-image` に従う。Figma 抽出 PNG の再利用ではなく、ブラウザで描画した画面を使う。仕様に状態があるなら、レビューに必要な状態分を添える。
 
 ## 進捗
 

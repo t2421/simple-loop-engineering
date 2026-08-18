@@ -28,7 +28,7 @@ Figma からの JSON・PNG など抽出物は、対応する進捗ファイル�
 
 現在の作業:
 
-- `progress/commit-timing-rules.md` — spec / progress のコミット・マージ規約。Not Started（最優先。他作業の進め方が依存）
+- `progress/commit-timing-rules.md` — spec / progress のコミット・マージ規約。In Progress（他作業の進め方が依存する）
 - `progress/guard-protected-paths.md` — 保護パス変更の CI ガード。Not Started
 - `progress/claude-md-slim.md` — CLAUDE.md の整理と方針追記。Not Started
 - `progress/archive-automation.md` — アーカイブ手順の自動化。Not Started

@@ -1,9 +1,9 @@
 # Progress: 計算ページの追加
 
-- **Target Spec:** `specs/calc-page.md`
+- **Target Spec:** `specs/archive/calc-page.md`
 - **Branch:** `feature/calc-page`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/3
-- **Status:** In Progress (Phase: Awaiting Merge)
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -18,7 +18,7 @@
 - [x] レビューサブエージェント (`visual-design-reviewer`) の承認取得(CRITICAL 0、HIGH 2件は修正済み。MEDIUM/LOWの一部は次作業へ)
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [x] 見た目のスクリーンキャプチャを PR 本文に貼る
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 
@@ -67,3 +67,4 @@
 - 05:16 - ルール変更: 見た目の変更を含む PR には、実装後の該当箇所のスクリーンキャプチャを本文に貼る。Figma 抽出 PNG は使わない。calc-page の PR #3 は作成済みのため、キャプチャ貼付は未完了として残す。
 - 05:28 - PR #3 本文に実装後のスクリーンキャプチャを貼る。初期状態と例(左 2、右 3、足し算 → 5)。Figma 抽出 PNG は使わず、ブラウザ描画を `progress/calc-page.browser-default.png` / `progress/calc-page.browser-add.png` に保存して参照。
 - 05:31 - PR への見た目キャプチャはリポジトリに置かず GitHub の PR 添付（`user-attachments`）に切り替えた。`progress/calc-page.browser-*.png` は削除。
+- 09:40 - PR #3 がマージされたことを確認(`gh pr view 3` で `mergedAt`/`state: MERGED`)。`main` を pull(6bd39f3 → 1543735、fast-forward)し `npm run ci` で 43/43 pass を再確認。アーカイブ手順を実行: `specs/calc-page.md` → `specs/archive/calc-page.md`、`progress/calc-page.md` / `.figma.json` / `.png` → `progress/archive/` へ移動。Status を `Done` に、Target Spec を `specs/archive/calc-page.md` に変更。

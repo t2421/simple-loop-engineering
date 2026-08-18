@@ -16,7 +16,7 @@
 - [x] 実装 (`src/calc.html` / `src/calc.css` / `src/calc.mjs`)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得(P1 計4件は修正済み。4・5回目は P0/P1 0件で承認。残る P2 2件は残差として記録)
 - [x] レビューサブエージェント (`visual-design-reviewer`) の承認取得(CRITICAL 0、HIGH 2件は修正済み。MEDIUM/LOWの一部は次作業へ)
-- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に貼る）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [x] 見た目のスクリーンキャプチャを PR 本文に貼る
 - [ ] PRマージ後のアーカイブ
 
@@ -66,3 +66,4 @@
 - 05:13 - ルール変更: PR 作成時点ではアーカイブせず、進捗の **PR** に URL を紐付ける。アーカイブは PR マージ後に行う。calc-page は PR #3 紐付け済み、マージ待ち。
 - 05:16 - ルール変更: 見た目の変更を含む PR には、実装後の該当箇所のスクリーンキャプチャを本文に貼る。Figma 抽出 PNG は使わない。calc-page の PR #3 は作成済みのため、キャプチャ貼付は未完了として残す。
 - 05:28 - PR #3 本文に実装後のスクリーンキャプチャを貼る。初期状態と例(左 2、右 3、足し算 → 5)。Figma 抽出 PNG は使わず、ブラウザ描画を `progress/calc-page.browser-default.png` / `progress/calc-page.browser-add.png` に保存して参照。
+- 05:31 - PR への見た目キャプチャはリポジトリに置かず GitHub の PR 添付（`user-attachments`）に切り替えた。`progress/calc-page.browser-*.png` は削除。

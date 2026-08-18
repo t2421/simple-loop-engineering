@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calculator</title>
+    <link rel="stylesheet" href="./calc.css" />
+  </head>
+  <body>
+    <main class="container">
+      <form class="calculator" id="calculator-form" aria-labelledby="calculator-title">
+        <h1 id="calculator-title" class="calculator-title">Calculator</h1>
+
+        <div class="inputs">
+          <div class="field">
+            <label class="field-label" for="number1">Number 1</label>
+            <input
+              class="field-input"
+              type="number"
+              id="number1"
+              inputmode="decimal"
+              step="any"
+              placeholder="0"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label" for="number2">Number 2</label>
+            <input
+              class="field-input"
+              type="number"
+              id="number2"
+              inputmode="decimal"
+              step="any"
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        <div class="operation-selector">
+          <button
+            type="button"
+            class="operation"
+            id="operation-add"
+            aria-pressed="true"
+            aria-label="足し算"
+            data-op="add"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            class="operation"
+            id="operation-sub"
+            aria-pressed="false"
+            aria-label="引き算"
+            data-op="sub"
+          >
+            −
+          </button>
+        </div>
+
+        <button type="submit" class="calculate-button" id="calculate">Calculate</button>
+
+        <div class="result-area">
+          <p class="result-label">Result:</p>
+          <p class="result-value" id="result" role="status" aria-live="polite" aria-atomic="true">
+            —
+          </p>
+        </div>
+      </form>
+    </main>
+    <script type="module" src="./calc.mjs"></script>
+  </body>
+</html>

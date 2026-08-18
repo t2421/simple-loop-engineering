@@ -1,0 +1,251 @@
+/* トークン: progress/calc-page.figma.json (node 1:2) を正とする */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/inter-400.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/inter-500.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./assets/fonts/inter-600.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/inter-700.ttf') format('truetype');
+}
+
+:root {
+  /* 色 */
+  --color-canvas-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f4f6;
+  --color-border-container: #d9d9d9;
+  --color-border-input: #d1d5db;
+  --color-text-title: #111827;
+  --color-text-label: #6b7280;
+  --color-text-placeholder: #9ca3af;
+  --color-text-result-value: #111827;
+  --color-accent: #2563eb;
+  --color-white: #ffffff;
+
+  /* 枠線 */
+  --border-width-default: 1px;
+
+  /* 角丸 */
+  --radius-container: 8px;
+  --radius-input: 6px;
+  --radius-operation: 8px;
+  --radius-button: 8px;
+
+  /* 余白・ギャップ */
+  --space-container-padding: 40px;
+  --space-calc-gap: 24px;
+  --space-inputs-gap: 16px;
+  --space-field-gap: 8px;
+  --space-input-padding-x: 16px;
+  --space-input-padding-y: 12px;
+  --space-operation-gap: 8px;
+  --space-operation-padding-x: 16px;
+  --space-button-padding-x: 24px;
+  --space-button-padding-y: 14px;
+  --space-result-gap: 8px;
+
+  /* 幅・高さ */
+  --size-container-width: 1152px;
+  --size-calc-width: 480px;
+  --size-operation-height: 44px;
+  --size-input-height: 43px;
+  --size-button-height: 47px;
+
+  /* タイポグラフィ */
+  --font-family: 'Inter', sans-serif;
+  --font-size-title: 24px;
+  --font-weight-title: 600;
+  --font-size-label: 14px;
+  --font-weight-label: 500;
+  --font-size-input: 16px;
+  --font-weight-input: 400;
+  --font-size-operation: 16px;
+  --font-weight-operation: 600;
+  --font-size-button: 16px;
+  --font-weight-button: 600;
+  --font-size-result-value: 24px;
+  --font-weight-result-value: 700;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /* この値はページ内でのカード位置(残差)であり、progress/calc-page.figma.json の
+     トークン表には含めない対象。抽出後の figma.json は書き換えず、この位置合わせは
+     progress/calc-page.png とのピクセル差分テストでのみ検証する。 */
+  padding-top: 91px;
+  display: flex;
+  justify-content: center;
+  background: var(--color-canvas-bg);
+  font-family: var(--font-family);
+}
+
+.container {
+  width: var(--size-container-width);
+  padding: var(--space-container-padding);
+  background: var(--color-surface);
+  border: var(--border-width-default) solid var(--color-border-container);
+  border-radius: var(--radius-container);
+  display: flex;
+  justify-content: center;
+}
+
+.calculator {
+  width: var(--size-calc-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-calc-gap);
+  margin: 0;
+}
+
+.calculator-title {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-title);
+  color: var(--color-text-title);
+}
+
+.inputs {
+  display: flex;
+  gap: var(--space-inputs-gap);
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-field-gap);
+  flex: 1 0 0;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--color-text-label);
+}
+
+.field-input {
+  width: 100%;
+  height: var(--size-input-height);
+  padding: var(--space-input-padding-y) var(--space-input-padding-x);
+  background: var(--color-surface);
+  border: var(--border-width-default) solid var(--color-border-input);
+  border-radius: var(--radius-input);
+  font-family: var(--font-family);
+  font-size: var(--font-size-input);
+  font-weight: var(--font-weight-input);
+  color: var(--color-text-title);
+}
+
+.field-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+/* ネイティブのスピナー(Figma に無い要素)を消す */
+.field-input::-webkit-outer-spin-button,
+.field-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.field-input {
+  appearance: textfield;
+}
+
+.operation-selector {
+  display: flex;
+  gap: var(--space-operation-gap);
+  width: 100%;
+}
+
+.operation {
+  flex: 1 0 0;
+  height: var(--size-operation-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-operation-padding-x);
+  border-radius: var(--radius-operation);
+  border: var(--border-width-default) solid var(--color-border-input);
+  background: var(--color-surface-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-operation);
+  font-weight: var(--font-weight-operation);
+  color: var(--color-text-label);
+  cursor: pointer;
+}
+
+.operation[aria-pressed='true'] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-white);
+}
+
+/* 塗りが --color-accent の要素はブラウザ標準のフォーカスリングと同化して見えなくなるため、
+   白い縁を挟んでどの背景色でも視認できるようにする */
+.operation:focus-visible,
+.calculate-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-white);
+}
+
+.calculate-button {
+  width: 100%;
+  height: var(--size-button-height);
+  padding: var(--space-button-padding-y) var(--space-button-padding-x);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-button);
+  font-family: var(--font-family);
+  font-size: var(--font-size-button);
+  font-weight: var(--font-weight-button);
+  color: var(--color-white);
+  cursor: pointer;
+}
+
+.result-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-result-gap);
+}
+
+.result-label {
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--color-text-label);
+}
+
+.result-value {
+  margin: 0;
+  font-size: var(--font-size-result-value);
+  font-weight: var(--font-weight-result-value);
+  color: var(--color-text-result-value);
+}

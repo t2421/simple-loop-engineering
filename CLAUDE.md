@@ -12,8 +12,8 @@
 | `progress/` | 未完了の作業状態。会話が切れてもここから再開する |
 | `progress/TEMPLATE.md` | 進捗の型。見出し名・順番は変えない |
 | `progress/archive/` | 完了した進捗 |
-| `src/` | 実装（これから置く） |
-| `tests/` | テスト（これから置く） |
+| `src/` | 実装 |
+| `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
 
 仕様と進捗は同名で対にする。例: `specs/math-add.md` と `progress/math-add.md`。
@@ -26,7 +26,7 @@
 
 現在の作業:
 
-- `progress/math-add.md` — `add` の追加。Not Started
+- なし。直近の完了: `progress/archive/math-add.md` — `add` の追加。Done ([PR #1](https://github.com/t2421/simple-loop-engineering/pull/1))
 
 ## 開発ループ
 

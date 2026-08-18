@@ -26,7 +26,7 @@
 
 現在の作業:
 
-- なし。直近の完了: `progress/archive/math-add.md` — `add` の追加。Done ([PR #1](https://github.com/t2421/simple-loop-engineering/pull/1))
+- なし。直近の完了: `progress/archive/math-sub.md` — `sub` の追加。Done
 
 ## 開発ループ
 

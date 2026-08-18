@@ -15,7 +15,7 @@
 - [x] 実装 (`src/calc.html` / `src/calc.css` / `src/calc.mjs`)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得(P1 計4件は修正済み。4・5回目は P0/P1 0件で承認。残る P2 2件は残差として記録)
 - [x] レビューサブエージェント (`visual-design-reviewer`) の承認取得(CRITICAL 0、HIGH 2件は修正済み。MEDIUM/LOWの一部は次作業へ)
-- [ ] PR作成
+- [x] PR作成 (https://github.com/t2421/simple-loop-engineering/pull/3)
 
 ## 試行ログ・エラー履歴
 
@@ -59,3 +59,4 @@
 - 16:38 - 5 回目の `codex review --uncommitted` を実行。border-width の指摘は解消。**P0/P1 は 0 件**。P2 が 1 件(新規):
   - **P2**: `tests/calc-page.test.mjs` の Chromium 自己インストール分岐(`npx playwright install chromium`)が `--with-deps` を付けていないため、共有ライブラリが入っていない素の Linux ホストでは Chromium 起動時のリトライも失敗しうる、という指摘。妥当ではあるが、`--with-deps` は Linux で `apt-get` 相当の特権操作を伴い、sudo が使えない一般的な非rootユーザー環境では逆に新規の権限エラーを生みうる。CI(GitHub Actions ubuntu ランナー)は既に明示ステップで `--with-deps chromium` を実行しており対象外。このフォールバックはローカル開発向けの防御的コードであり、完了条件（構造・トークン・状態・例のテスト）には含まれないため、次点の改善候補として現状維持(fixしない判断)。P2 は `codex-reviewer` の重大度対応表でも Critical/High ではないため、この作業のブロッカーとはしない。
   - `npm run ci` は引き続き 43/43 pass。
+- 09:05 - `git add -A` → コミット → `git push -u origin feature/calc-page` → `gh pr create` で PR #3 (https://github.com/t2421/simple-loop-engineering/pull/3) を作成。アーカイブ(Status を Done にし specs/progress を archive/ へ移動)は PR マージ後に行う想定でここでは行わない。

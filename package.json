@@ -8,5 +8,10 @@
   "scripts": {
     "test": "node --test",
     "ci": "npm test"
+  },
+  "devDependencies": {
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0"
   }
 }

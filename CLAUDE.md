@@ -28,7 +28,7 @@ Figma からの JSON・PNG など抽出物は、対応する進捗ファイル�
 
 現在の作業:
 
-- `progress/commit-timing-rules.md` — spec / progress のコミット・マージ規約。Not Started（最優先。他作業の進め方が依存）
+- `progress/commit-timing-rules.md` — spec / progress のコミット・マージ規約。In Progress（他作業の進め方が依存する）
 - `progress/guard-protected-paths.md` — 保護パス変更の CI ガード。Not Started
 - `progress/claude-md-slim.md` — CLAUDE.md の整理と方針追記。Not Started
 - `progress/archive-automation.md` — アーカイブ手順の自動化。Not Started
@@ -48,6 +48,21 @@ Figma からの JSON・PNG など抽出物は、対応する進捗ファイル�
 7. **Archive** — 紐付けた PR がマージされたら [アーカイブ](#アーカイブ) する
 
 Critical が残っている状態で「完了」と報告しない。Status を Done にしない。アーカイブもしない。PR 未作成・未マージでも同じ。
+
+## コミットとマージ
+
+spec・progress・ルールを、いつコミットし、どこへマージするか。
+
+| 対象 | コミットのタイミング | マージ先・方法 |
+|---|---|---|
+| spec + progress の新規作成（Not Started） | 作成したらすぐ。`docs: add <作業名> spec/progress` | main から切った**計画用ブランチ**から、軽量な docs PR で main へ入れる。実装 PR に混ぜない。レビューサブエージェントは不要。人間がマージする |
+| progress の更新（チェック・試行ログ・PR URL） | 工程を進めるたび | その作業ブランチ。実装と同じ PR に含める |
+| spec の変更 | 着手後は原則変更しない。必要になったら変更内容と理由を試行ログに記録し、人間の承認を経る | — |
+| アーカイブ（Status を Done にし `archive/` へ移動） | 紐付けた実装 PR のマージ直後 | main に直接 `docs: archive <作業名>`。内容が同一の移動と Status 変更だけなので PR は不要 |
+| ルール変更（`CLAUDE.md`・`TEMPLATE.md` など） | 気づいたとき | 独立した docs PR。進行中の作業ブランチに混ぜない |
+
+- 会話中に複数の spec が生まれたときも、進行中の作業ブランチには置かない。**計画用ブランチ**にまとめ、1 本の docs PR にする
+- 進捗の **Branch** は計画した時点では予約した名前でしかない。着手するときに main から切る
 
 ## 共通の検証
 
@@ -112,6 +127,7 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 2. 仕様を `specs/` から `specs/archive/` へ移動する
 3. 進捗を `progress/` から `progress/archive/` へ移動する（抽出物も同じディレクトリへ）
 4. 進捗の **Target Spec** を移動後のパス（`specs/archive/<ファイル>.md`）に直す
+5. `docs: archive <作業名>` として main に直接コミットする（[コミットとマージ](#コミットとマージ)）
 
 `TEMPLATE.md` は移動しない。未完了の作業をアーカイブしない。PR 未作成・未マージの作業をアーカイブしない。
 

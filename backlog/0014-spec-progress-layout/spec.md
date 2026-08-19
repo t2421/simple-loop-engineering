@@ -40,6 +40,8 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 - 作業の ID はゼロ埋め 4 桁の十進連番である（`0001`、`0002`、…）。識別子は番号だけとする
 - 新しい作業には、既存の最大番号の次を振る。欠番や使い終わった番号は再利用しない
 - ルートは `task/`。作業ディレクトリは `task/<id>-<slug>/`（例: `task/0001-calc-page/`）
+- backlog も同じ形にする。`backlog/<id>-<slug>/spec.md`。progress は置かない。ID は `task/` と同じ番号空間
+- 昇格は同じ ID のまま `backlog/<id>-<slug>/` を `task/<id>-<slug>/` へ移し、`progress.md` を足す
 - 作業ディレクトリ直下の文書は `spec.md` と `progress.md`
 - テンプレは `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md`。見出し名・順番は現行テンプレのまま
 - slug は kebab-case のラベルで、一覧から内容が分かるように付ける。識別や突き合わせは ID で行う
@@ -74,11 +76,13 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 |---|---|
 | 作業 ID `0001` を指定する | `task/archive/0001-math-add/spec.md` と `progress.md` がそのディレクトリに揃う |
 | `task/` を一覧する | ディレクトリ名から作業の内容が分かる（例: `0001-math-add`、`0003-calc-page`） |
-| 次の作業を作る | ID は既存の最大の次（アーカイブ移行後なら `0012` の次は `0013`） |
+| `backlog/` を一覧する | ディレクトリ名から候補の内容が分かる（例: `0013-cloudflare-preview`） |
+| 次の作業または backlog を作る | ID は既存の最大の次（いまは `0015` の次は `0016`） |
 | 過程で PNG や JSON が増える | 別作業のファイルを巻き込まない |
-| アーカイブする | 例: `task/0013-archive-pr-ownership/` が `task/archive/0013-archive-pr-ownership/` へ移る |
+| アーカイブする | 例: `task/0016-new-work/` が `task/archive/0016-new-work/` へ移る |
 | 既存アーカイブを移す | 下表の ID で `task/archive/<id>-<slug>/` に spec・progress・関連ファイルが揃い、Target Spec が新しいパスになる |
 | 進行中の作業 | `specs/` と `progress/` に残ったままである |
+| 既存 backlog を移す | `backlog/<id>-<slug>/spec.md` になり、progress は無い |
 
 既存アーカイブの ID（アーカイブが古い順。同コミットはメッセージに出た順）:
 
@@ -96,6 +100,14 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 | `0010` | `claude-md-slim` |
 | `0011` | `scripts-freeze-procedure` |
 | `0012` | `ci-lint` |
+
+既存 backlog の ID（作成が古い順。同コミットは会話で出た順）:
+
+| ID | slug |
+|---|---|
+| `0013` | `cloudflare-preview` |
+| `0014` | `spec-progress-layout` |
+| `0015` | `playwright-setup-readonly-cache` |
 
 ## 完了条件
 

@@ -15,13 +15,13 @@
 | `progress/` | 移行前から残っている未完了進捗 |
 | `progress/TEMPLATE.md` | 旧型。凍結対象として残す |
 | `progress/archive/` | `tests/calc-page.test.mjs` 用のシンボリックリンク（本体は `task/archive/0003-calc-page/`） |
-| `backlog/` | 着手しない候補。spec の型で書くが完了条件は未確定。progress は作らない |
+| `backlog/` | 着手しない候補。`backlog/<id>-<slug>/spec.md`。完了条件は未確定。progress は作らない |
 | `src/` | 実装 |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
-作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。slug は一覧用のラベル。例: `task/archive/0001-math-add/`。次の新規は既存の最大の次（いまは `0013`）。
+作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規は既存の最大の次（いまは `0016`）。
 
 Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
@@ -53,7 +53,9 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 
 | 対象 | コミットのタイミング | マージ先・方法 |
 |---|---|---|
-| spec + progress の新規作成（Not Started） | 作成したらすぐ。`docs: add <作業名> spec/progress` | main から切った**計画用ブランチ**から、軽量な docs PR で main へ入れる。実装 PR に混ぜない。レビューサブエージェントは不要。人間がマージする |
+| spec + progress の新規作成（Not Started） | 作成したらすぐ。`docs: add <id>-<slug> spec/progress` | main から切った**計画用ブランチ**から、軽量な docs PR で main へ入れる。実装 PR に混ぜない。レビューサブエージェントは不要。人間がマージする |
+| backlog の新規・追記 | 残したくなったとき。`docs: add <id>-<slug> backlog` | 同上。実装 PR に混ぜない |
+| 昇格（backlog → task） | 着手すると決めたとき。同じ ID のまま `task/<id>-<slug>/` へ移し、完了条件を埋めて `progress.md` を足す | 同上。移動と完了条件の記入は同じ PR で行う |
 | progress の更新（チェック・試行ログ・PR URL） | 工程を進めるたび | その作業ブランチ。実装と同じ PR に含める |
 | spec の変更 | 着手後は原則変更しない。必要になったら変更内容と理由を試行ログに記録し、人間の承認を経る | — |
 | アーカイブ（Status を Done にし `archive/` へ移動） | 紐付けた実装 PR のマージ直後 | main に直接 `docs: archive <作業名>`。内容が同一の移動と Status 変更だけなので PR は不要 |
@@ -105,9 +107,10 @@ npm run ci
 - **完了条件は必須。** 検証はこの条件に対して行う
 - 機能追加の記入例は `task/archive/0001-math-add/spec.md`
 - UI なら「仕様」に構造・トークン表・状態を書く。見出しは増やさない。Figma の URL は「背景」に出典として書く
-- 着手しない候補は `backlog/` に置く。**仕様ではなく候補である。** 見出し名・順番は `task/TEMPLATE-spec.md` に従う（昇格時にそのまま `task/<id>-<slug>/spec.md` へ入るため）が、完了条件は埋めず「未確定（incomplete）。昇格時に埋める。」の 1 行を節の先頭に足す。**progress は作らない**
+- 着手しない候補は `backlog/<id>-<slug>/spec.md` に置く。**仕様ではなく候補である。** 見出し名・順番は `task/TEMPLATE-spec.md` に従う。完了条件は埋めず「未確定（incomplete）。昇格時に埋める。」の 1 行を節の先頭に足す。**progress は作らない**
 - `backlog/` は未完了の作業ではない。次の作業を選ぶときの対象にしない
-- 着手するときは `task/<id>-<slug>/` を作り完了条件を埋め、`progress.md` を置く。[コミットとマージ](#コミットとマージ) の spec 新規作成と同じく、計画用ブランチの docs PR で main へ入れる
+- 着手するときは同じ ID のまま `backlog/<id>-<slug>/` を `task/<id>-<slug>/` へ移し、完了条件を埋めて `progress.md` を置く。**移動と完了条件の記入は同じ PR で行う**。[コミットとマージ](#コミットとマージ) の昇格と同じく、計画用ブランチの docs PR で main へ入れる
+- 最初から着手する作業は `task/<id>-<slug>/` を新しく作り、完了条件を埋めて `progress.md` を置く
 - `specs/` と `progress/` に残っている対（移行前の未完了）はこの構造では動かさない。完了後のアーカイブは、その時点の `tools/archive.mjs` に従う
 
 ## 見た目

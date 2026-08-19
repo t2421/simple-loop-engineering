@@ -44,6 +44,7 @@ DETECT specs/TEMPLATE.md                    ← 旧パスだけ守っている
 - `tools/archive.mjs` の移行追随（`0018-archive-tool-task-layout` の範囲）
 - `specs/` と `progress/` の完全な撤去
 - main への直接コミットに対するガード（ガードは `pull_request` でしか走らない。アーカイブは main 直接のため、この経路は現状どおり検知されない）
+- 進捗の **Target Spec** の指し先の検証。`progress.md` を保護対象から外した結果、Target Spec を `task/` の外（`docs/` や `backlog/` の spec など、保護対象でない `.md`）へ向けられる。これはパス保護ではなく**内容の検証**であり、`package.json` の `scripts` と同じく base と head の中身を比べる別の仕組みが要る。移行とは独立に前から存在する性質でもあるため、`0020-target-spec-binding` として別作業にする
 
 ## 失敗時
 

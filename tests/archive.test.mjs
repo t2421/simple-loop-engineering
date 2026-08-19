@@ -13,7 +13,7 @@ import { archive, collectArtifacts, rewriteProgress } from '../tools/archive.mjs
  * @param {string[]} [opts.extras] - 進捗と同じベース名で置く抽出物のファイル名
  * @returns {string} 作った root のパス
  */
-function makeRepo({ pr = 'https://github.com/o/r/pull/1', extras = [] } = {}) {
+function makeRepo({ pr = 'https://github.com/t2421/simple-loop-engineering/pull/1', extras = [] } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-test-'));
   for (const d of ['specs', 'specs/archive', 'progress', 'progress/archive']) {
     fs.mkdirSync(path.join(root, d), { recursive: true });
@@ -45,7 +45,9 @@ function makeRepo({ pr = 'https://github.com/o/r/pull/1', extras = [] } = {}) {
 }
 
 /** 常にマージ済みと答える PR 確認。実行時に gh を呼ばないための注入口 */
-const merged = async () => ({ merged: true });
+const merged = async () => ({ merged: true, headRefName: 'feature/foo' });
+/** 実行中のリポジトリ。gh を呼ばないための注入口 */
+const thisRepo = async () => ({ owner: 't2421', repo: 'simple-loop-engineering' });
 /** 常に未マージと答える PR 確認 */
 const notMerged = async () => ({ merged: false, reason: 'PR がマージされていません' });
 
@@ -54,7 +56,7 @@ const ls = (dir) => fs.readdirSync(dir).sort();
 
 test('マージ済み PR を持つ作業名で実行すると Status が Done になり archive/ へ移動する', async () => {
   const root = makeRepo();
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, true);
   assert.deepEqual(ls(path.join(root, 'specs')), ['TEMPLATE.md', 'archive']);
@@ -71,7 +73,7 @@ test('マージ済み PR を持つ作業名で実行すると Status が Done �
 
 test('同じベース名の抽出物も progress/archive/ へ移動する', async () => {
   const root = makeRepo({ extras: ['foo.figma.json', 'foo.png'] });
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, true);
   assert.deepEqual(ls(path.join(root, 'progress/archive')), [
@@ -84,7 +86,7 @@ test('同じベース名の抽出物も progress/archive/ へ移動する', asyn
 
 test('別作業の似た名前のファイルは巻き込まない', async () => {
   const root = makeRepo({ extras: ['foo-bar.md'] });
-  await archive('foo', { root, checkPr: merged });
+  await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.ok(fs.existsSync(path.join(root, 'progress/foo-bar.md')));
   assert.ok(!fs.existsSync(path.join(root, 'progress/archive/foo-bar.md')));
@@ -92,7 +94,7 @@ test('別作業の似た名前のファイルは巻き込まない', async () =>
 
 test('PR が未マージなら何も変更せず失敗する', async () => {
   const root = makeRepo();
-  const result = await archive('foo', { root, checkPr: notMerged });
+  const result = await archive('foo', { root, checkPr: notMerged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.deepEqual(ls(path.join(root, 'specs')), ['TEMPLATE.md', 'archive', 'foo.md']);
@@ -107,9 +109,10 @@ test('PR が 未作成 なら PR 確認を呼ばずに失敗する', async () =>
   let called = false;
   const result = await archive('foo', {
     root,
+    getRepo: thisRepo,
     checkPr: async () => {
       called = true;
-      return { merged: true };
+      return { merged: true, headRefName: 'feature/foo' };
     },
   });
 
@@ -120,7 +123,7 @@ test('PR が 未作成 なら PR 確認を呼ばずに失敗する', async () =>
 
 test('存在しない作業名なら何も変更せず失敗する', async () => {
   const root = makeRepo();
-  const result = await archive('nope', { root, checkPr: merged });
+  const result = await archive('nope', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.deepEqual(ls(path.join(root, 'specs')), ['TEMPLATE.md', 'archive', 'foo.md']);
@@ -130,7 +133,7 @@ test('存在しない作業名なら何も変更せず失敗する', async () =>
 test('spec だけ無い場合も何も変更せず失敗する', async () => {
   const root = makeRepo();
   fs.rmSync(path.join(root, 'specs/foo.md'));
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.deepEqual(ls(path.join(root, 'progress/archive')), []);
@@ -139,7 +142,7 @@ test('spec だけ無い場合も何も変更せず失敗する', async () => {
 
 test('TEMPLATE を指定すると何も変更せず失敗する', async () => {
   const root = makeRepo();
-  const result = await archive('TEMPLATE', { root, checkPr: merged });
+  const result = await archive('TEMPLATE', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.ok(fs.existsSync(path.join(root, 'specs/TEMPLATE.md')));
@@ -149,7 +152,7 @@ test('TEMPLATE を指定すると何も変更せず失敗する', async () => {
 
 test('失敗時は理由を返す', async () => {
   const root = makeRepo();
-  const result = await archive('nope', { root, checkPr: merged });
+  const result = await archive('nope', { root, checkPr: merged, getRepo: thisRepo });
   assert.equal(result.ok, false);
   assert.equal(typeof result.reason, 'string');
   assert.ok(result.reason.length > 0);
@@ -161,7 +164,7 @@ test('移動先に既存のアーカイブがあれば、上書きせず何も�
   const root = makeRepo();
   fs.writeFileSync(path.join(root, 'specs/archive/foo.md'), '# 先にあったアーカイブ\n');
 
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.match(result.reason, /移動先/);
@@ -179,7 +182,7 @@ test('抽出物の移動先が衝突していても、spec を動かす前に失
   const root = makeRepo({ extras: ['foo.png'] });
   fs.writeFileSync(path.join(root, 'progress/archive/foo.png'), 'old');
 
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')), 'spec が先に動いてはいけない');
@@ -195,7 +198,7 @@ test('移動の途中で失敗したら巻き戻し、中途半端な状態を�
   const blocked = path.join(root, 'progress/archive');
   fs.chmodSync(blocked, 0o500);
   try {
-    const result = await archive('foo', { root, checkPr: merged });
+    const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
     assert.equal(result.ok, false);
     assert.match(result.reason, /巻き戻し/);
@@ -212,10 +215,10 @@ test('Status / Target Spec の行が無い進捗は、動かす前に失敗す�
   const root = makeRepo();
   fs.writeFileSync(
     path.join(root, 'progress/foo.md'),
-    '# Progress: foo\n\n- **PR:** https://github.com/o/r/pull/1\n- **Status**: In Progress\n',
+    '# Progress: foo\n\n- **Branch:** `feature/foo`\n- **PR:** https://github.com/t2421/simple-loop-engineering/pull/1\n- **Status**: In Progress\n',
   );
 
-  const result = await archive('foo', { root, checkPr: merged });
+  const result = await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   assert.equal(result.ok, false);
   assert.match(result.reason, /Status/);
@@ -225,7 +228,7 @@ test('Status / Target Spec の行が無い進捗は、動かす前に失敗す�
 
 test('ドット区切りの別作業を巻き込まない', async () => {
   const root = makeRepo({ extras: ['foo.png', 'foo.v2.md', 'foo.v2.png'] });
-  await archive('foo', { root, checkPr: merged });
+  await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   // foo.v2 は別作業。progress/ に残る
   assert.ok(fs.existsSync(path.join(root, 'progress/foo.v2.md')));
@@ -253,7 +256,7 @@ test('アーカイブのチェック項目が [x] になる', async () => {
   fs.writeFileSync(fs.readFileSync(p, 'utf8') ? p : p,
     fs.readFileSync(p, 'utf8') + '\n- [ ] PRマージ後のアーカイブ\n');
 
-  await archive('foo', { root, checkPr: merged });
+  await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   const moved = fs.readFileSync(path.join(root, 'progress/archive/foo.md'), 'utf8');
   assert.match(moved, /^- \[x\] PRマージ後のアーカイブ$/m);
@@ -261,7 +264,7 @@ test('アーカイブのチェック項目が [x] になる', async () => {
 
 test('進捗の書き換えは一時ファイル経由で置き換える（途中で壊さない）', async () => {
   const root = makeRepo();
-  await archive('foo', { root, checkPr: merged });
+  await archive('foo', { root, checkPr: merged, getRepo: thisRepo });
 
   // .tmp が残っていない
   assert.deepEqual(ls(path.join(root, 'progress/archive')), ['foo.md']);

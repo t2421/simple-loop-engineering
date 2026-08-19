@@ -31,9 +31,12 @@ export default [
   {
     // Playwright のテストは、`page.evaluate` / `page.$eval` に渡すコールバックが
     // ブラウザ側で動く。同じファイルに Node とブラウザの両方の文脈が同居する。
+    //
+    // ブラウザ globals を丸ごと合流させると、Node 側のコードが `window` などを
+    // 誤参照しても no-undef が黙る。実際にコールバックで使う 2 つだけを足す。
     files: ['tests/calc-page.test.mjs'],
     languageOptions: {
-      globals: { ...globals.node, ...globals.browser },
+      globals: { getComputedStyle: 'readonly', document: 'readonly' },
     },
   },
 ];

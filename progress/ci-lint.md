@@ -28,3 +28,6 @@
 - 15:58 - `scripts` に `lint`（`eslint .`）を追加し、`ci` を `npm run lint && npm test` にした。`test` と `pretest` は変更していない。これは凍結対象の改訂であり、`scripts-freeze-procedure` が定めた手続き（改訂内容と理由を spec に書く／人間がマージ／ラベル）に従う。理由は `specs/ci-lint.md` の「背景」に既に書かれている（この spec 自体がその spec 化にあたる）。
 - 16:00 - 「例」3 行と「失敗時」を検証。`npm run ci` は lint 通過 → 117 pass / 0 fail。未使用変数を含む一時ファイルを `src/` に置くと `no-unused-vars` で失敗し、消すと成功する。lint 違反がある状態の `npm run ci` は exit 1 で、**テストに進まない**（出力に `# tests` が 0 回）。
 - 16:02 - **私の誤りを 1 件記録する。** コミット時に `git add -A` を使い、人間が並行して編集していた `backlog/spec-progress-layout.md`（33 行）を巻き込んだ。`git reset --soft` で外し、編集は作業ツリーに未ステージのまま保全した。**同じ取り違えは PR #15、PR #16 に続いて 3 回目。** 以後 `git add -A` は使わず、変更したファイルを列挙する。
+- 16:20 - `codex-reviewer` が承認（Critical 0 / High 0 / Medium 2）。`ignores` が対象を狭めていないことも実測で確認された（lint 対象 13 ファイル = リポジトリ内の対象拡張子 13 ファイルと一致。`progress/` `specs/` `backlog/` に JS は 0 件なので冗長なだけ）。
+- 16:23 - Medium 2 件を修正。(1) `engines.node` が `>=22` だが eslint 10 は `^20.19.0 || ^22.13.0 || >=24` を要求する。宣言と実態がずれていたので `>=22.13` に上げた（`engines` は保護対象の `scripts` ではないのでガードには当たらない）。(2) `tests/calc-page.test.mjs` にブラウザ globals を丸ごと合流させていたのを、実際にコールバックで使う `getComputedStyle` と `document` の 2 つだけに絞った。
+- 16:25 - (2) の穴が実際に塞がったことを確認。Node 側に `window.location` の参照を一時的に足すと `'window' is not defined` を検知する。union のままなら黙っていた。テストファイルは byte 単位で復元済み（`git diff` が空）。

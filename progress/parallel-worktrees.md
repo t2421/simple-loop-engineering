@@ -2,7 +2,7 @@
 
 - **Target Spec:** `specs/parallel-worktrees.md`
 - **Branch:** `feature/parallel-worktrees`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/11
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] CLAUDE.md への worktree 運用規約の追記（`.worktrees/` の gitignore 含む）
 - [x] 演習対象 2 作業の spec / progress 作成（例: `math-mul` / `math-div`）
 - [x] 2 worktree での並列実施と、各進捗ログへの worktree パス・ブランチの記録
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -31,3 +31,4 @@
 - 10:10 - `codex-reviewer` が承認（Critical 0 / High 0）。Medium 1 件: 新節に足した「並列にしてよいのは触るファイルが重ならない作業どうしである」が演習と矛盾する。演習の 2 本はどちらも `src/math.mjs` の `sub` 直後に追記しており衝突する。`git merge-tree --write-tree origin/feature/math-mul origin/feature/math-div` で `CONFLICT (content): Merge conflict in src/math.mjs` を確認した。
 - 10:12 - 当該一文は spec の「仕様」3 点に含まれない私の追加分であり、spec 本体はむしろ「競合は PR のマージ順に解決する」と衝突の発生を前提にしていた。矛盾していたのは追加した一文の側なので、「重なる場合も並列にしてよいが、後からマージする側が main を取り込んで解決する」に改めた。演習はこの表現どおりの実例となる（#9 / #10 のうち後にマージする側で `src/math.mjs` を解決する）。
 - 10:13 - Low 指摘: 本ブランチの CLAUDE.md「状態」節で他作業のステータスを更新しており、新節が想定する CLAUDE.md 競合を自ら作っている。progress ファイル自体は触っていないため規約違反ではない。この一覧の二重管理は `specs/claude-md-slim.md` が削除を予定している箇所であり、そちらで構造的に解消する。
+- 10:18 - PR #11 を作成。ドキュメントのみの変更で見た目の変更がないためスクリーンキャプチャは添付しない。演習の #9 / #10 とあわせて 3 本がマージ待ち。Status は Done にせず、アーカイブもしない。

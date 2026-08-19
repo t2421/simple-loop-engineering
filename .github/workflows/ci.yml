@@ -16,7 +16,55 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
       - name: Verify
         run: npm run ci
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # base との差分を取るため、全履歴が要る
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Decide whether e2e is needed
+        id: check
+        env:
+          # ${{ }} を run: へ直接展開しない（コマンドインジェクション対策）
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "needed=true"
+          else
+            # checkout が渡すのは PR のマージコミットなので、リポジトリ上の
+            # tools/e2e-needed.mjs は候補側である。それを実行すると、判定を
+            # 常に false にする変更と src/ の変更を同じ PR に入れるだけで
+            # e2e を間引ける。実行するのは必ず base リビジョンの版にする。
+            CHECKER="$RUNNER_TEMP/e2e-needed.mjs"
+            if git cat-file -e "origin/$BASE_REF:tools/e2e-needed.mjs" 2>/dev/null; then
+              git show "origin/$BASE_REF:tools/e2e-needed.mjs" > "$CHECKER"
+              echo "base（origin/$BASE_REF）の e2e-needed で判定します。"
+            else
+              CHECKER="tools/e2e-needed.mjs"
+              echo "::warning::base に e2e-needed が無いため候補側で判定します（導入 PR のみ想定）。"
+            fi
+            node "$CHECKER" "origin/$BASE_REF"
+          fi
+      - name: Install dependencies
+        if: steps.check.outputs.needed == 'true'
+        run: npm ci
+      - name: Install Playwright browsers
+        if: steps.check.outputs.needed == 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e
+        if: steps.check.outputs.needed == 'true'
+        run: npm run test:e2e
+      - name: Skip e2e
+        if: steps.check.outputs.needed != 'true'
+        run: echo "e2e not needed for this diff"

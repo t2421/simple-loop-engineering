@@ -8,7 +8,7 @@
 
 ## 対象
 
-- 場所: `package.json` の `scripts`、`.github/workflows/ci.yml`、`tools/e2e-needed.mjs`（新規）、`tools/run-unit-tests.mjs`（新規）、`CLAUDE.md`（「共通の検証」「見た目」）
+- 場所: `package.json` の `scripts`、`.github/workflows/ci.yml`、`tools/e2e-needed.mjs`（新規）、`tools/run-unit-tests.mjs`（新規）、`tools/check-protected-paths.mjs`（委譲先の保護）、`CLAUDE.md`（「共通の検証」「見た目」「変えてはいけないもの」）
 - 公開面: `npm run ci`（lint + ユニット）、`npm run test:e2e`（Chromium + `tests/calc-page.test.mjs`）、GitHub の `verify` / `e2e` ジョブ
 
 ## 背景
@@ -36,7 +36,9 @@ GitHub CI の `verify` は、差分が計算ページに触れなくても毎回
   - `package.json` / `package-lock.json`
   - `progress/` 配下のファイル名が `calc-page.` で始まるもの
   - `task/` 配下のファイル名が `calc-page.` で始まるもの
-- 判定は `tools/e2e-needed.mjs` が `git diff` を見て行う。サードパーティの path-filter アクションは使わない
+- 判定は `tools/e2e-needed.mjs` が `git diff` を見て行う。サードパーティの path-filter アクションは使わない。ローカル import を持たない（CI が base 版を一時ファイルで実行するため）
+- GitHub の e2e ジョブは、base に `tools/e2e-needed.mjs` があるときその版で判定する。候補側を実行すると、判定を常に false にする変更と `src/` の変更を同じ PR に入れて間引ける。base に無い導入 PR だけ候補側を使う
+- `tools/run-unit-tests.mjs` と `tools/e2e-needed.mjs` はガードが変更・削除・移動を検知する。新規追加は導入 PR のため許可する。`scripts` を触らずにユニットを間引いたり e2e 判定を潰したりできないようにするためである
 - 差分が取れないときは間引かず e2e を回す（素通りしない）
 - CLAUDE.md の「共通の検証」は引き続き `npm run ci`。見た目のテストは `npm run test:e2e` とし、GitHub は上の条件で回す
 
@@ -66,6 +68,10 @@ GitHub CI の `verify` は、差分が計算ページに触れなくても毎回
 | 差分が `package.json` を含む PR | `e2eNeeded` は true |
 | 差分が `task/archive/0003-calc-page/calc-page.png` を含む PR | `e2eNeeded` は true |
 | 差分が `task/0017-guard-task-paths/spec.md` だけの PR | `e2eNeeded` は false |
+| `tools/run-unit-tests.mjs` の内容を変更した PR | ガード失敗 |
+| `tools/e2e-needed.mjs` の内容を変更した PR | ガード失敗 |
+| 新規 `tools/run-unit-tests.mjs` と `tools/e2e-needed.mjs` の追加 | ガード通過 |
+| `npm run ci` | lint 通過 → ユニットテスト pass。`tests/calc-page.test.mjs` は走らない |
 | `npm run ci` | lint 通過 → ユニットテスト pass。`tests/calc-page.test.mjs` は走らない |
 | `npm run test:e2e` | `tests/calc-page.test.mjs` が pass |
 
@@ -77,4 +83,4 @@ GitHub CI の `verify` は、差分が計算ページに触れなくても毎回
 2. 「例」がすべて、テストまたは再現手順で同じ結果になる。
 3. 「失敗時」に書いた入力・操作で、仕様どおり失敗する。該当がなければこの項は「なし」。
 4. 「範囲外」を実装していない。
-5. `tests/e2e-needed.test.mjs` が「例」のパス判定各行を網羅する。`npm run ci` の出力に `calc-page` が出ない。`tests/calc-page.test.mjs` が変更前と byte 単位で同一である。実装 PR に `allow-protected-change` ラベルがある。
+5. `tests/e2e-needed.test.mjs` が「例」のパス判定各行を網羅する。`tests/gate-helpers.test.mjs` が委譲先の保護の例を網羅する。`npm run ci` が `tests/calc-page.test.mjs` を実行しない（出力に「数値を入力できる欄が 2 つある」が無い）。`tests/calc-page.test.mjs` が変更前と byte 単位で同一である。実装 PR に `allow-protected-change` ラベルがある。

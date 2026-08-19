@@ -6,10 +6,12 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "pretest": "node tools/setup-playwright.mjs",
-    "test": "node --test",
+    "pretest:e2e": "node tools/setup-playwright.mjs",
+    "test:unit": "node tools/run-unit-tests.mjs",
+    "test:e2e": "node --test tests/calc-page.test.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
     "lint": "eslint .",
-    "ci": "npm run lint && npm test"
+    "ci": "npm run lint && npm run test:unit"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

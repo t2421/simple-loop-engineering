@@ -1,8 +1,8 @@
 /**
  * テストが要る Chromium 本体を用意する。
  *
- * `package.json` の `pretest` から呼ばれるので、素の checkout でも
- * `npm ci && npm run ci` が通る。テストコード側に環境セットアップを
+ * `package.json` の `pretest:e2e` から呼ばれるので、素の checkout でも
+ * `npm ci && npm run test:e2e` が通る。テストコード側に環境セットアップを
  * 持たせないための分離である（`scripts-freeze-procedure`）。
  *
  * 導入済みかの判定は `playwright install` 自身に任せる。自前で

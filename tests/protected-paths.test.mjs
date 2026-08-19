@@ -250,3 +250,17 @@ test('hasAllowLabel: ラベル情報が取得できないときは安全側に�
   assert.equal(hasAllowLabel(null), false);
   assert.equal(hasAllowLabel(undefined), false);
 });
+
+test('途中で切れた差分出力を「変更なし」と読まず、例外にする', () => {
+  assert.throws(() => parseNameStatus('M\0'), /途中で切れ/);
+  assert.throws(() => parseNameStatus('R100\0specs/x.md\0'), /途中で切れ/);
+});
+
+test('空の差分出力は空配列になる', () => {
+  assert.deepEqual(parseNameStatus(''), []);
+});
+
+test('末尾が単独のバックスラッシュでも unquotePath が壊れない', () => {
+  const out = parseNameStatus('M\0"tests/a\\\\"\0');
+  assert.equal(typeof out[0].path, 'string');
+});

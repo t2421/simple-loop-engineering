@@ -53,6 +53,11 @@ function unquotePath(p) {
       continue;
     }
     const escaped = body[i + 1];
+    if (escaped === undefined) {
+      // 末尾が単独のバックスラッシュ。そのまま 1 バイトとして扱う
+      bytes.push(0x5c);
+      continue;
+    }
     const map = { n: 0x0a, t: 0x09, r: 0x0d, '"': 0x22, '\\': 0x5c };
     bytes.push(map[escaped] ?? escaped.charCodeAt(0));
     i += 1;
@@ -76,6 +81,11 @@ export function parseNameStatus(raw) {
   while (i < fields.length) {
     const code = fields[i];
     const rename = /^([RC])(\d+)$/.exec(code);
+    const needed = rename ? 3 : 2;
+    if (i + needed > fields.length) {
+      // 途中で切れた出力を「差分なし」と読んで素通りさせない
+      throw new Error(`差分の出力が途中で切れています: ${JSON.stringify(fields.slice(i))}`);
+    }
     if (rename) {
       changes.push({
         status: rename[1],
@@ -233,24 +243,33 @@ function main() {
   let changes;
   let baseScripts;
   let headScripts;
+  let raw;
+  let mergeBase;
   try {
     // 差分は base...HEAD（三点）なので、比較対象も分岐点（merge-base）に揃える。
     // base の先端を見ると、分岐後に main 側で scripts が変わった場合に誤検知する。
-    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
+    mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
       encoding: 'utf8',
     }).trim();
-    const raw = execFileSync(
+    raw = execFileSync(
       'git',
       ['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`],
       { encoding: 'utf8' },
     );
-    changes = parseNameStatus(raw);
-    baseScripts = readScripts(mergeBase);
-    headScripts = readScripts('HEAD');
   } catch (err) {
     // 差分が取れないまま素通りさせない（shallow clone 等）
     console.error(`base (${baseRef}) との差分を取得できませんでした: ${err.message}`);
     console.error('shallow clone の場合は fetch-depth: 0 が要ります。');
+    process.exit(1);
+  }
+
+  try {
+    changes = parseNameStatus(raw);
+    baseScripts = readScripts(mergeBase);
+    headScripts = readScripts('HEAD');
+  } catch (err) {
+    // 読めなかったものを「変更なし」と扱わない
+    console.error(`差分を解釈できませんでした: ${err.message}`);
     process.exit(1);
   }
 

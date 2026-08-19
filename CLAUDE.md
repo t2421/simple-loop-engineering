@@ -18,7 +18,7 @@
 | `backlog/` | 着手しない候補。`backlog/<id>-<slug>/spec.md`。完了条件は未確定。progress は作らない |
 | `src/` | 実装 |
 | `tests/` | テスト |
-| `.github/workflows/` | CI。`npm run ci` を実行する |
+| `.github/workflows/` | CI。`verify` が `npm run ci`、`e2e` は計算ページに影響しうる差分と `main` への push で `npm run test:e2e` |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
 作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規は既存の最大の次（いまは `0016`）。
@@ -90,7 +90,7 @@ git worktree remove .worktrees/<ブランチ名>
 
 ## 共通の検証
 
-定義は `package.json` の `scripts`。CI（`.github/workflows/ci.yml`）はそれを実行するだけ。progress には書かない。
+定義は `package.json` の `scripts`。CI（`.github/workflows/ci.yml`）の `verify` ジョブは `npm run ci` を実行する。progress には書かない。
 
 コードを編集したら、マージ前に CI と同じコマンドをローカルで実行する。失敗したまま次の工程に進まない。出力は会話に貼る。
 
@@ -98,7 +98,9 @@ git worktree remove .worktrees/<ブランチ名>
 npm run ci
 ```
 
-型チェッカーや Linter、計算スタイルのテストを導入したら、`package.json` の `scripts` に足して `ci` から呼ぶ。progress には戻さない。
+型チェッカーや Linter を導入したら、`package.json` の `scripts` に足して `ci` から呼ぶ。progress には戻さない。
+
+見た目のテスト（描画して計算スタイルを読むもの）は `npm run test:e2e`。GitHub の `e2e` ジョブが、計算ページに影響しうる差分と `main` への push で回す。見た目を変える作業では、マージ前にローカルでも `npm run test:e2e` を実行する。
 
 ## 仕様
 
@@ -128,7 +130,7 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 
 「Figma どおり」「近い」は完了条件にしない。トークン表に無い値を実装に置かない。
 
-見た目のテストは `npm run ci` が回す。progress には書かない。描画して計算スタイルを読むランナーを入れるときは、他の検証と同じく `ci` から呼ぶ。
+見た目のテストは `npm run test:e2e` が回す。progress には書かない。描画して計算スタイルを読むランナーを入れるときは `test:e2e` から呼ぶ。GitHub は計算ページに影響しうる差分と `main` への push でこれを回す。
 
 見た目の変更を含む PR には、実装後の該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない。GitHub の PR 添付（`user-attachments`）に上げて本文から参照する。手順は `.claude/skills/gh-pr-attach-image` に従う。Figma 抽出 PNG の再利用ではなく、ブラウザで描画した画面を使う。仕様に状態があるなら、レビューに必要な状態分を添える。
 
@@ -193,6 +195,8 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 - `tests/` 配下のテストコードと期待値（存在するようになったら）
 - `package.json` の `scripts`（検証コマンド）
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
+- `tools/run-unit-tests.mjs`（ユニットテストの列挙。`ci` が委譲する）
+- `tools/e2e-needed.mjs`（e2e を回すかの判定。CI は base リビジョンを実行する）
 
 この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
 

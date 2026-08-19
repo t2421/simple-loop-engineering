@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { archive } from '../tools/archive.mjs';
+import { archive, collectArtifacts, rewriteProgress } from '../tools/archive.mjs';
 
 /**
  * 一時ディレクトリに specs/ と progress/ を持つリポジトリの骨格を作る。
@@ -153,4 +153,93 @@ test('失敗時は理由を返す', async () => {
   assert.equal(result.ok, false);
   assert.equal(typeof result.reason, 'string');
   assert.ok(result.reason.length > 0);
+});
+
+// --- レビュー指摘の回帰テスト ---
+
+test('移動先に既存のアーカイブがあれば、上書きせず何も変更せずに失敗する', async () => {
+  const root = makeRepo();
+  fs.writeFileSync(path.join(root, 'specs/archive/foo.md'), '# 先にあったアーカイブ\n');
+
+  const result = await archive('foo', { root, checkPr: merged });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /移動先/);
+  // 既存のアーカイブが残っている
+  assert.equal(
+    fs.readFileSync(path.join(root, 'specs/archive/foo.md'), 'utf8'),
+    '# 先にあったアーカイブ\n',
+  );
+  // 移動対象は動いていない
+  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
+  assert.ok(fs.existsSync(path.join(root, 'progress/foo.md')));
+});
+
+test('抽出物の移動先が衝突していても、spec を動かす前に失敗する', async () => {
+  const root = makeRepo({ extras: ['foo.png'] });
+  fs.writeFileSync(path.join(root, 'progress/archive/foo.png'), 'old');
+
+  const result = await archive('foo', { root, checkPr: merged });
+
+  assert.equal(result.ok, false);
+  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')), 'spec が先に動いてはいけない');
+  assert.equal(fs.readFileSync(path.join(root, 'progress/archive/foo.png'), 'utf8'), 'old');
+});
+
+test('移動の途中で失敗したら巻き戻し、中途半端な状態を残さない', async () => {
+  const root = makeRepo({ extras: ['foo.png'] });
+  // progress/archive/ を書き込めなくして、spec の移動後に失敗させる
+  const blocked = path.join(root, 'progress/archive');
+  fs.chmodSync(blocked, 0o500);
+  try {
+    const result = await archive('foo', { root, checkPr: merged });
+
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /巻き戻し/);
+    // spec が archive/ に取り残されていない
+    assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')), 'spec が元の位置に戻っている');
+    assert.ok(!fs.existsSync(path.join(root, 'specs/archive/foo.md')));
+    assert.ok(fs.existsSync(path.join(root, 'progress/foo.md')));
+  } finally {
+    fs.chmodSync(blocked, 0o700);
+  }
+});
+
+test('Status / Target Spec の行が無い進捗は、動かす前に失敗する', async () => {
+  const root = makeRepo();
+  fs.writeFileSync(
+    path.join(root, 'progress/foo.md'),
+    '# Progress: foo\n\n- **PR:** https://github.com/o/r/pull/1\n- **Status**: In Progress\n',
+  );
+
+  const result = await archive('foo', { root, checkPr: merged });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /Status/);
+  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
+  assert.deepEqual(ls(path.join(root, 'progress/archive')), []);
+});
+
+test('ドット区切りの別作業を巻き込まない', async () => {
+  const root = makeRepo({ extras: ['foo.png', 'foo.v2.md', 'foo.v2.png'] });
+  await archive('foo', { root, checkPr: merged });
+
+  // foo.v2 は別作業。progress/ に残る
+  assert.ok(fs.existsSync(path.join(root, 'progress/foo.v2.md')));
+  assert.ok(fs.existsSync(path.join(root, 'progress/foo.v2.png')));
+  assert.deepEqual(ls(path.join(root, 'progress/archive')), ['foo.md', 'foo.png']);
+});
+
+test('collectArtifacts: 進捗本体と抽出物だけを拾う', () => {
+  const entries = ['foo.md', 'foo.png', 'foo.figma.json', 'foo.v2.md', 'foo-bar.md', 'other.md'];
+  assert.deepEqual(collectArtifacts(entries, 'foo'), ['foo.figma.json', 'foo.md', 'foo.png']);
+});
+
+test('rewriteProgress: 当たらなかった行を missing で返す', () => {
+  const ok = rewriteProgress('- **Target Spec:** `specs/foo.md`\n- **Status:** In Progress\n', 'foo');
+  assert.deepEqual(ok.missing, []);
+  assert.match(ok.text, /- \*\*Status:\*\* Done/);
+
+  const bad = rewriteProgress('- **Status**: In Progress\n', 'foo');
+  assert.deepEqual(bad.missing.sort(), ['Status', 'Target Spec']);
 });

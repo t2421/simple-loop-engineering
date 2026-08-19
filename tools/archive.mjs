@@ -45,12 +45,15 @@ export function readPrUrl(text) {
  * @returns {string} 書き換え後の中身
  */
 export function rewriteProgress(text, name) {
-  return text
-    .replace(/^- \*\*Status:\*\*.*$/m, '- **Status:** Done')
-    .replace(
-      /^- \*\*Target Spec:\*\*.*$/m,
-      `- **Target Spec:** \`specs/archive/${name}.md\``,
-    );
+  const statusRe = /^- \*\*Status:\*\*.*$/m;
+  const targetRe = /^- \*\*Target Spec:\*\*.*$/m;
+  const missing = [];
+  if (!statusRe.test(text)) missing.push('Status');
+  if (!targetRe.test(text)) missing.push('Target Spec');
+  const rewritten = text
+    .replace(statusRe, '- **Status:** Done')
+    .replace(targetRe, `- **Target Spec:** \`specs/archive/${name}.md\``);
+  return { text: rewritten, missing };
 }
 
 /**
@@ -63,7 +66,23 @@ export function rewriteProgress(text, name) {
  * @returns {string[]} 移動対象のファイル名
  */
 export function collectArtifacts(entries, name) {
-  return entries.filter((e) => e === `${name}.md` || e.startsWith(`${name}.`)).sort();
+  // 進捗（.md）の存在が作業の定義である。`foo` と `foo.v2` の両方に進捗があるなら、
+  // `foo.v2.png` は `foo.v2` のものであって `foo` のものではない。
+  // 名前がドットを含む作業を巻き込まないよう、最長一致する作業名に割り当てる。
+  const longerWorks = entries
+    .filter((e) => e.endsWith('.md') && e !== `${name}.md`)
+    .map((e) => e.slice(0, -'.md'.length))
+    .filter((work) => work.startsWith(`${name}.`));
+
+  return entries
+    .filter((e) => {
+      if (e === `${name}.md`) return true;
+      if (!e.startsWith(`${name}.`)) return false;
+      // `foo.v2.md` は別作業の進捗であって `foo` の抽出物ではない
+      if (e.endsWith('.md')) return false;
+      return !longerWorks.some((work) => e.startsWith(`${work}.`));
+    })
+    .sort();
 }
 
 /**
@@ -124,28 +143,70 @@ export async function archive(name, { root = process.cwd(), checkPr = checkPrWit
     return { ok: false, reason: pr.reason ?? `PR がマージされていません: ${prUrl}` };
   }
 
-  // ここから先はファイルを変更する。事前チェックはすべて通っている
+  // 移動計画を先に立てる。ここまでは一切ファイルを変更しない
   const specArchiveDir = path.join(root, 'specs', 'archive');
   const progressArchiveDir = path.join(root, 'progress', 'archive');
+  const artifacts = collectArtifacts(fs.readdirSync(path.join(root, 'progress')), name);
+
+  const plan = [
+    { from: specPath, to: path.join(specArchiveDir, `${name}.md`), label: `specs/${name}.md -> specs/archive/${name}.md` },
+    ...artifacts.map((file) => ({
+      from: path.join(root, 'progress', file),
+      to: path.join(progressArchiveDir, file),
+      label: `progress/${file} -> progress/archive/${file}`,
+    })),
+  ];
+
+  // 移動先がすでにあるなら、上書きせず失敗する。
+  // archive/ は完了した作業の履歴であり、黙って壊してよいものではない。
+  const collisions = plan.filter((m) => fs.existsSync(m.to)).map((m) => path.relative(root, m.to));
+  if (collisions.length > 0) {
+    return {
+      ok: false,
+      reason: `移動先がすでに存在します: ${collisions.join(', ')}。既存のアーカイブを上書きしません`,
+    };
+  }
+
+  // 書き換えが空振りしないことも、動かす前に確かめる。
+  // Status / Target Spec の行が無いまま移動すると、手順 2・5 が達成されないのに成功してしまう
+  const { missing } = rewriteProgress(progressText, name);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      reason: `progress/${name}.md に ${missing.join(' / ')} の行がありません。書式を直してから実行してください`,
+    };
+  }
+
+  // ここから先がファイルの変更。途中で失敗したら、やった分を巻き戻す
   fs.mkdirSync(specArchiveDir, { recursive: true });
   fs.mkdirSync(progressArchiveDir, { recursive: true });
 
-  const artifacts = collectArtifacts(fs.readdirSync(path.join(root, 'progress')), name);
   const moved = [];
+  const done = [];
+  try {
+    for (const step of plan) {
+      fs.renameSync(step.from, step.to);
+      done.push(step);
+      moved.push(step.label);
+    }
 
-  fs.renameSync(specPath, path.join(specArchiveDir, `${name}.md`));
-  moved.push(`specs/${name}.md -> specs/archive/${name}.md`);
-
-  for (const file of artifacts) {
-    fs.renameSync(
-      path.join(root, 'progress', file),
-      path.join(progressArchiveDir, file),
-    );
-    moved.push(`progress/${file} -> progress/archive/${file}`);
+    const movedProgress = path.join(progressArchiveDir, `${name}.md`);
+    const rewritten = rewriteProgress(fs.readFileSync(movedProgress, 'utf8'), name);
+    fs.writeFileSync(movedProgress, rewritten.text);
+  } catch (err) {
+    // 逆順に戻す。spec だけ移動して progress が残る中途半端な状態を作らない
+    for (const step of done.reverse()) {
+      try {
+        fs.renameSync(step.to, step.from);
+      } catch {
+        // 巻き戻しにも失敗したら、下で状態を伝える
+      }
+    }
+    return {
+      ok: false,
+      reason: `移動中に失敗したため巻き戻しました: ${err.message}`,
+    };
   }
-
-  const movedProgress = path.join(progressArchiveDir, `${name}.md`);
-  fs.writeFileSync(movedProgress, rewriteProgress(fs.readFileSync(movedProgress, 'utf8'), name));
 
   return { ok: true, moved };
 }

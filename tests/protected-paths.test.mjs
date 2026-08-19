@@ -563,20 +563,28 @@ test('作業ディレクトリの下の階層にある関連文書は別名 spec
   assert.deepEqual(v, [], '判定は作業ディレクトリ直下だけ');
 });
 
-test('アーカイブ済みの作業と同じパスへの spec 追加は違反になる（PR をまたぐすり替え）', () => {
-  const baseHas = (p) => p === 'task/archive/0012-x/spec.md';
-  const v = findViolations({
+test('アーカイブ済みの ID の再利用は違反になる（PR をまたぐすり替え）', () => {
+  const baseArchivedIds = new Set(['0012']);
+  const sameSlug = findViolations({
     ...empty,
-    baseHas,
+    baseArchivedIds,
     changes: [{ status: 'A', path: 'task/0012-x/spec.md' }],
   });
-  assert.equal(v.length, 1, 'PR1 でアーカイブ、PR2 で跡地に緩めた spec を置く 2 手を防ぐ');
+  assert.equal(sameSlug.length, 1, 'PR1 でアーカイブ、PR2 で跡地に緩めた spec を置く 2 手を防ぐ');
+
+  // 照合は ID で行う。名前で照合すると slug を変えるだけで迂回できる
+  const otherSlug = findViolations({
+    ...empty,
+    baseArchivedIds,
+    changes: [{ status: 'A', path: 'task/0012-other/spec.md' }],
+  });
+  assert.equal(otherSlug.length, 1, '同じ ID・別 slug も弾く');
 });
 
 test('アーカイブが無い新規作業の追加は通る', () => {
   const v = findViolations({
     ...empty,
-    baseHas: () => false,
+    baseArchivedIds: new Set(['0001', '0002']),
     changes: [
       { status: 'A', path: 'task/0019-bar/spec.md' },
       { status: 'A', path: 'task/0019-bar/progress.md' },
@@ -585,12 +593,76 @@ test('アーカイブが無い新規作業の追加は通る', () => {
   assert.deepEqual(v, []);
 });
 
-test('baseHas は archiveMove のディレクトリにだけ効く', () => {
-  const baseHas = () => true;
+test('ID 再利用の判定は specFile を持つディレクトリにだけ効く', () => {
   const v = findViolations({
     ...empty,
-    baseHas,
+    baseArchivedIds: new Set(['0001']),
     changes: [{ status: 'A', path: 'tests/new.test.mjs' }],
   });
-  assert.deepEqual(v, [], 'tests/ は archiveMove: false なので対象外');
+  assert.deepEqual(v, [], 'tests/ は作業ディレクトリではない');
 });
+
+// --- 持ち込みのチャネル行列 ---
+//
+// 保護パスに内容が入ってくる経路は A（新規追加）・R（保護外からの移し込み）・
+// C（コピー）の 3 つある。過去に「A にだけ規則を書いて R に書き忘れる」抜けを
+// 3 度作ったため、持ち込みに対する規則は必ず全チャネルで検証する。
+// 新しい持ち込み規則を足すときは、この表に行を足すこと。
+
+const INBOUND_CHANNELS = {
+  A: (path) => ({ status: 'A', path }),
+  R: (path) => ({ status: 'R', path, oldPath: 'docs/outside.md', similarity: 90 }),
+  C: (path) => ({ status: 'C', path, oldPath: 'docs/outside.md', similarity: 90 }),
+};
+
+const INBOUND_CASES = [
+  {
+    name: '別名 spec の持ち込みは違反',
+    path: 'task/0017-foo/spec-v2.md',
+    ctx: {},
+    want: 1,
+  },
+  {
+    name: 'アーカイブ済み ID（同 slug）への持ち込みは違反',
+    path: 'task/0012-x/spec.md',
+    ctx: { baseArchivedIds: new Set(['0012']) },
+    want: 1,
+  },
+  {
+    name: 'アーカイブ済み ID（別 slug）への持ち込みは違反',
+    path: 'task/0012-other/spec.md',
+    ctx: { baseArchivedIds: new Set(['0012']) },
+    want: 1,
+  },
+  {
+    name: '立ち退かせた跡地への持ち込みは違反（同一差分のすり替え）',
+    path: 'task/0017-foo/spec.md',
+    ctx: {},
+    extra: [
+      { status: 'R', path: 'task/archive/0017-foo/spec.md', oldPath: 'task/0017-foo/spec.md', similarity: 100 },
+    ],
+    want: 1, // アーカイブ移動側は免除（0）、跡地への持ち込みが 1
+  },
+  {
+    name: '新規作業の spec.md の持ち込みは通る',
+    path: 'task/0019-bar/spec.md',
+    ctx: {},
+    want: 0,
+  },
+  {
+    name: '作業ディレクトリ下層の関連文書の持ち込みは通る',
+    path: 'task/0017-foo/notes/README.md',
+    ctx: {},
+    want: 0,
+  },
+];
+
+for (const c of INBOUND_CASES) {
+  for (const [channel, make] of Object.entries(INBOUND_CHANNELS)) {
+    test(`持ち込み行列 [${channel}] ${c.name}`, () => {
+      const changes = [...(c.extra ?? []), make(c.path)];
+      const v = findViolations({ ...empty, ...c.ctx, changes });
+      assert.equal(v.length, c.want, JSON.stringify(v));
+    });
+  }
+}

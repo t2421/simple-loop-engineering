@@ -4,6 +4,20 @@
  * 判定ロジックは純関数として公開し、テスト可能にしてある。
  * CLI としては `node tools/check-protected-paths.mjs <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
+ *
+ * ## 構造: 分解してから判定する
+ *
+ * git のステータス（A/M/D/R/C）で規則を分岐させない。まず `decompose()` で
+ * 差分を 3 種類の「出来事」に分解する。
+ *
+ * - appeared: 保護パスに内容が現れた（A、保護外からの R/C の移動先）
+ * - removed:  保護パスから内容が消えた（D、R の移動元）
+ * - modified: その場で内容が変わった（M など）
+ *
+ * 規則は出来事ごとに 1 箇所だけ書く。以前はステータスごとの分岐に同じ規則を
+ * 重複して書いており、「A に足して R に足し忘れる」抜けを 3 度作った。
+ * 持ち込み経路（A / R / C）はすべて appeared に正規化されるので、
+ * この構造では入れ忘れ自体が起こらない。
  */
 
 import fs from 'node:fs';
@@ -44,9 +58,10 @@ function isGateHelper(filePath) {
 /**
  * 既存ファイルの内容変更・削除を禁じ、新規追加は許すディレクトリ。
  *
- * `archiveMove` が true のディレクトリだけ、同ディレクトリ内での内容同一の移動
- * （アーカイブ作業）を許す。`tests/` と `.github/workflows/` は移動も許さない。
- * リネームでディレクトリの外へ出せば、テストの削除や CI の無効化ができてしまうため。
+ * `archiveMove` が true のディレクトリだけ、`<prefix>X` → `<prefix>archive/X` の
+ * 内容同一の移動（アーカイブ作業）を許す。`tests/` と `.github/workflows/` は
+ * 移動も許さない。リネームでディレクトリの外へ出せば、テストの削除や CI の
+ * 無効化ができてしまうため。
  */
 const APPEND_ONLY_DIRS = [
   // `task/<id>-<slug>/` には spec.md・progress.md・関連ファイル（Figma 抽出物など）が
@@ -60,10 +75,10 @@ const APPEND_ONLY_DIRS = [
 ];
 
 /**
- * 別名の spec の追加かを判定する純関数。
- * 作業ディレクトリ直下に足された `.md` のうち、`spec.md` と除外対象以外を指す。
+ * 別名の spec かを判定する純関数。
+ * 作業ディレクトリ直下にある `.md` のうち、`spec.md` と除外対象以外を指す。
  *
- * @param {{prefix: string, exclude?: string}} dir
+ * @param {{prefix: string, exclude?: string, specFile?: string}} dir
  * @param {string} p
  * @returns {boolean}
  */
@@ -79,6 +94,27 @@ function isAliasSpec(dir, p) {
   if (rest.length !== depth) return false;
   const name = rest[rest.length - 1];
   return name !== dir.specFile && name !== dir.exclude;
+}
+
+/**
+ * アーカイブ済みの作業 ID を再利用しているかを判定する純関数。
+ *
+ * ディレクトリ名の完全一致ではなく **ID で照合する**。名前で照合すると、
+ * `task/archive/0012-x/` がある状態で `task/0012-other/`（同じ ID・別 slug）を
+ * 作れてしまう。CLAUDE.md は ID を識別子、slug をラベルと定めている。
+ *
+ * @param {{prefix: string, specFile?: string}} dir
+ * @param {string} p
+ * @param {Set<string>} baseArchivedIds - base の `<prefix>archive/` にある作業の ID
+ * @returns {boolean}
+ */
+function archivedIdReused(dir, p, baseArchivedIds) {
+  if (!dir.specFile || baseArchivedIds.size === 0) return false;
+  const rest = p.slice(dir.prefix.length).split('/');
+  // archive/ 側への追加はここでは見ない（能動側の再利用だけを弾く）
+  if (rest[0] === 'archive') return false;
+  const m = /^(\d{4})-/.exec(rest[0]);
+  return m !== null && baseArchivedIds.has(m[1]);
 }
 
 /**
@@ -111,6 +147,21 @@ function covers(dir, p) {
   const inArchive = rest[0] === 'archive';
   const depth = inArchive ? 3 : 2;
   return !(rest.length === depth && rest[rest.length - 1] === dir.exclude);
+}
+
+/**
+ * 何らかの保護（単一ファイル・型・保護ディレクトリ）の対象かを判定する純関数。
+ *
+ * @param {string} p
+ * @returns {boolean}
+ */
+function isProtectedPath(p) {
+  return (
+    p === CHECKER
+    || isGateHelper(p)
+    || TEMPLATES.includes(p)
+    || APPEND_ONLY_DIRS.some((d) => covers(d, p))
+  );
 }
 
 /**
@@ -189,6 +240,33 @@ export function parseNameStatus(raw) {
 }
 
 /**
+ * 差分を「出来事」に分解する純関数。ステータスの解釈はここで完結させ、
+ * 判定側にはステータスを持ち込まない。
+ *
+ * @param {Array<{status: string, path: string, oldPath?: string, similarity?: number}>} changes
+ * @returns {Array<{kind: 'appeared'|'removed'|'modified', path: string, from?: string, pairedTo?: string, similarity?: number}>}
+ */
+export function decompose(changes) {
+  const events = [];
+  for (const { status, path, oldPath, similarity } of changes) {
+    if (status === 'A') {
+      events.push({ kind: 'appeared', path });
+    } else if (status === 'D') {
+      events.push({ kind: 'removed', path });
+    } else if (status === 'R' || status === 'C') {
+      // C（コピー）は実 CLI では現れない（`-C` を渡していない）。現れた場合は
+      // R と同じ扱いにする（安全側。移動元が保護対象なら違反として拾われる）
+      events.push({ kind: 'removed', path: oldPath, pairedTo: path, similarity });
+      events.push({ kind: 'appeared', path, from: oldPath, similarity });
+    } else {
+      // M / T などはすべて「その場で内容が変わった」として扱う
+      events.push({ kind: 'modified', path });
+    }
+  }
+  return events;
+}
+
+/**
  * `package.json` の `scripts` が変わったかを判定する純関数。
  * キーの増減と値の変更の両方を見る。
  *
@@ -213,147 +291,125 @@ export function scriptsChanged(baseScripts, headScripts) {
  * @param {Array<{status: string, path: string, oldPath?: string, similarity?: number}>} input.changes
  * @param {Record<string, string>} [input.baseScripts] - base 側の package.json の scripts
  * @param {Record<string, string>} [input.headScripts] - head 側の package.json の scripts
- * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
- *   **`main()` は必ず渡すこと。** 渡さないと PR をまたぐすり替えを検知できない
+ * @param {Set<string>} [input.baseArchivedIds] - base の `archive/` にある作業の ID。
+ *   **`main()` は必ず渡すこと。** 渡さないと PR をまたぐ ID 再利用を検知できない
  * @returns {Array<{path: string, reason: string}>} 違反の一覧。空なら通過
  */
-export function findViolations({ changes, baseScripts, headScripts, baseHas = () => false }) {
+export function findViolations({ changes, baseScripts, headScripts, baseArchivedIds = new Set() }) {
+  const events = decompose(changes);
   const violations = [];
 
-  // 同じ差分の中で、保護ファイルを移動させたうえで同じパスに新規追加すると、
-  // 「移動は許可」「新規追加は許可」の合わせ技で中身をすり替えられる。
-  // 移動元のパスを覚えておき、そこへの追加を弾く。
-  const movedAwayFrom = new Set(
-    changes
-      .filter((c) => (c.status === 'R' || c.status === 'C') && c.oldPath)
-      .map((c) => c.oldPath),
+  // 同じ差分の中で保護ファイルが立ち退いたパス（移動元）。
+  // ここへの持ち込みは、移動と追加の合わせ技によるすり替えである
+  const vacated = new Set(
+    events.filter((e) => e.kind === 'removed' && e.pairedTo !== undefined).map((e) => e.path),
   );
 
-  for (const change of changes) {
-    const { status, path, oldPath, similarity } = change;
+  /** 違反表示用。リネームは「旧 -> 新」で示す */
+  const render = (e) => {
+    if (e.from !== undefined) return `${e.from} -> ${e.path}`;
+    if (e.pairedTo !== undefined) return `${e.path} -> ${e.pairedTo}`;
+    return e.path;
+  };
 
-    // 新規追加（ガード導入 PR）は許可。変更・削除・移動は許さない
-    if ((path === CHECKER && status !== 'A') || oldPath === CHECKER) {
-      violations.push({
-        path: oldPath ? `${oldPath} -> ${path}` : path,
-        reason: 'ガードの判定ロジック自体は変更も移動もできない',
-      });
+  for (const e of events) {
+    const { kind, path, from, pairedTo, similarity } = e;
+
+    // リネームの片割れの二重判定を避ける。移動元が保護対象なら removed 側の
+    // 規則がそのリネームを代表する（免除するのも違反にするのも removed 側）
+    if (kind === 'appeared' && from !== undefined && isProtectedPath(from)) continue;
+
+    // --- 単一ファイルの規則 ---
+
+    if (path === CHECKER) {
+      // 新規追加（ガード導入 PR）だけ許可
+      if (kind === 'appeared' && from === undefined) continue;
+      violations.push({ path: render(e), reason: 'ガードの判定ロジック自体は変更も移動もできない' });
       continue;
     }
 
-    if ((isGateHelper(path) && status !== 'A') || (oldPath && isGateHelper(oldPath))) {
-      violations.push({
-        path: oldPath ? `${oldPath} -> ${path}` : path,
-        reason: '検証の委譲先は変更も移動もできない',
-      });
+    if (isGateHelper(path)) {
+      // 新規追加（導入 PR）だけ許可
+      if (kind === 'appeared' && from === undefined) continue;
+      violations.push({ path: render(e), reason: '検証の委譲先は変更も移動もできない' });
       continue;
     }
 
-    // 型は移動も内容変更も削除も許さない
-    if (TEMPLATES.includes(path) || TEMPLATES.includes(oldPath)) {
-      violations.push({
-        path: oldPath ? `${oldPath} -> ${path}` : path,
-        reason: '型（TEMPLATE）は変更も移動もできない',
-      });
+    if (TEMPLATES.includes(path)) {
+      violations.push({ path: render(e), reason: '型（TEMPLATE）は変更も移動もできない' });
       continue;
     }
 
-    if (path === 'package.json' && scriptsChanged(baseScripts, headScripts)) {
-      violations.push({
-        path: 'package.json',
-        reason: '検証コマンド（scripts）が変わっている',
-      });
+    if (path === 'package.json') {
+      if (scriptsChanged(baseScripts, headScripts)) {
+        violations.push({ path: 'package.json', reason: '検証コマンド（scripts）が変わっている' });
+      }
       continue;
     }
 
-    const isRename = status === 'R' || status === 'C';
-    // 保護対象かどうかは、移動元と移動先の両方で見る。
-    // 移動元だけで見ると、保護ディレクトリの外へ出す変更を取り逃がす。
-    const fromDir = isRename
-      ? APPEND_ONLY_DIRS.find((d) => covers(d, oldPath ?? ''))
-      : undefined;
+    // --- 保護ディレクトリの規則 ---
+
     const dir = APPEND_ONLY_DIRS.find((d) => covers(d, path));
+    if (!dir) continue;
 
-    if (isRename) {
-      // 保護ディレクトリの外から中へ移すのは新規追加と同じ。ただし、
-      // 同じ差分で保護ファイルを退かせた跡地へ移し込むのはすり替えである
-      if (!fromDir) {
-        if (dir && movedAwayFrom.has(path)) {
-          violations.push({
-            path: `${oldPath} -> ${path}`,
-            reason: `既存の${dir.label}を移動させた跡地に別の内容を移し込んでいる（すり替え）`,
-          });
-        } else if (dir && isAliasSpec(dir, path)) {
-          // 追加（A）だけを見ていると、外から移し込む（R）経路が残る。
-          // `backlog/<id>/spec.md` -> `task/<id>-<slug>/spec.md` の正規の昇格は
-          // 名前が `spec.md` なので、この判定には掛からない
-          violations.push({
-            path: `${oldPath} -> ${path}`,
-            reason: `${dir.label}は ${dir.specFile} だけにする（別名の spec を移し込んで Target Spec を付け替えられる）`,
-          });
-        }
+    if (kind === 'modified') {
+      violations.push({ path, reason: `既存の${dir.label}の内容が変わっている` });
+      continue;
+    }
+
+    if (kind === 'removed') {
+      if (pairedTo === undefined) {
+        violations.push({ path, reason: `既存の${dir.label}が削除されている` });
         continue;
       }
-
       // 免除するのはアーカイブ移動だけ。移動先が保護ディレクトリ内であればよい、
       // では足りない。それだと `task/A/spec.md -> task/B/spec.md` で凍結対象を
       // 別作業へ付け替えたり、`archive/` から出して凍結を解いたりできてしまう。
-      // `<prefix>X` -> `<prefix>archive/X` の対応する遷移だけを許す。
-      const stayedInside = covers(fromDir, path);
-      // 移動元がすでに archive/ の中なら、それはアーカイブ移動ではない。
-      // 許すと `archive/X` -> `archive/archive/X` で凍結記録を正規パスから動かせる
-      const alreadyArchived = oldPath.startsWith(`${fromDir.prefix}archive/`);
+      // 移動元がすでに archive/ の中なら、それもアーカイブ移動ではない
+      // （許すと `archive/X` -> `archive/archive/X` で凍結記録を正規パスから動かせる）
+      const alreadyArchived = path.startsWith(`${dir.prefix}archive/`);
       const isArchiveMove =
-        fromDir.archiveMove
+        dir.archiveMove
         && similarity === 100
         && !alreadyArchived
-        && path === archiveDestination(fromDir, oldPath);
+        && pairedTo === archiveDestination(dir, path);
       if (isArchiveMove) continue;
 
+      const stayedInside = covers(dir, pairedTo);
       const reason = !stayedInside
-        ? `既存の${fromDir.label}が保護ディレクトリの外へ移動されている`
+        ? `既存の${dir.label}が保護ディレクトリの外へ移動されている`
         : similarity !== 100
-          ? `既存の${fromDir.label}が内容ごと移動されている`
-          : fromDir.archiveMove
-            ? `既存の${fromDir.label}は、${fromDir.prefix}archive/ への移動以外はできない`
-            : `既存の${fromDir.label}は内容が同一でも移動できない`;
-      violations.push({ path: `${oldPath} -> ${path}`, reason });
+          ? `既存の${dir.label}が内容ごと移動されている`
+          : dir.archiveMove
+            ? `既存の${dir.label}は、${dir.prefix}archive/ への移動以外はできない`
+            : `既存の${dir.label}は内容が同一でも移動できない`;
+      violations.push({ path: render(e), reason });
       continue;
     }
 
-    if (!dir) continue;
-
-    // 新規追加は許可。ただし 2 つだけ許さない
-    if (status === 'A') {
-      if (movedAwayFrom.has(path)) {
-        // 移動させた跡地への追加は、移動と追加の合わせ技によるすり替え
-        violations.push({
-          path,
-          reason: `既存の${dir.label}を移動させた跡地に別の内容を置いている（すり替え）`,
-        });
-      } else if (dir.archiveMove && baseHas(archiveDestination(dir, path))) {
-        // PR1 でアーカイブ移動し、マージ後の PR2 で跡地に緩めた spec を置く 2 手を防ぐ。
-        // 差分の中だけを見る movedAwayFrom では届かない。
-        // ID は使い終わったら再利用しない規約なので、この追加が正当になることはない
-        violations.push({
-          path,
-          reason: `すでにアーカイブ済みの${dir.label}と同じパスに新しく置いている（${archiveDestination(dir, path)} がある）`,
-        });
-      } else if (isAliasSpec(dir, path)) {
-        // 別名の spec を足して progress の Target Spec をそこへ向ければ、
-        // 以後その完了条件は保護を受けずに書き換えられる
-        violations.push({
-          path,
-          reason: `${dir.label}は ${dir.specFile} だけにする（別名の spec は Target Spec の付け替えで凍結を迂回できる）`,
-        });
-      }
-      continue;
-    }
-
-    if (status === 'D') {
-      violations.push({ path, reason: `既存の${dir.label}が削除されている` });
-    } else {
-      violations.push({ path, reason: `既存の${dir.label}の内容が変わっている` });
+    // kind === 'appeared'
+    // 持ち込み（A / 保護外からの R / C）はすべてここに正規化される。
+    // 持ち込みに対する規則はこの 1 箇所にだけ書く
+    if (vacated.has(path)) {
+      violations.push({
+        path: render(e),
+        reason: `既存の${dir.label}を移動させた跡地に別の内容を${from !== undefined ? '移し込んでいる' : '置いている'}（すり替え）`,
+      });
+    } else if (archivedIdReused(dir, path, baseArchivedIds)) {
+      // PR1 でアーカイブ移動し、マージ後の PR2 で同じ ID の作業を作り直す 2 手を防ぐ。
+      // 差分の中だけを見る vacated では届かない。
+      // ID は使い終わったら再利用しない規約なので、この持ち込みが正当になることはない
+      violations.push({
+        path: render(e),
+        reason: `すでにアーカイブ済みの作業 ID を再利用している（base の archive/ に同じ ID の作業がある）`,
+      });
+    } else if (isAliasSpec(dir, path)) {
+      // 別名の spec を持ち込んで progress の Target Spec をそこへ向ければ、
+      // 以後その完了条件は保護を受けずに書き換えられる
+      violations.push({
+        path: render(e),
+        reason: `${dir.label}は ${dir.specFile} だけにする（別名の spec で Target Spec を付け替えて凍結を迂回できる）`,
+      });
     }
   }
 
@@ -401,6 +457,34 @@ function readScripts(ref) {
   return JSON.parse(raw).scripts ?? {};
 }
 
+/**
+ * base の `<prefix>archive/` にある作業 ID を列挙する。
+ * archive/ が base に無いなら再利用は起こり得ないので空を返す。
+ *
+ * @param {string} mergeBase
+ * @returns {Set<string>}
+ */
+function readBaseArchivedIds(mergeBase) {
+  const ids = new Set();
+  for (const dir of APPEND_ONLY_DIRS) {
+    if (!dir.specFile) continue;
+    let out;
+    try {
+      out = execFileSync('git', ['ls-tree', '--name-only', `${mergeBase}:${dir.prefix}archive`], {
+        encoding: 'utf8',
+      });
+    } catch {
+      // base に archive/ 自体が無い（＝アーカイブ済みの作業が無い）
+      continue;
+    }
+    for (const line of out.split('\n')) {
+      const m = /^(\d{4})-/.exec(line.trim());
+      if (m) ids.add(m[1]);
+    }
+  }
+  return ids;
+}
+
 function main() {
   const baseRef = process.argv[2];
   if (!baseRef) {
@@ -411,6 +495,7 @@ function main() {
   let changes;
   let baseScripts;
   let headScripts;
+  let baseArchivedIds;
   let raw;
   let mergeBase;
   try {
@@ -435,23 +520,15 @@ function main() {
     changes = parseNameStatus(raw);
     baseScripts = readScripts(mergeBase);
     headScripts = readScripts('HEAD');
+    // これを渡さないと PR をまたぐ ID 再利用を取り逃がす
+    baseArchivedIds = readBaseArchivedIds(mergeBase);
   } catch (err) {
     // 読めなかったものを「変更なし」と扱わない
     console.error(`差分を解釈できませんでした: ${err.message}`);
     process.exit(1);
   }
 
-  // base のツリーを引く。これを渡さないと PR をまたぐすり替えを取り逃がす
-  const baseHas = (p) => {
-    try {
-      execFileSync('git', ['cat-file', '-e', `${mergeBase}:${p}`], { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const violations = findViolations({ changes, baseScripts, headScripts, baseHas });
+  const violations = findViolations({ changes, baseScripts, headScripts, baseArchivedIds });
 
   if (violations.length === 0) {
     console.log(`保護パスの変更はありません（${changes.length} 件の差分を確認）。`);

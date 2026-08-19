@@ -12,6 +12,7 @@
 | `progress/` | 未完了の作業状態。会話が切れてもここから再開する。Figma 抽出物もここに置く |
 | `progress/TEMPLATE.md` | 進捗の型。見出し名・順番は変えない |
 | `progress/archive/` | 完了した進捗と、その作業の抽出物 |
+| `backlog/` | 着手しない候補。spec の型で書くが完了条件は未確定。progress は作らない |
 | `src/` | 実装 |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
@@ -95,8 +96,11 @@ npm run ci
 - 機能追加・バグ修正・改善を問わず `specs/TEMPLATE.md` をコピーして埋める
 - 見出し名・順番は変えない。空でも見出しは残す
 - **完了条件は必須。** 検証はこの条件に対して行う
-- 機能追加の記入例は `specs/math-add.md`
+- 機能追加の記入例は `specs/archive/math-add.md`
 - UI なら「仕様」に構造・トークン表・状態を書く。見出しは増やさない。Figma の URL は「背景」に出典として書く
+- 着手しない候補は `backlog/` に置く。spec の型で書いてよいが、完了条件は `未確定（incomplete）。昇格時に埋める。` とする。**progress は作らない**
+- `backlog/` は未完了の作業ではない。次の作業を選ぶときの対象にしない。凍結対象でもない（`specs/` に移してから凍る）
+- 着手するときは `specs/` へ移して完了条件を埋め、progress を作る。[コミットとマージ](#コミットとマージ) の spec 新規作成と同じく、計画用ブランチの docs PR で main へ入れる
 
 ## 見た目
 

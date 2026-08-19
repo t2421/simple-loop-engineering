@@ -15,25 +15,17 @@
 | `src/` | 実装 |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
+| `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
 仕様と進捗は同名で対にする。例: `specs/math-add.md` と `progress/math-add.md`。
 
-Figma からの JSON・PNG など抽出物は、対応する進捗ファイルと同じディレクトリに、同じベース名で置く。例: `progress/calc-page.md` に対して `progress/calc-page.figma.json` と `progress/calc-page.png`。
+Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
 ## 状態
 
 作業を始める前に `progress/` を読む。`archive/` 以外が未完了の作業である。  
 着手する作業の **Target Spec** を読み、完了条件を確認する。  
 タスクを進めたら、その進捗ファイルのチェックボックスと試行ログを更新する。
-
-現在の作業:
-
-- `progress/guard-protected-paths.md` — 保護パス変更の CI ガード。Not Started
-- `progress/claude-md-slim.md` — CLAUDE.md の整理と方針追記。Not Started
-- `progress/archive-automation.md` — アーカイブ手順の自動化。Not Started
-- `progress/scripts-freeze-procedure.md` — 凍結ファイルの改訂手続き。Not Started
-- `progress/ci-lint.md` — Lint の導入。Not Started（`scripts-freeze-procedure` マージ後に着手）
-- 直近の完了: `progress/archive/parallel-worktrees.md` — worktree による並列作業の導入。Done（演習の `math-mul` / `math-div` も完了）
 
 ## 開発ループ
 
@@ -108,7 +100,7 @@ npm run ci
 
 ## 見た目
 
-Figma のライブファイルは完了条件にしない。抽出して `progress/` に置いた JSON・PNG が正である。抽出は同じ進捗のチェック項目とし、実装より先に行う。
+Figma のライブファイルは完了条件にしない。抽出して `progress/` に置いた JSON・PNG が正である。抽出は同じ進捗のチェック項目とし、実装より先に行う。手順・保存先・JSON の形は `.claude/skills/figma-extract` に従う。
 
 見た目の完了条件は算術の例と同じく、検証可能な命題にする。
 
@@ -127,13 +119,12 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 
 ## 進捗
 
-- `progress/TEMPLATE.md` をコピーして埋める
-- Target Spec / Branch / PR / Status は欠かさない。PR は未作成なら `未作成`、作成後は URL
-- チェック: `[ ]` 未着手、`[/]` 進行中、`[x]` 完了
+書式・メタ情報・チェックボックスの意味は `progress/TEMPLATE.md` が正。コピーして埋める。
+
+このリポジトリ固有の決めごとだけ、ここに書く。
+
 - チェックリストは作業固有の項目だけ書く（仕様確認、Figma 抽出、テスト作成、実装、レビュー、PR 作成、見た目なら PR へのスクリーンキャプチャ、PR マージ後のアーカイブ）
-- Figma 抽出物は進捗と同じベース名で `progress/` に保存する（`progress/<作業>.figma.json`、`progress/<作業>.png`）
 - 構文チェック・テスト実行など全作業共通の検証は progress に書かない。`npm run ci` が強制する
-- 試行ログは追記する。失敗と解消も残す。消して体裁を整えない
 
 ## アーカイブ
 
@@ -152,6 +143,15 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 5. `docs: archive <作業名>` として main に直接コミットする（[コミットとマージ](#コミットとマージ)）
 
 `TEMPLATE.md` は移動しない。未完了の作業をアーカイブしない。PR 未作成・未マージの作業をアーカイブしない。
+
+## トークンコスト
+
+文脈は有限で、読ませた分だけ遅く高くなる。次を守る。
+
+- レビューサブエージェントへ渡すのは**差分と対象 spec だけ**。リポジトリ全体を読ませない
+- レビューの往復は 5 回を上限とする。超えるなら spec か分割の仕方が間違っている
+- 役割ごとにモデルを変えるなら、会話ではなくエージェント定義（`.claude/agents/`）に書く
+- 手順の知識は CLAUDE.md に足さず Skill に切り出す。CLAUDE.md は毎セッション全文が載る
 
 ## 報告の作法
 

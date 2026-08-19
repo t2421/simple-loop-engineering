@@ -2,7 +2,7 @@
 
 - **Target Spec:** `specs/claude-md-slim.md`
 - **Branch:** `feature/claude-md-slim`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/12
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -12,8 +12,8 @@
 - [x] Specの要件・受け入れ条件の確認
 - [x] CLAUDE.md の編集（状態節の一元化・進捗節の重複削減・トークンコスト節の追加）
 - [x] Skill の作成 (`.claude/skills/figma-extract/SKILL.md`) と CLAUDE.md からの参照
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -30,3 +30,4 @@
 - 11:50 - `codex-reviewer` が承認（Critical 0 / High 0）。Medium 1 件: SKILL.md の手順 1 が nodeId の表記ゆれに触れていない。実データで裏取りすると、URL は `?node-id=1-2`（ハイフン）なのに MCP と JSON は `1:2`（コロン）で、手順どおり読むと無効な ID を渡すことになる（`specs/archive/calc-page.md:18` と `progress/archive/calc-page.figma.json:4`）。手順 1 に URL デコードと `-` → `:` の正規化を明記した。
 - 11:52 - Low 1 件も対応。CLAUDE.md の 2 箇所が `.claude/skills/figma-extract` を参照するようになったのに「ディレクトリ」節の表に `.claude/` の行が無く、参照先を表から辿れなかった。行を足した。
 - 11:53 - Low 2（「見た目」節と SKILL.md の方針文の重複）は対応しない。spec の「参照のみ」は手順に対する要求であり、方針（ライブファイルを完了条件にしない・抽出は実装より先）は CLAUDE.md 側に残すのが本来。将来のドリフト懸念は認識としてここに残す。
+- 11:55 - PR #12 を作成。ドキュメントのみの変更で見た目の変更がないためスクリーンキャプチャは添付しない。マージ待ち。

@@ -46,6 +46,19 @@ const APPEND_ONLY_DIRS = [
 ];
 
 /**
+ * アーカイブ移動の唯一の正しい移動先を返す純関数。
+ * `<prefix>X` に対して `<prefix>archive/X`。
+ *
+ * @param {{prefix: string}} dir
+ * @param {string} oldPath
+ * @returns {string}
+ */
+function archiveDestination(dir, oldPath) {
+  const rest = oldPath.slice(dir.prefix.length);
+  return `${dir.prefix}archive/${rest}`;
+}
+
+/**
  * そのパスが保護ディレクトリの対象かを判定する純関数。
  * `basename` が指定されたディレクトリは、その名前のファイルだけを対象にする。
  *
@@ -164,6 +177,15 @@ export function scriptsChanged(baseScripts, headScripts) {
 export function findViolations({ changes, baseScripts, headScripts }) {
   const violations = [];
 
+  // 同じ差分の中で、保護ファイルを移動させたうえで同じパスに新規追加すると、
+  // 「移動は許可」「新規追加は許可」の合わせ技で中身をすり替えられる。
+  // 移動元のパスを覚えておき、そこへの追加を弾く。
+  const movedAwayFrom = new Set(
+    changes
+      .filter((c) => (c.status === 'R' || c.status === 'C') && c.oldPath)
+      .map((c) => c.oldPath),
+  );
+
   for (const change of changes) {
     const { status, path, oldPath, similarity } = change;
 
@@ -205,14 +227,21 @@ export function findViolations({ changes, baseScripts, headScripts }) {
       // 保護ディレクトリの外から中へ移すのは新規追加と同じ。許可する
       if (!fromDir) continue;
 
-      // 内容同一のまま同じ保護ディレクトリ内で移すアーカイブ作業だけ許可する
+      // 免除するのはアーカイブ移動だけ。移動先が保護ディレクトリ内であればよい、
+      // では足りない。それだと `task/A/spec.md -> task/B/spec.md` で凍結対象を
+      // 別作業へ付け替えたり、`archive/` から出して凍結を解いたりできてしまう。
+      // `<prefix>X` -> `<prefix>archive/X` の対応する遷移だけを許す。
       const stayedInside = covers(fromDir, path);
-      if (fromDir.archiveMove && stayedInside && similarity === 100) continue;
+      const isArchiveMove =
+        fromDir.archiveMove
+        && similarity === 100
+        && path === archiveDestination(fromDir, oldPath);
+      if (isArchiveMove) continue;
 
       const reason = !stayedInside
         ? `既存の${fromDir.label}が保護ディレクトリの外へ移動されている`
         : similarity === 100
-          ? `既存の${fromDir.label}は内容が同一でも移動できない`
+          ? `既存の${fromDir.label}は、${fromDir.prefix}archive/ への移動以外はできない`
           : `既存の${fromDir.label}が内容ごと移動されている`;
       violations.push({ path: `${oldPath} -> ${path}`, reason });
       continue;
@@ -220,8 +249,16 @@ export function findViolations({ changes, baseScripts, headScripts }) {
 
     if (!dir) continue;
 
-    // 新規追加は許可
-    if (status === 'A') continue;
+    // 新規追加は許可。ただし同じ差分で移動させた跡地への追加は、すり替えなので許さない
+    if (status === 'A') {
+      if (movedAwayFrom.has(path)) {
+        violations.push({
+          path,
+          reason: `既存の${dir.label}を移動させた跡地に別の内容を置いている（すり替え）`,
+        });
+      }
+      continue;
+    }
 
     if (status === 'D') {
       violations.push({ path, reason: `既存の${dir.label}が削除されている` });

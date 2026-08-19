@@ -399,3 +399,47 @@ test('task/ 配下の既存 spec.md の削除は違反になる', () => {
   });
   assert.equal(v.length, 1);
 });
+
+test('アーカイブ移動以外のリネームは、保護ディレクトリ内でも違反になる', () => {
+  const unarchive = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'task/0012-x/spec.md', oldPath: 'task/archive/0012-x/spec.md', similarity: 100 }],
+  });
+  assert.equal(unarchive.length, 1, 'archive/ から出せば凍結を解けてしまう');
+
+  const reassign = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'task/0012-b/spec.md', oldPath: 'task/0012-a/spec.md', similarity: 100 }],
+  });
+  assert.equal(reassign.length, 1, '別作業へ付け替えられてしまう');
+});
+
+test('旧 specs/ のアーカイブ移動は引き続き通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'specs/archive/x.md', oldPath: 'specs/x.md', similarity: 100 }],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('移動させた跡地への新規追加（すり替え）は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/archive/0012-x/spec.md', oldPath: 'task/0012-x/spec.md', similarity: 100 },
+      { status: 'A', path: 'task/0012-x/spec.md' },
+    ],
+  });
+  assert.equal(v.length, 1, '移動と新規追加の合わせ技で中身をすり替えられる');
+});
+
+test('アーカイブ移動と、無関係な新規追加の同居は通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/archive/0012-x/spec.md', oldPath: 'task/0012-x/spec.md', similarity: 100 },
+      { status: 'A', path: 'task/0020-new/spec.md' },
+    ],
+  });
+  assert.deepEqual(v, []);
+});

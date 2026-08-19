@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { PNG } from 'pngjs';
@@ -83,29 +82,13 @@ function px(n) {
   return `${n}px`;
 }
 
-// package.json の scripts は変更しない方針のため、Chromium 本体の取得は
-// ここで面倒を見る。`npm run ci` を素の checkout で叩いても(`npm ci` の後)
-// 通るようにする。
-async function launchChromiumWithAutoInstall() {
-  try {
-    return await chromium.launch();
-  } catch (err) {
-    if (!/executable doesn't exist/i.test(String(err.message))) throw err;
-    execFileSync('npx', ['playwright', 'install', 'chromium'], {
-      cwd: rootDir,
-      stdio: 'inherit',
-    });
-    return chromium.launch();
-  }
-}
-
 let browser;
 let page;
 
 before(async () => {
   server = await startStaticServer(srcDir);
   pageUrl = `http://127.0.0.1:${server.address().port}/calc.html`;
-  browser = await launchChromiumWithAutoInstall();
+  browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: figma.canvas.width, height: figma.canvas.height } });
   await page.goto(pageUrl);
 });

@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "pretest": "node tools/setup-playwright.mjs",
     "test": "node --test",
     "ci": "npm test"
   },

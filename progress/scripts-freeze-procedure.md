@@ -31,3 +31,8 @@
 - 14:19 - Medium を修正。CLAUDE.md が `specs/archive/scripts-freeze-procedure.md`、`tools/setup-playwright.mjs` が `specs/scripts-freeze-procedure.md` を参照しており、マージ時点では前者が dangling、アーカイブ後は後者が stale になる。どちらもパスを持たせず作業名 `scripts-freeze-procedure` で指す形に揃えた。
 - 14:20 - Low 1 件に対応。新節が `add-protected-path` skill の直下にあり担当を混同しうるため、「守る対象そのものを増減するのは skill、ここは保護されているものの中身を改訂する手続き」と冒頭に明示した。
 - 14:21 - Low（Linux で実行ファイルはあるが OS 依存ライブラリが無い場合に `pretest` が no-op になる）は未対応。CI は `--with-deps` の明示ステップがあるので影響せず、移設前の in-test リトライにも同じ穴があったため退行ではない。
+- 14:35 - 再レビュー（2 回目）で **承認**（Critical 0 / High 0 / Medium 1 / Low 2）。High（`backlog/` 混入）と Medium（spec 参照の食い違い）は解消を確認された。`git reset --soft` で作り直した内容が意図した 2 箇所以外変わっていないことも旧コミットとの比較で確認された。
+- 14:38 - Medium を修正。**これは私が持ち込んだ退行だった。** `isInstalled()` が `chromium.executablePath()` を見ていたが、それが指すのはフル Chromium（`chromium-1234`）で、`chromium.launch()` が実際に使うのは `chromium_headless_shell-1234` である。headless shell だけ欠けた部分キャッシュや `--no-shell` 導入では「導入済み」と誤判定して no-op になり、テストが実行ファイル無しで落ちる。移設前の in-test リトライはこのケースを自己修復していたので、この 1 ケースに限っては機能後退だった。
+- 14:40 - 自前の判定をやめ、`playwright install chromium` 自身の no-op 判定に任せる形にした。フル Chromium だけ置いた一時ディレクトリで再現すると、旧判定は「存在: true」で素通り、新実装は headless shell を検知して補完する。導入済みのときのオーバーヘッドは 0.62 秒で、`pretest` に置いて許容範囲。
+- 14:42 - 「失敗時」を再確認。導入コマンドが失敗すると理由を表示して exit 1（無言でスキップしない）。`npm run ci` は 117 pass / 0 fail のまま。
+- 14:44 - **人間の判断に上げる点:** spec の「例」1 行目は「素の checkout で `npm ci && npm run ci` → 43/43 pass」だが、実測は 117 である。spec 作成時（`b123982`）の `tests/` は 3 ファイル、現在は 7 ファイルで、この作業とは無関係に陳腐化していた。完了条件 5（前後で件数一致）は満たすが、完了条件 2 を字義どおりには満たさない。**spec の期待値は凍結対象なので書き換えていない。** 更新するなら人間の承認を経た spec 改訂として別途行う。

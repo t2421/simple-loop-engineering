@@ -5,52 +5,31 @@
  * `npm ci && npm run ci` が通る。テストコード側に環境セットアップを
  * 持たせないための分離である（`scripts-freeze-procedure`）。
  *
- * すでに入っていれば何もしない。導入に失敗したら、黙ってスキップせず
- * エラーを表示して終了コード非 0 で終わる。
+ * 導入済みかの判定は `playwright install` 自身に任せる。自前で
+ * `chromium.executablePath()` を見ると、それが指すのはフル Chromium
+ * なのに `chromium.launch()` が使うのは chromium_headless_shell なので、
+ * shell だけ欠けた部分キャッシュを「導入済み」と誤判定して素通りする。
+ * 導入済みなら 1 秒ほどで何も出さずに終わる。
+ *
+ * 導入に失敗したら、黙ってスキップせずエラーを表示して終了コード非 0 で終わる。
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/**
- * Chromium 本体がすでにあるかを調べる。
- *
- * @returns {boolean} 実行ファイルが存在すれば true
- */
-function isInstalled() {
-  try {
-    const executable = chromium.executablePath();
-    return Boolean(executable) && fs.existsSync(executable);
-  } catch {
-    // executablePath() 自体が投げる場合は未導入として扱う
-    return false;
-  }
-}
-
 function main() {
-  if (isInstalled()) return;
-
-  console.log('Chromium が見つかりません。playwright install chromium を実行します。');
   try {
     execFileSync('npx', ['playwright', 'install', 'chromium'], {
       cwd: rootDir,
+      // ダウンロードが要るときは数分かかる。進捗を見せる
       stdio: 'inherit',
     });
   } catch (err) {
     console.error(`Chromium の導入に失敗しました: ${err.message}`);
     console.error('手動で `npx playwright install chromium` を実行してください。');
-    process.exit(1);
-  }
-
-  if (!isInstalled()) {
-    // インストールコマンドが成功しても実体が無いなら、テストは必ず落ちる。
-    // ここで気づけるようにする
-    console.error('playwright install は成功しましたが Chromium が見つかりません。');
     process.exit(1);
   }
 }

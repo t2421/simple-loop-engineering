@@ -1,0 +1,22 @@
+name: Guard
+
+on:
+  pull_request:
+
+jobs:
+  protected-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # base との差分を取るため、全履歴が要る
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check protected paths
+        env:
+          # ${{ }} を run: へ直接展開しない（コマンドインジェクション対策）
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node tools/check-protected-paths.mjs "origin/$BASE_REF"

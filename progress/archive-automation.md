@@ -2,7 +2,7 @@
 
 - **Target Spec:** `specs/archive-automation.md`
 - **Branch:** `feature/archive-automation`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/13
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -12,8 +12,8 @@
 - [x] Specの要件・受け入れ条件の確認
 - [x] テストの作成 (`tests/archive.test.mjs`。一時ディレクトリ + PR 確認のモック)
 - [x] 実装 (`tools/archive.mjs`)
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -40,3 +40,4 @@
 - 12:02 - Low 2 件に対応。(1) chmod を使う巻き戻しテストは root だとモードビットが無視されて false failure になるため、`process.getuid?.() === 0` で skip するガードを付けた（現行 CI は非 root の ubuntu-latest なので今は安定するが、コンテナ実行に移すと壊れる）。(2) `collectArtifacts` は progress/ 直下しか見ないため、`foo.v2` が既にアーカイブ済みだと `foo.v2.png` を `foo` の抽出物として拾う。設計上の帰結なので前提としてコメントに明記した。
 - 12:03 - TOCTOU（事前検査と rename の間に別プロセスが同名を作る）は未対応。単発の手動起動 CLI で現実的なシナリオが無く、POSIX に上書きしない rename が無い以上コストに見合わないという判断。レビューも Low とした。
 - 12:05 - 回帰テストを 2 件追加（チェック項目の `[x]` 化、一時ファイルが残らないこと）。テストは 16 → 18 件。`npm run ci` は 80 pass / 0 fail（既存 62 + archive 18）。
+- 12:08 - PR #13 を作成。CLI の追加で見た目の変更がないためスクリーンキャプチャは添付しない。マージ待ち。

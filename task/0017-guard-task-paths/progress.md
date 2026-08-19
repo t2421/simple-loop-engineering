@@ -50,4 +50,13 @@
 - 19:25 - High-1 を修正。`specFile` を持つディレクトリ（`task/` のみ）で、作業ディレクトリ直下に `spec.md` / `progress.md` 以外の `.md` を新規追加することを違反にした。旧 `specs/` はフラット命名（`specs/<名前>.md`）なので対象外にする必要があり、`specFile` フラグで区別した。抽出物（`.json` / `.png`）の追加は引き続き許可する。spec の「仕様」にもこの例外を明記した（「例」が既に要求していた内容の明文化）。
 - 19:28 - High-2 を修正（リネーム先が跡地なら弾く）。Medium-1 を修正（CLAUDE.md を「`task/` 配下のファイル全部。除外は各作業ディレクトリ直下の `progress.md` だけ」に）。Medium-2 を修正（`archiveMove` の有無でメッセージを分ける）。Low-1 も修正し、除外を作業ディレクトリ直下の 1 階層に限定した（`task/progress.md` や `task/X/sub/progress.md` が外れていた）。
 - 19:30 - 途中で 2 度、自分のミスで足止めした。(1) `SPEC_FILE` を使用箇所より後に定義して TDZ エラーにした。(2) Medium-2 の置換に assert を付けず、当たっていないことにテストで初めて気づいた。**文字列置換は必ず assert を付ける。**
-- 19:32 - テストを 46 → 58 件に拡充。`npm run ci` は 152 pass / 0 fail。
+- 19:32 - テストを拡充。`npm run ci` は 152 pass / 0 fail。（**訂正: このとき「46 → 58 件」と書いたが実測は 57 件だった。件数の誤記はこれで 2 度目。**）
+- 19:45 - 再レビュー（4 回目）で **不承認**（Critical 0 / High 2 / Medium 1 / Low 1）。不承認は 3 回目。次が 5 回目のレビューで、そこで High が残れば Blocked にすると警告を受けた。
+  - **High-1 は私が同じ非対称を繰り返した。** 3 回目で `movedAwayFrom` を `R` にも対応させたのに、`isAliasSpec` は `A` のブロックに置いたままにした。結果、`backlog/0013-x/spec.md → task/0017-foo/spec-lenient.md` のような**移し込み（R）**が素通りしていた。しかも `backlog` からの移動は規約が認める正規経路なので、攻撃者は移動元を用意する必要すらない。
+  - Medium: `isAliasSpec` に階層判定が無く、`task/0017-foo/notes/README.md` のような正当な関連文書まで違反にしていた（JSDoc と spec は「作業ディレクトリ直下」と書いているのに実装だけが広い）。
+- 19:50 - High-1 を修正。`isAliasSpec` をリネーム先にも適用した。Medium も修正し、判定を作業ディレクトリ直下（`archive` は 1 段深い）に限定した。
+- 19:55 - **今回は実 git で検証した。** 一時リポジトリで `git mv backlog/0013-x/spec.md task/0017-foo/spec-lenient.md` + Target Spec の付け替えを行い、git が `R085` を出す差分に対してガードを実行した。
+  - 攻撃: `保護パスの変更を 1 件検知しました: backlog/0013-x/spec.md -> task/0017-foo/spec-lenient.md` / exit 1
+  - 正規の昇格（`backlog/0013-x/spec.md → task/0013-x/spec.md` + 完了条件の記入 + progress 追加）と `task/0017-foo/notes/README.md` の追加: `保護パスの変更はありません` / exit 0
+  過去 2 回の不承認は「検証すべき経路と違うものを試して塞がったと報告した」ことが原因だった。ユニットテストだけでなく実 git の出力で確かめる。
+- 19:57 - 回帰テストを 3 件追加（移し込み R、正規の昇格、下の階層の関連文書）。`tests/protected-paths.test.mjs` は 60 件、`npm run ci` は 155 pass / 0 fail。

@@ -61,7 +61,11 @@ function isAliasSpec(dir, p) {
   // 旧 `specs/` はフラット命名（`specs/<名前>.md`）なので対象外。
   if (!dir.specFile) return false;
   if (!p.startsWith(dir.prefix) || !p.endsWith('.md')) return false;
+  // 対象は作業ディレクトリ直下だけ。`task/X/notes/README.md` のような
+  // 関連文書まで弾かない
   const rest = p.slice(dir.prefix.length).split('/');
+  const depth = rest[0] === 'archive' ? 3 : 2;
+  if (rest.length !== depth) return false;
   const name = rest[rest.length - 1];
   return name !== dir.specFile && name !== dir.exclude;
 }
@@ -258,6 +262,14 @@ export function findViolations({ changes, baseScripts, headScripts }) {
             path: `${oldPath} -> ${path}`,
             reason: `既存の${dir.label}を移動させた跡地に別の内容を移し込んでいる（すり替え）`,
           });
+        } else if (dir && isAliasSpec(dir, path)) {
+          // 追加（A）だけを見ていると、外から移し込む（R）経路が残る。
+          // `backlog/<id>/spec.md` -> `task/<id>-<slug>/spec.md` の正規の昇格は
+          // 名前が `spec.md` なので、この判定には掛からない
+          violations.push({
+            path: `${oldPath} -> ${path}`,
+            reason: `${dir.label}は ${dir.specFile} だけにする（別名の spec を移し込んで Target Spec を付け替えられる）`,
+          });
         }
         continue;
       }
@@ -303,7 +315,7 @@ export function findViolations({ changes, baseScripts, headScripts }) {
         // 以後その完了条件は保護を受けずに書き換えられる
         violations.push({
           path,
-          reason: `${dir.label}は ${SPEC_FILE} だけにする（別名の spec は Target Spec の付け替えで凍結を迂回できる）`,
+          reason: `${dir.label}は ${dir.specFile} だけにする（別名の spec は Target Spec の付け替えで凍結を迂回できる）`,
         });
       }
       continue;

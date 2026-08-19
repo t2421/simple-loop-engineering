@@ -526,3 +526,39 @@ test('すでに archive/ にあるものをさらに archive/ へ移すのは違
     assert.equal(v.length, 1, `${oldPath} -> ${path}`);
   }
 });
+
+test('別名 spec を外から移し込む（R）のも違反になる', () => {
+  const fromBacklog = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'task/0017-foo/spec-lenient.md', oldPath: 'backlog/0013-x/spec.md', similarity: 85 }],
+  });
+  assert.equal(fromBacklog.length, 1, '追加(A)だけ塞いでも移し込み(R)が残る');
+
+  const fromSrc = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'task/0017-foo/spec-v2.md', oldPath: 'src/notes.md', similarity: 90 }],
+  });
+  assert.equal(fromSrc.length, 1);
+});
+
+test('backlog からの正規の昇格（spec.md のまま）は通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/0013-x/spec.md', oldPath: 'backlog/0013-x/spec.md', similarity: 75 },
+      { status: 'A', path: 'task/0013-x/progress.md' },
+    ],
+  });
+  assert.deepEqual(v, [], '昇格は spec.md のままなので別名 spec に当たらない');
+});
+
+test('作業ディレクトリの下の階層にある関連文書は別名 spec 扱いしない', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'A', path: 'task/0017-foo/notes/README.md' },
+      { status: 'A', path: 'task/archive/0012-x/notes/memo.md' },
+    ],
+  });
+  assert.deepEqual(v, [], '判定は作業ディレクトリ直下だけ');
+});

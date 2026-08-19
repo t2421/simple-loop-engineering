@@ -38,7 +38,7 @@
 
 | 操作または入力 | 期待結果 |
 |---|---|
-| 素の checkout で `npm ci && npm run ci` | 43/43 pass（セットアップは `pretest` が担う） |
+| 素の checkout で `npm ci && npm run ci` | 変更前と同じ件数が pass（セットアップは `pretest` が担う） |
 | `tests/calc-page.test.mjs` を `playwright install` で検索 | 一致なし |
 | CLAUDE.md を「改訂」で検索 | 凍結ファイルの改訂手続きが存在する |
 

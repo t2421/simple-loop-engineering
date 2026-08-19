@@ -301,3 +301,18 @@ test('ガードの判定ロジックの新規追加は違反にならない（�
   });
   assert.deepEqual(v, []);
 });
+
+test('別ファイルをチェッカーのパスへ上書きリネームするのも違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'tools/check-protected-paths.mjs',
+        oldPath: 'tools/x.mjs',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(v.length, 1, '外から差し替える経路も塞ぐ');
+});

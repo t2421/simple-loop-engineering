@@ -24,3 +24,6 @@
 - 09:40 - `parallel-worktrees` の演習として worktree `.worktrees/feature/math-div`（ブランチ `feature/math-div`、main から作成）で実施。`math-mul` と並列。
 - 09:42 - TDD。`tests/div.test.mjs` を先に書き RED を確認（`node --test tests/div.test.mjs` → fail 1）。`src/math.mjs` に `div` を追加して GREEN。除数 0 は `RangeError` を投げ、`Infinity`・`NaN` を返さない。`npm run ci` は 54 pass / 0 fail（既存 43 + div 11）。
 - 09:44 - `math-mul` の worktree と同時に `npm run ci` を実行し、互いに影響せず両方成功することを確認。テストサーバは `listen(0)` のエフェメラルポートのためポート競合しない。
+- 09:56 - `codex-reviewer` が承認（Critical 0 / High 0）。Medium 1 件: `div(Number.MAX_VALUE, 0.5)` が `Infinity` を返し、spec「仕様」の「戻り値: …有限数」と「戻り値は `a / b` に等しい」の 2 行が桁あふれ時に両立しない。
+- 09:57 - 上記 Medium は実装ではなく spec 内部の記述の緊張と判断し、実装を変更しない。理由: 「失敗時」は除数 0 の 1 件のみ、「例」6 行に桁あふれ行が無く、「完了条件 5」も桁あふれに触れていない。桁あふれ検出を足すと仕様に無い失敗条件を実装することになる。`specs/math-mul.md` は「範囲外」に桁あふれを明記しているが `specs/math-div.md` には無く、spec 側の記載漏れの可能性がある。spec の変更は人間の承認が要るため（CLAUDE.md「コミットとマージ」）、ここに記録して判断を仰ぐ。
+- 09:58 - `-0` の扱いを確認。`b === 0` は `-0` にも真なので `div(1, -0)` は `-Infinity` ではなく `RangeError` を投げる。spec の「`Infinity` を返さない」に沿う。

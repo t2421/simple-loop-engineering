@@ -63,6 +63,30 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 - 会話中に複数の spec が生まれたときも、進行中の作業ブランチには置かない。**計画用ブランチ**にまとめ、1 本の docs PR にする
 - 進捗の **Branch** は計画した時点では予約した名前でしかない。着手するときに main から切る
 
+## 並列作業（worktree）
+
+独立した作業を同時に進めるときは git worktree を使う。1 つのチェックアウトでブランチを切り替えながら 2 作業を持たない。
+
+- worktree は `.worktrees/<ブランチ名>` に作る。`.worktrees/` は gitignore する
+- **1 worktree = 1 作業 = 1 ブランチ。** ブランチは main から切る
+- 各 worktree に `node_modules` が要る。作成後に `npm ci` を実行する
+- 進捗の更新は、その作業の worktree の、その作業のブランチで行う。他の作業の進捗ファイルを触らない
+- `progress/` や `CLAUDE.md` が競合したら、PR のマージ順に解決する。後からマージする側が main を取り込んで直す
+- [アーカイブ](#アーカイブ) はマージされた側から順に行う。未マージの作業を巻き込まない
+
+並列にしてよいのは、触るファイルが重ならない作業どうしである。同じファイルの同じ節を変える作業は直列にする。
+
+```
+git worktree add .worktrees/<ブランチ名> -b <ブランチ名> main
+cd .worktrees/<ブランチ名> && npm ci
+```
+
+作業が終わり PR がマージされたら worktree を片付ける。
+
+```
+git worktree remove .worktrees/<ブランチ名>
+```
+
 ## 共通の検証
 
 定義は `package.json` の `scripts`。CI（`.github/workflows/ci.yml`）はそれを実行するだけ。progress には書かない。

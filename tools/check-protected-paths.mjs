@@ -23,6 +23,17 @@ const TEMPLATES = ['specs/TEMPLATE.md', 'progress/TEMPLATE.md'];
 const CHECKER = 'tools/check-protected-paths.mjs';
 
 /**
+ * `ci` / e2e ジョブが委譲する実行ファイル。scripts やワークフローを触らずに
+ * ユニットを間引いたり e2e 判定を常に false にしたりできないようにする。
+ * 新規追加は導入 PR のため許可。変更・削除・移動は許さない。
+ */
+const GATE_HELPERS = ['tools/run-unit-tests.mjs', 'tools/e2e-needed.mjs'];
+
+function isGateHelper(filePath) {
+  return GATE_HELPERS.includes(filePath);
+}
+
+/**
  * 既存ファイルの内容変更・削除を禁じ、新規追加は許すディレクトリ。
  *
  * `archiveMove` が true のディレクトリだけ、同ディレクトリ内での内容同一の移動
@@ -148,6 +159,14 @@ export function findViolations({ changes, baseScripts, headScripts }) {
       violations.push({
         path: oldPath ? `${oldPath} -> ${path}` : path,
         reason: 'ガードの判定ロジック自体は変更も移動もできない',
+      });
+      continue;
+    }
+
+    if ((isGateHelper(path) && status !== 'A') || (oldPath && isGateHelper(oldPath))) {
+      violations.push({
+        path: oldPath ? `${oldPath} -> ${path}` : path,
+        reason: '検証の委譲先は変更も移動もできない',
       });
       continue;
     }

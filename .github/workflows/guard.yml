@@ -1,0 +1,47 @@
+name: Guard
+
+on:
+  pull_request:
+    # 既定は opened / synchronize / reopened のみ。
+    # labeled / unlabeled: allow-protected-change の付け外しで再判定させる。
+    #   そうしないと後から付けても再実行されず、外しても成功済みのチェックが残る。
+    # edited: base ブランチの付け替えは edited として飛ぶ。付け替えると差分が変わる。
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  protected-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # base との差分を取るため、全履歴が要る
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check protected paths
+        env:
+          # ${{ }} を run: へ直接展開しない（コマンドインジェクション対策）
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          # checkout が渡すのは PR のマージコミットなので、リポジトリ上の
+          # tools/check-protected-paths.mjs は「候補側」のコードである。
+          # それを実行すると、チェッカーを無害化する変更と保護パスの変更を
+          # 同じ PR に入れるだけでガードを回避できる。
+          # 実行するのは必ず base リビジョンの版にする。
+          CHECKER="$RUNNER_TEMP/check-protected-paths.mjs"
+          if git cat-file -e "origin/$BASE_REF:tools/check-protected-paths.mjs" 2>/dev/null; then
+            git show "origin/$BASE_REF:tools/check-protected-paths.mjs" > "$CHECKER"
+            echo "base（origin/$BASE_REF）のチェッカーで判定します。"
+          else
+            # ガード自身を導入する PR だけがここに来る。base にまだ存在しないため、
+            # 候補側を使うほかない。マージ後は必ず上の経路になる。
+            CHECKER="tools/check-protected-paths.mjs"
+            echo "::warning::base にチェッカーが無いため候補側で判定します（ガード導入 PR のみ想定）。"
+          fi
+          node "$CHECKER" "origin/$BASE_REF"

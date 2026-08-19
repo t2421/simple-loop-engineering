@@ -26,6 +26,7 @@ PR の差分（base ブランチとの比較）に次の変更が含まれると
 - `tests/` 配下の既存テストファイルの内容変更・削除。新規追加は許可
 - `package.json` の `scripts` の変更
 - `.github/workflows/` 配下の既存ワークフローの変更・削除。新規追加は許可
+- `tools/check-protected-paths.mjs` の変更・削除。ガードジョブは base リビジョンのこのファイルを実行するため、このファイル自体が判定の根拠である
 
 例外: PR に `allow-protected-change` ラベルが付いているときはガードを通過させる（人間による明示承認の経路）。凍結ファイルの正規の改訂手続きは `specs/scripts-freeze-procedure.md` を参照。
 
@@ -36,6 +37,7 @@ PR の差分（base ブランチとの比較）に次の変更が含まれると
 - ローカルフック（PreToolUse 等）による編集時ブロック
 - GitHub の branch protection / CODEOWNERS 設定
 - 保護対象の変更内容が「妥当かどうか」の判断（検知のみ）
+- ガードのワークフロー定義（`.github/workflows/guard.yml`）自身が同じ PR で改変される経路。`pull_request` の Actions は候補側のワークフロー定義で走るため、`run:` を差し替えられるとジョブは実行されない。これは GitHub 側の required workflows / ruleset で担保する領域であり、上記の branch protection と同じく範囲外とする
 
 ## 失敗時
 
@@ -52,6 +54,7 @@ PR の差分（base ブランチとの比較）に次の変更が含まれると
 | 新規 `specs/foo.md` と新規 `tests/foo.test.mjs` を追加した PR | ガード通過 |
 | `specs/x.md` を内容同一のまま `specs/archive/x.md` へ移動した PR | ガード通過 |
 | `src/` のみ変更した PR | ガード通過 |
+| `tools/check-protected-paths.mjs` を変更した PR | ガード失敗 |
 | 保護パス変更あり + `allow-protected-change` ラベル | ガード通過 |
 
 ## 完了条件

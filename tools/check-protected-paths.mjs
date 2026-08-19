@@ -6,6 +6,7 @@
  * 違反があれば理由を表示して終了コード 1 で終わる。
  */
 
+import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
@@ -301,6 +302,9 @@ function main() {
 // CLI として起動されたときだけ実行する（テストからの import では走らせない）。
 // ファイル名で判定すると、別名にコピーして実行したとき（CI が base 版を
 // 一時ファイルへ取り出す経路）に main() が黙って走らない。
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+// `import.meta.url` は realpath 解決済みなので、argv 側も realpath に揃える。
+// 揃えないとパスに symlink 成分があるとき（/tmp -> /private/tmp 等）不一致になり、
+// main() が走らないまま exit 0 になる。ガードが黙って成功するのが最悪の失敗方向。
+if (process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href === import.meta.url) {
   main();
 }

@@ -29,7 +29,7 @@ Figma のライブファイルは完了条件にしない。**抽出して `prog
 
 ## 手順
 
-1. Figma の URL から `fileKey` と `nodeId` を取る
+1. Figma の URL から `fileKey` と `nodeId` を取る。**URL の `node-id` はハイフン区切り（`node-id=1-2`、URL エンコードされて `1%3A2` のこともある）だが、MCP へ渡す形と JSON に書く形はコロン区切り（`1:2`）である。** URL デコードしたうえで `-` を `:` に直す
 2. `mcp__figma__get_variable_defs` と `mcp__figma__get_design_context` で対象ノードの値を読む
 3. 下の形で `progress/<作業>.figma.json` に書く
 4. `mcp__figma__get_screenshot` で同じノードの PNG を `progress/<作業>.png` に保存する

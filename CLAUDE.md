@@ -15,6 +15,7 @@
 | `src/` | 実装 |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
+| `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
 仕様と進捗は同名で対にする。例: `specs/math-add.md` と `progress/math-add.md`。
 

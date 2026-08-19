@@ -7,6 +7,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 /** 人間による明示承認の経路。この PR ラベルが付いていればガードを通過させる */
 export const ALLOW_LABEL = 'allow-protected-change';
@@ -297,7 +298,9 @@ function main() {
   process.exit(1);
 }
 
-// CLI として起動されたときだけ実行する（テストからの import では走らせない）
-if (process.argv[1] && process.argv[1].endsWith('check-protected-paths.mjs')) {
+// CLI として起動されたときだけ実行する（テストからの import では走らせない）。
+// ファイル名で判定すると、別名にコピーして実行したとき（CI が base 版を
+// 一時ファイルへ取り出す経路）に main() が黙って走らない。
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main();
 }

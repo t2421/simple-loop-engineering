@@ -1,9 +1,9 @@
 # Progress: spec / progress のコミット・マージ規約
 
-- **Target Spec:** `specs/commit-timing-rules.md`
+- **Target Spec:** `specs/archive/commit-timing-rules.md`
 - **Branch:** `feature/commit-timing-rules`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/7
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] CLAUDE.md への規約の追記（コミットタイミング表・補足 2 点）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 
@@ -24,3 +24,4 @@
 - 06:08 - CLAUDE.md に「## コミットとマージ」節（表 5 行 + 補足 2 点）を追加し、「アーカイブ」節の手順に main へ直接コミットする手順 5 を追記した。`npm run ci` は 43 pass / 0 fail で変更前と同じく成功。
 - 06:14 - `codex-reviewer` が承認（Critical 0 / High 0）。Medium 1 件の指摘: CLAUDE.md「状態」節のこの作業が Not Started のままで進捗の Status と食い違う。同じコミットで In Progress に直した。
 - 06:18 - PR #7 を作成。ドキュメントのみの変更で見た目の変更がないため、スクリーンキャプチャは添付しない。マージ待ち。Status は Done にせず、アーカイブもしない。
+- 09:02 - PR #7 がマージされた（merge commit `4d5237c`）。本規約のアーカイブ行に従い、Status を Done にして spec / progress を `archive/` へ移し、`docs: archive commit-timing-rules` として main へ直接コミットした。この規約自身の初適用。

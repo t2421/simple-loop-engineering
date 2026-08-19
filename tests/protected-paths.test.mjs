@@ -562,3 +562,35 @@ test('作業ディレクトリの下の階層にある関連文書は別名 spec
   });
   assert.deepEqual(v, [], '判定は作業ディレクトリ直下だけ');
 });
+
+test('アーカイブ済みの作業と同じパスへの spec 追加は違反になる（PR をまたぐすり替え）', () => {
+  const baseHas = (p) => p === 'task/archive/0012-x/spec.md';
+  const v = findViolations({
+    ...empty,
+    baseHas,
+    changes: [{ status: 'A', path: 'task/0012-x/spec.md' }],
+  });
+  assert.equal(v.length, 1, 'PR1 でアーカイブ、PR2 で跡地に緩めた spec を置く 2 手を防ぐ');
+});
+
+test('アーカイブが無い新規作業の追加は通る', () => {
+  const v = findViolations({
+    ...empty,
+    baseHas: () => false,
+    changes: [
+      { status: 'A', path: 'task/0019-bar/spec.md' },
+      { status: 'A', path: 'task/0019-bar/progress.md' },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('baseHas は archiveMove のディレクトリにだけ効く', () => {
+  const baseHas = () => true;
+  const v = findViolations({
+    ...empty,
+    baseHas,
+    changes: [{ status: 'A', path: 'tests/new.test.mjs' }],
+  });
+  assert.deepEqual(v, [], 'tests/ は archiveMove: false なので対象外');
+});

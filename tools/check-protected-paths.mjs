@@ -202,9 +202,11 @@ export function scriptsChanged(baseScripts, headScripts) {
  * @param {Array<{status: string, path: string, oldPath?: string, similarity?: number}>} input.changes
  * @param {Record<string, string>} [input.baseScripts] - base 側の package.json の scripts
  * @param {Record<string, string>} [input.headScripts] - head 側の package.json の scripts
+ * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
+ *   **`main()` は必ず渡すこと。** 渡さないと PR をまたぐすり替えを検知できない
  * @returns {Array<{path: string, reason: string}>} 違反の一覧。空なら通過
  */
-export function findViolations({ changes, baseScripts, headScripts }) {
+export function findViolations({ changes, baseScripts, headScripts, baseHas = () => false }) {
   const violations = [];
 
   // 同じ差分の中で、保護ファイルを移動させたうえで同じパスに新規追加すると、
@@ -310,6 +312,14 @@ export function findViolations({ changes, baseScripts, headScripts }) {
           path,
           reason: `既存の${dir.label}を移動させた跡地に別の内容を置いている（すり替え）`,
         });
+      } else if (dir.archiveMove && baseHas(archiveDestination(dir, path))) {
+        // PR1 でアーカイブ移動し、マージ後の PR2 で跡地に緩めた spec を置く 2 手を防ぐ。
+        // 差分の中だけを見る movedAwayFrom では届かない。
+        // ID は使い終わったら再利用しない規約なので、この追加が正当になることはない
+        violations.push({
+          path,
+          reason: `すでにアーカイブ済みの${dir.label}と同じパスに新しく置いている（${archiveDestination(dir, path)} がある）`,
+        });
       } else if (isAliasSpec(dir, path)) {
         // 別名の spec を足して progress の Target Spec をそこへ向ければ、
         // 以後その完了条件は保護を受けずに書き換えられる
@@ -412,7 +422,17 @@ function main() {
     process.exit(1);
   }
 
-  const violations = findViolations({ changes, baseScripts, headScripts });
+  // base のツリーを引く。これを渡さないと PR をまたぐすり替えを取り逃がす
+  const baseHas = (p) => {
+    try {
+      execFileSync('git', ['cat-file', '-e', `${mergeBase}:${p}`], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const violations = findViolations({ changes, baseScripts, headScripts, baseHas });
 
   if (violations.length === 0) {
     console.log(`保護パスの変更はありません（${changes.length} 件の差分を確認）。`);

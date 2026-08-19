@@ -34,6 +34,7 @@ DETECT specs/TEMPLATE.md                    ← 旧パスだけ守っている
 - `spec.md` 以外の関連ファイル（Figma 抽出物など）も保護する。CLAUDE.md「見た目」は抽出した JSON・PNG を**見た目の完了条件の正**と定めており、これも期待値だからである。`spec.md` だけを守ると、別名の spec（`spec-v2.md`）を足して **Target Spec** をそこへ向ける迂回も残る
 - アーカイブ移動（`task/<id>-<slug>/` → `task/archive/<id>-<slug>/`）は、内容が同一なら許可する。移動元がすでに `archive/` の中にある場合は許可しない
 - 同じ差分の中で、保護ファイルを移動させた跡地へ新規追加することは許可しない（移動と追加の合わせ技によるすり替えを防ぐ）
+- **すでにアーカイブ済みの作業と同じパスへ `spec.md` を新規追加することは許可しない。** PR1 でアーカイブ移動し、マージ後の PR2 で跡地に緩めた spec を置く 2 手を防ぐ。差分の中だけを見る判定では届かないので、base に `<prefix>archive/<作業ディレクトリ>/spec.md` があるかを確認する。ID は使い終わったら再利用しない規約なので、この追加が正当になることはない
 - `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md` は、変更も移動も削除も許さない（現行の `TEMPLATES` と同じ扱い）
 - `backlog/` は保護しない。着手前の候補であり、完了条件は未確定だからである
 - `specs/` と `progress/` の既存の扱い（`TEMPLATE.md` の凍結を含む）は残す。移行前の資産が残っている限り外さない
@@ -61,6 +62,8 @@ DETECT specs/TEMPLATE.md                    ← 旧パスだけ守っている
 | `task/0017-foo/spec-v2.md` を追加して内容を変更した PR | ガード失敗 |
 | `task/archive/X/spec.md` を `task/archive/archive/X/spec.md` へ移動した PR | ガード失敗 |
 | 保護ファイルを移動させた跡地へ同じ差分で新規追加した PR | ガード失敗 |
+| base に `task/archive/0012-x/spec.md` がある状態で `task/0012-x/spec.md` を追加した PR | ガード失敗 |
+| base にアーカイブが無い新規作業 `task/0019-bar/spec.md` を追加した PR | ガード通過 |
 | `task/0019-bar/` を、`progress.md` を書き換えたうえで `task/archive/0019-bar/` へ移動した PR | ガード通過（`spec.md` が同一なら可） |
 | `task/TEMPLATE-spec.md` を変更した PR | ガード失敗 |
 | 新規 `task/0019-bar/spec.md` を追加した PR | ガード通過 |

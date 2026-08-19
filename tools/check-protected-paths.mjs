@@ -15,40 +15,81 @@ export const ALLOW_LABEL = 'allow-protected-change';
 const TEMPLATES = ['specs/TEMPLATE.md', 'progress/TEMPLATE.md'];
 
 /**
- * 既存ファイルの内容変更・削除を禁じ、新規追加と内容同一の移動は許すディレクトリ。
- * `specs/` は `archive/` も含む。
+ * 既存ファイルの内容変更・削除を禁じ、新規追加は許すディレクトリ。
+ *
+ * `archiveMove` が true のディレクトリだけ、同ディレクトリ内での内容同一の移動
+ * （アーカイブ作業）を許す。`tests/` と `.github/workflows/` は移動も許さない。
+ * リネームでディレクトリの外へ出せば、テストの削除や CI の無効化ができてしまうため。
  */
 const APPEND_ONLY_DIRS = [
-  { prefix: 'specs/', label: '仕様' },
-  { prefix: 'tests/', label: 'テスト' },
-  { prefix: '.github/workflows/', label: 'ワークフロー' },
+  { prefix: 'specs/', label: '仕様', archiveMove: true },
+  { prefix: 'tests/', label: 'テスト', archiveMove: false },
+  { prefix: '.github/workflows/', label: 'ワークフロー', archiveMove: false },
 ];
 
 /**
- * `git diff --name-status -M` の出力を構造化する純関数。
+ * git が C クォートしたパス名（`"..."`）を元に戻す。
+ * `-z` を使えば通常は出ないが、念のため受けられるようにしておく。
  *
- * @param {string} raw - `git diff --name-status -M <base>...HEAD` の標準出力
+ * @param {string} p
+ * @returns {string}
+ */
+function unquotePath(p) {
+  if (!p.startsWith('"') || !p.endsWith('"')) return p;
+  const body = p.slice(1, -1);
+  // 8 進エスケープは UTF-8 の「バイト」なので、いったんバイト列に積んでから復号する。
+  // 1 文字ずつ復号するとマルチバイト文字が壊れる。
+  const encoder = new TextEncoder();
+  const bytes = [];
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] !== '\\') {
+      encoder.encode(body[i]).forEach((b) => bytes.push(b));
+      continue;
+    }
+    const octal = body.slice(i + 1, i + 4);
+    if (/^[0-7]{3}$/.test(octal)) {
+      bytes.push(parseInt(octal, 8));
+      i += 3;
+      continue;
+    }
+    const escaped = body[i + 1];
+    const map = { n: 0x0a, t: 0x09, r: 0x0d, '"': 0x22, '\\': 0x5c };
+    bytes.push(map[escaped] ?? escaped.charCodeAt(0));
+    i += 1;
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/**
+ * `git diff --name-status -M -z` の出力を構造化する純関数。
+ *
+ * `-z` は NUL 区切りでパス名をクォートしないため、非 ASCII・タブ・改行を含む
+ * パスでも正しく読める。リネーム・コピーは「状態・旧パス・新パス」の 3 フィールド。
+ *
+ * @param {string} raw - `git diff --name-status -M -z <base>...HEAD` の標準出力
  * @returns {Array<{status: string, path: string, oldPath?: string, similarity?: number}>}
  */
 export function parseNameStatus(raw) {
-  return raw
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => {
-      const fields = line.split('\t');
-      const code = fields[0];
-      // リネーム（R100）とコピー（C100）は「旧パス→新パス」の 2 列を持つ
-      const rename = /^([RC])(\d+)$/.exec(code);
-      if (rename) {
-        return {
-          status: rename[1],
-          path: fields[2],
-          oldPath: fields[1],
-          similarity: Number(rename[2]),
-        };
-      }
-      return { status: code, path: fields[1] };
-    });
+  const fields = raw.split('\0').filter((f) => f !== '');
+  const changes = [];
+  let i = 0;
+  while (i < fields.length) {
+    const code = fields[i];
+    const rename = /^([RC])(\d+)$/.exec(code);
+    if (rename) {
+      changes.push({
+        status: rename[1],
+        path: unquotePath(fields[i + 2]),
+        oldPath: unquotePath(fields[i + 1]),
+        similarity: Number(rename[2]),
+      });
+      i += 3;
+    } else {
+      changes.push({ status: code, path: unquotePath(fields[i + 1]) });
+      i += 2;
+    }
+  }
+  return changes;
 }
 
 /**
@@ -87,7 +128,7 @@ export function findViolations({ changes, baseScripts, headScripts }) {
     // 型は移動も内容変更も削除も許さない
     if (TEMPLATES.includes(path) || TEMPLATES.includes(oldPath)) {
       violations.push({
-        path: oldPath ?? path,
+        path: oldPath ? `${oldPath} -> ${path}` : path,
         reason: '型（TEMPLATE.md）は変更も移動もできない',
       });
       continue;
@@ -101,24 +142,38 @@ export function findViolations({ changes, baseScripts, headScripts }) {
       continue;
     }
 
-    const dir = APPEND_ONLY_DIRS.find(
-      (d) => path.startsWith(d.prefix) || (oldPath ?? '').startsWith(d.prefix),
-    );
+    const isRename = status === 'R' || status === 'C';
+    // 保護対象かどうかは、移動元と移動先の両方で見る。
+    // 移動元だけで見ると、保護ディレクトリの外へ出す変更を取り逃がす。
+    const fromDir = isRename
+      ? APPEND_ONLY_DIRS.find((d) => (oldPath ?? '').startsWith(d.prefix))
+      : undefined;
+    const dir = APPEND_ONLY_DIRS.find((d) => path.startsWith(d.prefix));
+
+    if (isRename) {
+      // 保護ディレクトリの外から中へ移すのは新規追加と同じ。許可する
+      if (!fromDir) continue;
+
+      // 内容同一のまま同じ保護ディレクトリ内で移すアーカイブ作業だけ許可する
+      const stayedInside = path.startsWith(fromDir.prefix);
+      if (fromDir.archiveMove && stayedInside && similarity === 100) continue;
+
+      const reason = !stayedInside
+        ? `既存の${fromDir.label}が保護ディレクトリの外へ移動されている`
+        : similarity === 100
+          ? `既存の${fromDir.label}は内容が同一でも移動できない`
+          : `既存の${fromDir.label}が内容ごと移動されている`;
+      violations.push({ path: `${oldPath} -> ${path}`, reason });
+      continue;
+    }
+
     if (!dir) continue;
 
     // 新規追加は許可
     if (status === 'A') continue;
 
-    // 内容が同一のままの移動（アーカイブ作業）は許可
-    if ((status === 'R' || status === 'C') && similarity === 100) continue;
-
     if (status === 'D') {
       violations.push({ path, reason: `既存の${dir.label}が削除されている` });
-    } else if (status === 'R' || status === 'C') {
-      violations.push({
-        path: `${oldPath} -> ${path}`,
-        reason: `既存の${dir.label}が内容ごと移動されている`,
-      });
     } else {
       violations.push({ path, reason: `既存の${dir.label}の内容が変わっている` });
     }
@@ -160,7 +215,7 @@ function readLabels() {
 /**
  * 指定した ref の package.json の scripts を読む。ref が読めなければ例外を投げる。
  *
- * @param {string} ref - `git show` に渡す ref。空文字なら作業ツリー
+ * @param {string} ref - `git show` に渡す ref
  * @returns {Record<string, string>}
  */
 function readScripts(ref) {
@@ -179,13 +234,18 @@ function main() {
   let baseScripts;
   let headScripts;
   try {
+    // 差分は base...HEAD（三点）なので、比較対象も分岐点（merge-base）に揃える。
+    // base の先端を見ると、分岐後に main 側で scripts が変わった場合に誤検知する。
+    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
     const raw = execFileSync(
       'git',
-      ['diff', '--name-status', '-M', `${baseRef}...HEAD`],
+      ['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`],
       { encoding: 'utf8' },
     );
     changes = parseNameStatus(raw);
-    baseScripts = readScripts(baseRef);
+    baseScripts = readScripts(mergeBase);
     headScripts = readScripts('HEAD');
   } catch (err) {
     // 差分が取れないまま素通りさせない（shallow clone 等）

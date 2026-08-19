@@ -2,6 +2,13 @@ name: Guard
 
 on:
   pull_request:
+    # 既定は opened / synchronize / reopened のみ。ラベルの付け外しでも再判定させる。
+    # そうしないと allow-protected-change を後から付けても再実行されず、
+    # 外しても成功済みのチェックが残ってしまう。
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
 
 jobs:
   protected-paths:

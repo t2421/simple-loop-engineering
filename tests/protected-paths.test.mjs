@@ -10,7 +10,7 @@ import {
 const empty = { changes: [], baseScripts: {}, headScripts: {} };
 
 test('parseNameStatus: 追加・変更・削除を読む', () => {
-  const out = parseNameStatus('A\tsrc/new.mjs\nM\tsrc/math.mjs\nD\tsrc/old.mjs\n');
+  const out = parseNameStatus('A\0src/new.mjs\0M\0src/math.mjs\0D\0src/old.mjs\0');
   assert.deepEqual(out, [
     { status: 'A', path: 'src/new.mjs' },
     { status: 'M', path: 'src/math.mjs' },
@@ -19,14 +19,14 @@ test('parseNameStatus: 追加・変更・削除を読む', () => {
 });
 
 test('parseNameStatus: 内容同一の移動は similarity 100 として読む', () => {
-  const out = parseNameStatus('R100\tspecs/x.md\tspecs/archive/x.md\n');
+  const out = parseNameStatus('R100\0specs/x.md\0specs/archive/x.md\0');
   assert.deepEqual(out, [
     { status: 'R', path: 'specs/archive/x.md', oldPath: 'specs/x.md', similarity: 100 },
   ]);
 });
 
 test('parseNameStatus: 内容が変わった移動は similarity < 100 として読む', () => {
-  const out = parseNameStatus('R087\ttests/a.test.mjs\ttests/b.test.mjs\n');
+  const out = parseNameStatus('R087\0tests/a.test.mjs\0tests/b.test.mjs\0');
   assert.deepEqual(out, [
     { status: 'R', path: 'tests/b.test.mjs', oldPath: 'tests/a.test.mjs', similarity: 87 },
   ]);
@@ -159,6 +159,83 @@ test('複数の違反をすべて報告する', () => {
     headScripts: { ci: 'true' },
   });
   assert.equal(v.length, 3);
+});
+
+test('parseNameStatus: -z なのでタブや非 ASCII を含むパスも壊れない', () => {
+  const out = parseNameStatus('M\0tests/名前に\tタブ.test.mjs\0');
+  assert.deepEqual(out, [{ status: 'M', path: 'tests/名前に\tタブ.test.mjs' }]);
+});
+
+test('C クォートされたパスも元に戻して判定する', () => {
+  const out = parseNameStatus('M\0"tests/\\343\\201\\202.test.mjs"\0');
+  assert.equal(out[0].path, 'tests/あ.test.mjs');
+  const v = findViolations({ ...empty, changes: out });
+  assert.equal(v.length, 1, 'クォートを解かないと tests/ 判定を外れて素通りする');
+});
+
+test('既存テストを tests/ の外へリネームすると違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'docs/add.test.mjs', oldPath: 'tests/add.test.mjs', similarity: 100 },
+    ],
+  });
+  assert.equal(v.length, 1, 'tests/ の外へ出せばテストを消せてしまう');
+});
+
+test('既存ワークフローをリネームで退避すると違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'ci.yml.disabled',
+        oldPath: '.github/workflows/ci.yml',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(v.length, 1, 'リネームで退避すれば CI 検証そのものを無効化できてしまう');
+});
+
+test('tests/ 内での内容同一のリネームも違反になる（アーカイブ免除は specs/ だけ）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'tests/b.test.mjs', oldPath: 'tests/a.test.mjs', similarity: 100 },
+    ],
+  });
+  assert.equal(v.length, 1);
+});
+
+test('specs/ の外へ出す移動は内容同一でも違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'docs/math-add.md', oldPath: 'specs/math-add.md', similarity: 100 },
+    ],
+  });
+  assert.equal(v.length, 1);
+});
+
+test('保護ディレクトリの外から中への移動は新規追加と同じく違反にならない', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'tests/moved.test.mjs', oldPath: 'draft/moved.test.mjs', similarity: 100 },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('コピー（C100）でも保護ディレクトリの外へ出せば違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'C', path: 'docs/ci.yml', oldPath: '.github/workflows/ci.yml', similarity: 100 },
+    ],
+  });
+  assert.equal(v.length, 1);
 });
 
 test('hasAllowLabel: allow-protected-change があれば true', () => {

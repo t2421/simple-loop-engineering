@@ -1,9 +1,9 @@
 # Progress: GitHub CI で e2e を必要なときだけ回す
 
-- **Target Spec:** `task/0019-ci-e2e-when-needed/spec.md`
+- **Target Spec:** `task/archive/0019-ci-e2e-when-needed/spec.md`
 - **Branch:** `feature/ci-e2e-when-needed`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/25
-- **Status:** In Progress (Phase: Record)
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -16,7 +16,7 @@
 - [x] 実装 (`tools/e2e-needed.mjs`、`tools/run-unit-tests.mjs`、`package.json` の `scripts`、`.github/workflows/ci.yml`、`CLAUDE.md`)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。見た目の変更は無いためスクリーンキャプチャは添付しない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 
@@ -27,3 +27,4 @@
 - 05:40 - `codex-reviewer` 不承認。High 2: (1) `run-unit-tests.mjs` が未保護だと scripts を触らずにユニットを空振りできる。(2) e2e ジョブが候補側の `e2e-needed.mjs` を実行すると、判定を false にして `src/` 変更と同時に間引ける。
 - 05:50 - High 対応。委譲先 2 ファイルを CHECKER と同じく保護。`e2e-needed.mjs` からローカル import を外し、CI は base 版を一時ファイルで実行。spec の仕様・例と CLAUDE.md 一覧を追随。
 - 05:58 - `codex-reviewer` 承認（Critical 0 / High 0）。PR #25 を作成し `allow-protected-change` を付けた。
+- 05:51 - PR #25 がマージされたことを確認（`gh pr view 25` で `mergedAt` / `state: MERGED`）。#24 もマージ済み。`main` を pull し、`task/0019-ci-e2e-when-needed/` を `task/archive/` へ移動。Status を Done に、Target Spec を新しいパスに変更。

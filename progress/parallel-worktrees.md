@@ -28,3 +28,6 @@
 - 09:52 - `math-mul` の PR #9 を作成（codex-reviewer 承認、Critical 0 / High 0）。
 - 09:59 - `math-div` の PR #10 を作成（codex-reviewer 承認、Critical 0 / High 0）。演習 2 作業の PR が別 worktree から 2 本作られた。
 - 10:02 - 並列実施中に、出力のラベルを取り違えて会話に貼る失敗をした（math-mul と math-div の ci 出力を逆に提示）。原因はバックグラウンド実行の完了順とタスク ID の対応を目視で追ったこと。対処として、コマンド内に `pwd` と `git branch --show-current` を埋め込んで出力自体に worktree を刻む方式に変更し、再実行して確定させた。並列時は出力に出自を埋めることを運用の前提とする。
+- 10:10 - `codex-reviewer` が承認（Critical 0 / High 0）。Medium 1 件: 新節に足した「並列にしてよいのは触るファイルが重ならない作業どうしである」が演習と矛盾する。演習の 2 本はどちらも `src/math.mjs` の `sub` 直後に追記しており衝突する。`git merge-tree --write-tree origin/feature/math-mul origin/feature/math-div` で `CONFLICT (content): Merge conflict in src/math.mjs` を確認した。
+- 10:12 - 当該一文は spec の「仕様」3 点に含まれない私の追加分であり、spec 本体はむしろ「競合は PR のマージ順に解決する」と衝突の発生を前提にしていた。矛盾していたのは追加した一文の側なので、「重なる場合も並列にしてよいが、後からマージする側が main を取り込んで解決する」に改めた。演習はこの表現どおりの実例となる（#9 / #10 のうち後にマージする側で `src/math.mjs` を解決する）。
+- 10:13 - Low 指摘: 本ブランチの CLAUDE.md「状態」節で他作業のステータスを更新しており、新節が想定する CLAUDE.md 競合を自ら作っている。progress ファイル自体は触っていないため規約違反ではない。この一覧の二重管理は `specs/claude-md-slim.md` が削除を予定している箇所であり、そちらで構造的に解消する。

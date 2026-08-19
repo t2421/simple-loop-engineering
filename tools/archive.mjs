@@ -52,7 +52,10 @@ export function rewriteProgress(text, name) {
   if (!targetRe.test(text)) missing.push('Target Spec');
   const rewritten = text
     .replace(statusRe, '- **Status:** Done')
-    .replace(targetRe, `- **Target Spec:** \`specs/archive/${name}.md\``);
+    .replace(targetRe, `- **Target Spec:** \`specs/archive/${name}.md\``)
+    // 手作業の手順どおり、アーカイブのチェック項目も閉じる。
+    // Done なのに「PR マージ後のアーカイブ」が未着手のまま残るのを防ぐ
+    .replace(/^- \[[ /]\] (PRマージ後のアーカイブ.*)$/m, '- [x] $1');
   return { text: rewritten, missing };
 }
 
@@ -66,7 +69,9 @@ export function rewriteProgress(text, name) {
  * @returns {string[]} 移動対象のファイル名
  */
 export function collectArtifacts(entries, name) {
-  // 進捗（.md）の存在が作業の定義である。`foo` と `foo.v2` の両方に進捗があるなら、
+  // 進捗（.md）の存在が作業の定義である。
+  // 前提: 判定は progress/ 直下だけを見る。`foo.v2` が既にアーカイブ済みだと
+  // `foo.v2.png` は `foo` の抽出物として拾われる（既知の限界）。`foo` と `foo.v2` の両方に進捗があるなら、
   // `foo.v2.png` は `foo.v2` のものであって `foo` のものではない。
   // 名前がドットを含む作業を巻き込まないよう、最長一致する作業名に割り当てる。
   const longerWorks = entries
@@ -192,7 +197,11 @@ export async function archive(name, { root = process.cwd(), checkPr = checkPrWit
 
     const movedProgress = path.join(progressArchiveDir, `${name}.md`);
     const rewritten = rewriteProgress(fs.readFileSync(movedProgress, 'utf8'), name);
-    fs.writeFileSync(movedProgress, rewritten.text);
+    // 直接上書きすると、truncate 後・書き込み中に落ちたとき進捗が壊れる。
+    // 隣に書ききってから rename で置き換える
+    const tmp = `${movedProgress}.tmp`;
+    fs.writeFileSync(tmp, rewritten.text);
+    fs.renameSync(tmp, movedProgress);
   } catch (err) {
     // 逆順に戻す。spec だけ移動して progress が残る中途半端な状態を作らない
     for (const step of done.reverse()) {

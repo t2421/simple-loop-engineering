@@ -186,7 +186,10 @@ test('抽出物の移動先が衝突していても、spec を動かす前に失
   assert.equal(fs.readFileSync(path.join(root, 'progress/archive/foo.png'), 'utf8'), 'old');
 });
 
-test('移動の途中で失敗したら巻き戻し、中途半端な状態を残さない', async () => {
+test('移動の途中で失敗したら巻き戻し、中途半端な状態を残さない', {
+  // root はモードビットを無視して rename できてしまう（コンテナ実行の CI 等）
+  skip: process.getuid?.() === 0 ? 'root では chmod による失敗を再現できない' : false,
+}, async () => {
   const root = makeRepo({ extras: ['foo.png'] });
   // progress/archive/ を書き込めなくして、spec の移動後に失敗させる
   const blocked = path.join(root, 'progress/archive');
@@ -242,4 +245,24 @@ test('rewriteProgress: 当たらなかった行を missing で返す', () => {
 
   const bad = rewriteProgress('- **Status**: In Progress\n', 'foo');
   assert.deepEqual(bad.missing.sort(), ['Status', 'Target Spec']);
+});
+
+test('アーカイブのチェック項目が [x] になる', async () => {
+  const root = makeRepo();
+  const p = path.join(root, 'progress/foo.md');
+  fs.writeFileSync(fs.readFileSync(p, 'utf8') ? p : p,
+    fs.readFileSync(p, 'utf8') + '\n- [ ] PRマージ後のアーカイブ\n');
+
+  await archive('foo', { root, checkPr: merged });
+
+  const moved = fs.readFileSync(path.join(root, 'progress/archive/foo.md'), 'utf8');
+  assert.match(moved, /^- \[x\] PRマージ後のアーカイブ$/m);
+});
+
+test('進捗の書き換えは一時ファイル経由で置き換える（途中で壊さない）', async () => {
+  const root = makeRepo();
+  await archive('foo', { root, checkPr: merged });
+
+  // .tmp が残っていない
+  assert.deepEqual(ls(path.join(root, 'progress/archive')), ['foo.md']);
 });

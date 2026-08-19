@@ -160,3 +160,24 @@ test('PR の head ブランチが取得できなければ失敗する', async ()
   assert.equal(r.ok, false);
   assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
 });
+
+test('owner / repo の大小文字は区別しない', () => {
+  const r = checkOwnership({
+    url: 'https://github.com/T2421/Simple-Loop-Engineering/pull/1',
+    repo: { owner: 't2421', repo: 'simple-loop-engineering' },
+    headRefName: 'feature/foo',
+    branch: 'feature/foo',
+  });
+  assert.equal(r.ok, true, 'GitHub の owner/repo は case-insensitive');
+});
+
+test('getRepo は root を受け取る（判定の対象と変更の対象を一致させる）', async () => {
+  const root = makeRepo();
+  let seen = null;
+  await archive('foo', {
+    root,
+    checkPr: prBeing(),
+    getRepo: async (r) => { seen = r; return { owner: 't2421', repo: 'simple-loop-engineering' }; },
+  });
+  assert.equal(seen, root);
+});

@@ -82,7 +82,9 @@ export function checkOwnership({ url, repo, headRefName, branch }) {
   if (!repo || !repo.owner || !repo.repo) {
     return { ok: false, reason: 'このリポジトリの owner/repo を取得できませんでした' };
   }
-  if (parsed.owner !== repo.owner || parsed.repo !== repo.repo) {
+  // GitHub の owner/repo は大小文字を区別しない。区別すると正当な PR を弾く
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  if (!same(parsed.owner, repo.owner) || !same(parsed.repo, repo.repo)) {
     return {
       ok: false,
       reason: `PR が別のリポジトリのものです: ${parsed.owner}/${parsed.repo}（このリポジトリは ${repo.owner}/${repo.repo}）`,
@@ -172,8 +174,8 @@ async function checkPrWithGh(url) {
     if (state !== 'MERGED') {
       return { merged: false, reason: `PR がマージされていません（state: ${state}）` };
     }
-    const parsed = parsePrUrl(url);
-    return { merged: true, headRefName, owner: parsed?.owner, repo: parsed?.repo };
+    // 帰属の判定は checkOwnership が URL を直接見る。ここでは head だけ返す
+    return { merged: true, headRefName };
   } catch (err) {
     return { merged: false, reason: `PR の状態を確認できませんでした: ${err.message}` };
   }
@@ -182,10 +184,15 @@ async function checkPrWithGh(url) {
 /**
  * 実行中のリポジトリの owner/repo を返す。
  *
+ * @param {string} root - リポジトリのルート
  * @returns {Promise<{owner: string, repo: string}>}
  */
-async function getRepoWithGh() {
-  const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner']);
+async function getRepoWithGh(root) {
+  const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner'], {
+    // root を渡さないと、別ディレクトリを対象にしたとき「A の PR を検証して B を書き換える」
+    // ことになる。判定の対象と変更の対象を必ず一致させる
+    cwd: root,
+  });
   const [owner, repo] = JSON.parse(stdout).nameWithOwner.split('/');
   return { owner, repo };
 }
@@ -239,7 +246,7 @@ export async function archive(
   // 別リポジトリや別作業の PR を貼れば通ってしまうので、帰属も確かめる
   let repo;
   try {
-    repo = await getRepo();
+    repo = await getRepo(root);
   } catch (err) {
     // 判定できないまま素通りさせない
     return { ok: false, reason: `このリポジトリの情報を取得できませんでした: ${err.message}` };

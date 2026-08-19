@@ -22,6 +22,21 @@
 
 `specs/archive/archive-automation.md` のレビューで指摘されたが、同 spec の「仕様」が `gh pr view` でのマージ確認しか要求していなかったため、範囲外として見送った経緯がある（`progress/archive/archive-automation.md` の 12:00）。
 
+### 凍結ファイルの改訂（CLAUDE.md「凍結を解いて改訂するとき」）
+
+この変更は既存の `tests/archive.test.mjs` の改訂を伴う。内容と理由を記す。
+
+**変更内容は fixture と注入口のみ。** PR URL の既定値を `https://github.com/o/r/pull/1`（実在しない owner/repo）から実在する形にする。確認関数のスタブが `headRefName` を返すようにし、リポジトリ確認のスタブを足して各 `archive()` 呼び出しに注入する。「Status / Target Spec の行が無い進捗」の fixture に `Branch` 行を足す。
+
+**検証を弱めない根拠:**
+
+- `assert` 行を 1 行も変更しない（`git diff -- tests/archive.test.mjs | grep -E "^[-+]\s*assert"` が空）
+- テスト名・アサーション・検査対象は不変。変わるのは入力データと注入口だけ
+- 落ちる 8 件はすべて「アーカイブが成功すること」を前提にする肯定系で、修正後も `result.ok === true` や移動後のファイル一覧を要求する。失敗しても通る形にはならない
+- `Branch` 行の追加は検査を飛ばすためではない。足さなければ帰属検証の理由（`進捗に **Branch** の行がありません`）で止まり、当該テストのアサーション `/Status/` に一致せず落ちる。足して初めて本来の Status 検査に到達する
+
+fixture が実在しない owner/repo を使っていたのは、帰属を検証していなかった時期の名残である。帰属検証を入れる以上、fixture が実在する形になるのは仕様上の必然で、テストの意図を変えるものではない。
+
 ## 仕様
 
 `archive(name)` は、PR がマージ済みであることに加えて次を確かめる。満たさなければ**ファイルを一切変更せず**、終了コード非 0 で理由を表示する。

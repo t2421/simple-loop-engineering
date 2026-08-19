@@ -1,9 +1,9 @@
 # Progress: `mul` の追加
 
-- **Target Spec:** `specs/math-mul.md`
+- **Target Spec:** `specs/archive/math-mul.md`
 - **Branch:** `feature/math-mul`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/9
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -16,7 +16,7 @@
 - [x] 実装 (`src/math.mjs` に `mul` を追加)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

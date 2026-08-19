@@ -1,9 +1,9 @@
 # Progress: `div` の追加
 
-- **Target Spec:** `specs/math-div.md`
+- **Target Spec:** `specs/archive/math-div.md`
 - **Branch:** `feature/math-div`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/10
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -16,7 +16,7 @@
 - [x] 実装 (`src/math.mjs` に `div` を追加)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

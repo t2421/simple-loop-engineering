@@ -31,12 +31,9 @@ Figma からの JSON・PNG など抽出物は、対応する進捗ファイル�
 - `progress/guard-protected-paths.md` — 保護パス変更の CI ガード。Not Started
 - `progress/claude-md-slim.md` — CLAUDE.md の整理と方針追記。Not Started
 - `progress/archive-automation.md` — アーカイブ手順の自動化。Not Started
-- `progress/parallel-worktrees.md` — worktree による並列作業の導入。In Progress
-- `progress/math-mul.md` — `mul` の追加（parallel-worktrees の演習）。In Progress
-- `progress/math-div.md` — `div` の追加（parallel-worktrees の演習）。In Progress
 - `progress/scripts-freeze-procedure.md` — 凍結ファイルの改訂手続き。Not Started
 - `progress/ci-lint.md` — Lint の導入。Not Started（`scripts-freeze-procedure` マージ後に着手）
-- 直近の完了: `progress/archive/commit-timing-rules.md` — spec / progress のコミット・マージ規約。Done
+- 直近の完了: `progress/archive/parallel-worktrees.md` — worktree による並列作業の導入。Done（演習の `math-mul` / `math-div` も完了）
 
 ## 開発ループ
 

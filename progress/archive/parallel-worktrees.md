@@ -1,9 +1,9 @@
 # Progress: worktree による並列作業の導入
 
-- **Target Spec:** `specs/parallel-worktrees.md`
+- **Target Spec:** `specs/archive/parallel-worktrees.md`
 - **Branch:** `feature/parallel-worktrees`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/11
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] 2 worktree での並列実施と、各進捗ログへの worktree パス・ブランチの記録
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

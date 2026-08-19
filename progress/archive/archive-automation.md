@@ -1,9 +1,9 @@
 # Progress: アーカイブ手順の自動化
 
-- **Target Spec:** `specs/archive-automation.md`
+- **Target Spec:** `specs/archive/archive-automation.md`
 - **Branch:** `feature/archive-automation`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/13
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -14,7 +14,7 @@
 - [x] 実装 (`tools/archive.mjs`)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

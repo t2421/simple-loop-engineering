@@ -1,9 +1,9 @@
 # Progress: CLAUDE.md の整理と方針追記
 
-- **Target Spec:** `specs/claude-md-slim.md`
+- **Target Spec:** `specs/archive/claude-md-slim.md`
 - **Branch:** `feature/claude-md-slim`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/12
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -14,7 +14,7 @@
 - [x] Skill の作成 (`.claude/skills/figma-extract/SKILL.md`) と CLAUDE.md からの参照
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

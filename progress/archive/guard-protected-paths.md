@@ -1,9 +1,9 @@
 # Progress: 保護パス変更の CI ガード
 
-- **Target Spec:** `specs/guard-protected-paths.md`
+- **Target Spec:** `specs/archive/guard-protected-paths.md`
 - **Branch:** `feature/guard-protected-paths`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/14
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
 - [x] PR に `allow-protected-change` ラベルを付ける（この PR は spec を変更しており、自分のガードに引っかかるため）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

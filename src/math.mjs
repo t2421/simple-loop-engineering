@@ -23,6 +23,18 @@ export function sub(a, b) {
 }
 
 /**
+ * 2 つの有限数の積を返す純関数。
+ * 引数は変更しない。
+ *
+ * @param {number} a - 乗数。有限数
+ * @param {number} b - 乗数。有限数
+ * @returns {number} a と b の積
+ */
+export function mul(a, b) {
+  return a * b;
+}
+
+/**
  * 2 つの有限数の商を返す純関数。
  * 引数は変更しない。
  *

@@ -1,7 +1,7 @@
 # Progress: 保護パスを `task/` へ追随させる
 
 - **Target Spec:** `task/0017-guard-task-paths/spec.md`
-- **Branch:** `feature/guard-task-paths`
+- **Branch:** `feature/guard-task-paths-only`
 - **PR:** 未作成
 - **Status:** In Progress
 
@@ -27,3 +27,4 @@
 - 18:10 - 実装。`APPEND_ONLY_DIRS` のエントリに任意の `basename` を持たせ、指定があればそのファイル名だけを対象にする `covers()` を追加した。`task/` は `basename: 'spec.md'`。リネーム時の「保護ディレクトリ内に留まったか」の判定も `covers()` 経由に揃えた。`TEMPLATES` に `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md` を追加し、違反メッセージを `型（TEMPLATE）は…` に一般化した。
 - 18:12 - 検証。移行で失われていた保護が回復した。`task/archive/0012-ci-lint/spec.md` の変更を DETECT、`task/TEMPLATE-spec.md` を DETECT。通るべきもの（進捗の更新、`backlog/`、新規追加）はすべて PASS。テストは 8 → 17 件に増え、`npm run ci` は全件 pass。
 - 18:14 - このチェックアウトで人間が並行して `.github/workflows/ci.yml`・`package.json`・`tools/e2e-needed.mjs`・`tools/run-unit-tests.mjs` を編集していた（CI のハング対策と見られる）。**自分の 3 ファイルだけを明示して commit し、人間の変更には触れていない。** `git add -A` を使わないという 3 度の失敗からの運用。
+- 18:20 - 人間が `feature/guard-task-paths` に別作業（`0019-ci-e2e-when-needed`）の spec/progress をコミットしていたため、そのまま PR にすると「進行中の作業ブランチに別の spec を置かない」に反する。人間の判断で分離し、main から切った `feature/guard-task-paths-only` に自分のコミットだけを cherry-pick した。元ブランチは触っていないので 0019 は残っている。Branch 欄を更新。

@@ -2,8 +2,8 @@
 
 - **Target Spec:** `task/0019-ci-e2e-when-needed/spec.md`
 - **Branch:** `feature/ci-e2e-when-needed`
-- **PR:** 未作成
-- **Status:** In Progress (Phase: Verify (外部))
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/25
+- **Status:** In Progress (Phase: Record)
 
 ## タスクチェックリスト
 
@@ -14,8 +14,8 @@
 - [x] Specの要件・受け入れ条件の確認
 - [x] テストの作成 (`tests/e2e-needed.test.mjs`、`tests/run-unit-tests.test.mjs`、`tests/gate-helpers.test.mjs`)
 - [x] 実装 (`tools/e2e-needed.mjs`、`tools/run-unit-tests.mjs`、`package.json` の `scripts`、`.github/workflows/ci.yml`、`CLAUDE.md`)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。見た目の変更は無いためスクリーンキャプチャは添付しない）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。見た目の変更は無いためスクリーンキャプチャは添付しない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -26,3 +26,4 @@
 - 05:28 - 完了条件 5 を精密化。当初「出力に calc-page が出ない」だと、パス判定テストの名前がヒットする。e2e 本体のアサーション名が出ない、に直した。
 - 05:40 - `codex-reviewer` 不承認。High 2: (1) `run-unit-tests.mjs` が未保護だと scripts を触らずにユニットを空振りできる。(2) e2e ジョブが候補側の `e2e-needed.mjs` を実行すると、判定を false にして `src/` 変更と同時に間引ける。
 - 05:50 - High 対応。委譲先 2 ファイルを CHECKER と同じく保護。`e2e-needed.mjs` からローカル import を外し、CI は base 版を一時ファイルで実行。spec の仕様・例と CLAUDE.md 一覧を追随。
+- 05:58 - `codex-reviewer` 承認（Critical 0 / High 0）。PR #25 を作成し `allow-protected-change` を付けた。

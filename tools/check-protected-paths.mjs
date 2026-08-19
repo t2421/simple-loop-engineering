@@ -35,11 +35,11 @@ const CHECKER = 'tools/check-protected-paths.mjs';
  * リネームでディレクトリの外へ出せば、テストの削除や CI の無効化ができてしまうため。
  */
 const APPEND_ONLY_DIRS = [
-  // `task/<id>-<slug>/spec.md` が完了条件と期待値の置き場である。
-  // 同じディレクトリの `progress.md` は保護しない（`basename` で絞る）。
-  // 進捗は工程を進めるたびに更新するもので、保護すると作業 PR が毎回
-  // ラベルを要求することになり、ガードが形骸化する。
-  { prefix: 'task/', label: '仕様', archiveMove: true, basename: 'spec.md' },
+  // `task/<id>-<slug>/` には spec.md・progress.md・関連ファイル（Figma 抽出物など）が
+  // 同居する。期待値は spec.md だけでなく抽出物にもあるので、配下は原則すべて守る。
+  // 除外は progress.md だけ。進捗は工程を進めるたびに更新するもので、保護すると
+  // 作業 PR が毎回ラベルを要求することになり、ガードが形骸化する。
+  { prefix: 'task/', label: '仕様', archiveMove: true, exclude: 'progress.md' },
   { prefix: 'specs/', label: '仕様', archiveMove: true },
   { prefix: 'tests/', label: 'テスト', archiveMove: false },
   { prefix: '.github/workflows/', label: 'ワークフロー', archiveMove: false },
@@ -60,16 +60,16 @@ function archiveDestination(dir, oldPath) {
 
 /**
  * そのパスが保護ディレクトリの対象かを判定する純関数。
- * `basename` が指定されたディレクトリは、その名前のファイルだけを対象にする。
+ * `exclude` が指定されたディレクトリは、その名前のファイルだけを対象から外す。
  *
- * @param {{prefix: string, basename?: string}} dir
+ * @param {{prefix: string, exclude?: string}} dir
  * @param {string} p
  * @returns {boolean}
  */
 function covers(dir, p) {
   if (!p.startsWith(dir.prefix)) return false;
-  if (!dir.basename) return true;
-  return p.endsWith(`/${dir.basename}`);
+  if (!dir.exclude) return true;
+  return !p.endsWith(`/${dir.exclude}`);
 }
 
 /**
@@ -232,9 +232,13 @@ export function findViolations({ changes, baseScripts, headScripts }) {
       // 別作業へ付け替えたり、`archive/` から出して凍結を解いたりできてしまう。
       // `<prefix>X` -> `<prefix>archive/X` の対応する遷移だけを許す。
       const stayedInside = covers(fromDir, path);
+      // 移動元がすでに archive/ の中なら、それはアーカイブ移動ではない。
+      // 許すと `archive/X` -> `archive/archive/X` で凍結記録を正規パスから動かせる
+      const alreadyArchived = oldPath.startsWith(`${fromDir.prefix}archive/`);
       const isArchiveMove =
         fromDir.archiveMove
         && similarity === 100
+        && !alreadyArchived
         && path === archiveDestination(fromDir, oldPath);
       if (isArchiveMove) continue;
 

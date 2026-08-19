@@ -35,3 +35,10 @@
 - 18:40 - 検証。アーカイブ解除・付け替え・すり替えをすべて DETECT。正当なアーカイブ移動（`task/` と旧 `specs/` の両方）と、アーカイブ移動に無関係な新規追加が同居する場合は PASS（誤検知なし）。回帰テストを 4 件追加し、テストは 46 → 50 件。
 - 18:42 - High-2 を修正。CLAUDE.md「変えてはいけないもの」の一覧を `task/` の `spec.md`・`task/TEMPLATE-*.md` を含む形に直し、旧 `specs/` / `progress/` の資産も 1 行に集約した。チェックボックスも閉じた。
 - 18:43 - Low 1 件も訂正。18:12 の「テストは 8 → 17 件」は誤りで、実際は 37 → 46 件だった（追加分だけを数えていた）。
+- 18:55 - 再レビュー（2 回目）で **承認**（Critical 0 / High 0 / Medium 2 / Low 3）。High 2 件の解消が確認された。`D`+`A` によるすり替えは「git は base と head の両方に存在するパスを必ず `M` として出す」ため構造的に不可能で、`M` 判定が先に捕まえるとの裏取りも得た。
+- 18:58 - M-1 を修正。`archiveDestination()` が移動元に `archive/` 配下を取れるため、`task/archive/X/spec.md → task/archive/archive/X/spec.md` が通っていた。移動元が `<prefix>archive/` の外であることを免除の条件に足した。旧 `specs/` にも同じく効く。
+- 19:00 - **M-2 は私が作った穴だった。** `basename: 'spec.md'` で対象を絞ったため、(a) 別名 spec（`spec-v2.md`）を足して **Target Spec** をそこへ向ける迂回、(b) Figma 抽出物の書き換えが素通りしていた。CLAUDE.md「見た目」は抽出した JSON・PNG を**見た目の完了条件の正**と定めており、抽出物も期待値である。旧 `specs/` 設計は配下を全面保護していたので、この 2 経路は絞り込みによって生まれたものだった。
+- 19:03 - 人間の承認を得て spec を「除外するのは `progress.md` だけ」に変更し、実装も `basename`（含める）から `exclude`（除く）に反転した。**保護は広がり、進捗更新は妨げない。** 「例」の表にも 4 行を追加。
+- 19:05 - 12 経路を通しで確認。検知すべき 7 件（完了条件の書き換え・Figma 抽出物・別名 spec・型・archive の入れ子・別作業への付け替え・退避+すり替え）をすべて DETECT、通すべき 5 件（進捗の更新・backlog・新規追加・正当なアーカイブ移動・進捗のアーカイブ移動）をすべて PASS。`npm run ci` は 147 pass / 0 fail。
+- 19:07 - **人間の作業ツリーを汚す事故を起こした。** 人間がこのチェックアウトを `feature/ci-e2e-when-needed` に切り替えたあと、それに気づかず `tests/protected-paths.test.mjs` へテストを追記していた。該当箇所だけ `git checkout --` で戻し、人間の他の変更には触れていない。以後は `.worktrees/feature/guard-task-paths-only` で作業する。**自分でマージした「1 つのチェックアウトで 2 作業を持たない」を破っていた。** 並行作業をするなら最初から worktree を使う。
+- 19:08 - なお人間の `GATE_HELPERS`（`tools/run-unit-tests.mjs` / `tools/e2e-needed.mjs` の保護）と本作業は、どちらも `tools/check-protected-paths.mjs` の同じ領域を変更する。規約どおり後からマージする側が解決する。

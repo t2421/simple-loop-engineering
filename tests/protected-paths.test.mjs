@@ -327,6 +327,20 @@ test('task/ 配下の既存 spec.md の内容変更は違反になる', () => {
   assert.equal(v.length, 1, '移行後は完了条件がここにある');
 });
 
+test('task/ 配下の spec.md 以外の関連ファイルも保護する', () => {
+  const figma = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'task/archive/0003-calc-page/calc-page.figma.json' }],
+  });
+  assert.equal(figma.length, 1, '抽出物は見た目の完了条件の正であり、期待値そのもの');
+
+  const alias = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'task/0017-foo/spec-v2.md' }],
+  });
+  assert.equal(alias.length, 1, '別名 spec を足して Target Spec を向ける迂回を塞ぐ');
+});
+
 test('task/ 配下の progress.md は保護しない', () => {
   const v = findViolations({
     ...empty,
@@ -442,4 +456,14 @@ test('アーカイブ移動と、無関係な新規追加の同居は通る', ()
     ],
   });
   assert.deepEqual(v, []);
+});
+
+test('すでに archive/ にあるものをさらに archive/ へ移すのは違反になる', () => {
+  for (const [oldPath, path] of [
+    ['task/archive/0012-x/spec.md', 'task/archive/archive/0012-x/spec.md'],
+    ['specs/archive/x.md', 'specs/archive/archive/x.md'],
+  ]) {
+    const v = findViolations({ ...empty, changes: [{ status: 'R', path, oldPath, similarity: 100 }] });
+    assert.equal(v.length, 1, `${oldPath} -> ${path}`);
+  }
 });

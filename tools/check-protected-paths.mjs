@@ -14,7 +14,12 @@ import { pathToFileURL } from 'node:url';
 export const ALLOW_LABEL = 'allow-protected-change';
 
 /** 見出し・順番を固定した型。移動しても中身を変えてもいけない */
-const TEMPLATES = ['specs/TEMPLATE.md', 'progress/TEMPLATE.md'];
+const TEMPLATES = [
+  'task/TEMPLATE-spec.md',
+  'task/TEMPLATE-progress.md',
+  'specs/TEMPLATE.md',
+  'progress/TEMPLATE.md',
+];
 
 /**
  * 判定の根拠そのもの。ガードジョブは base リビジョンのこのファイルを実行するので、
@@ -30,10 +35,29 @@ const CHECKER = 'tools/check-protected-paths.mjs';
  * リネームでディレクトリの外へ出せば、テストの削除や CI の無効化ができてしまうため。
  */
 const APPEND_ONLY_DIRS = [
+  // `task/<id>-<slug>/spec.md` が完了条件と期待値の置き場である。
+  // 同じディレクトリの `progress.md` は保護しない（`basename` で絞る）。
+  // 進捗は工程を進めるたびに更新するもので、保護すると作業 PR が毎回
+  // ラベルを要求することになり、ガードが形骸化する。
+  { prefix: 'task/', label: '仕様', archiveMove: true, basename: 'spec.md' },
   { prefix: 'specs/', label: '仕様', archiveMove: true },
   { prefix: 'tests/', label: 'テスト', archiveMove: false },
   { prefix: '.github/workflows/', label: 'ワークフロー', archiveMove: false },
 ];
+
+/**
+ * そのパスが保護ディレクトリの対象かを判定する純関数。
+ * `basename` が指定されたディレクトリは、その名前のファイルだけを対象にする。
+ *
+ * @param {{prefix: string, basename?: string}} dir
+ * @param {string} p
+ * @returns {boolean}
+ */
+function covers(dir, p) {
+  if (!p.startsWith(dir.prefix)) return false;
+  if (!dir.basename) return true;
+  return p.endsWith(`/${dir.basename}`);
+}
 
 /**
  * git が C クォートしたパス名（`"..."`）を元に戻す。
@@ -156,7 +180,7 @@ export function findViolations({ changes, baseScripts, headScripts }) {
     if (TEMPLATES.includes(path) || TEMPLATES.includes(oldPath)) {
       violations.push({
         path: oldPath ? `${oldPath} -> ${path}` : path,
-        reason: '型（TEMPLATE.md）は変更も移動もできない',
+        reason: '型（TEMPLATE）は変更も移動もできない',
       });
       continue;
     }
@@ -173,16 +197,16 @@ export function findViolations({ changes, baseScripts, headScripts }) {
     // 保護対象かどうかは、移動元と移動先の両方で見る。
     // 移動元だけで見ると、保護ディレクトリの外へ出す変更を取り逃がす。
     const fromDir = isRename
-      ? APPEND_ONLY_DIRS.find((d) => (oldPath ?? '').startsWith(d.prefix))
+      ? APPEND_ONLY_DIRS.find((d) => covers(d, oldPath ?? ''))
       : undefined;
-    const dir = APPEND_ONLY_DIRS.find((d) => path.startsWith(d.prefix));
+    const dir = APPEND_ONLY_DIRS.find((d) => covers(d, path));
 
     if (isRename) {
       // 保護ディレクトリの外から中へ移すのは新規追加と同じ。許可する
       if (!fromDir) continue;
 
       // 内容同一のまま同じ保護ディレクトリ内で移すアーカイブ作業だけ許可する
-      const stayedInside = path.startsWith(fromDir.prefix);
+      const stayedInside = covers(fromDir, path);
       if (fromDir.archiveMove && stayedInside && similarity === 100) continue;
 
       const reason = !stayedInside

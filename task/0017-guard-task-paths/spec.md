@@ -29,8 +29,9 @@ DETECT specs/TEMPLATE.md                    ← 旧パスだけ守っている
 
 ## 仕様
 
-- ガードは `task/` 配下の既存ファイルの内容変更・削除を検知する。新規追加は許可する
-- アーカイブ移動（`task/<id>-<slug>/` → `task/archive/<id>-<slug>/`）は、内容が同一なら許可する
+- ガードは `task/` 配下の既存 **`spec.md`** の内容変更・削除を検知する。新規追加は許可する
+- **`progress.md` は保護しない。** 進捗は工程を進めるたびに更新するものであり、保護すると作業 PR が毎回ラベルを要求される。旧設計でも `specs/` は保護し `progress/` は保護していなかった
+- アーカイブ移動（`task/<id>-<slug>/` → `task/archive/<id>-<slug>/`）は、`spec.md` の内容が同一なら許可する
 - `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md` は、変更も移動も削除も許さない（現行の `TEMPLATES` と同じ扱い）
 - `backlog/` は保護しない。着手前の候補であり、完了条件は未確定だからである
 - `specs/` と `progress/` の既存の扱い（`TEMPLATE.md` の凍結を含む）は残す。移行前の資産が残っている限り外さない
@@ -52,7 +53,8 @@ DETECT specs/TEMPLATE.md                    ← 旧パスだけ守っている
 | 操作または入力 | 期待結果 |
 |---|---|
 | `task/archive/0012-ci-lint/spec.md` の内容を変更した PR | ガード失敗 |
-| `task/0017-foo/progress.md` の内容を変更した PR | ガード失敗 |
+| `task/0017-foo/progress.md` の内容を変更した PR | ガード通過（進捗は保護しない） |
+| `task/0019-bar/` を、`progress.md` を書き換えたうえで `task/archive/0019-bar/` へ移動した PR | ガード通過（`spec.md` が同一なら可） |
 | `task/TEMPLATE-spec.md` を変更した PR | ガード失敗 |
 | 新規 `task/0019-bar/spec.md` を追加した PR | ガード通過 |
 | `task/0019-bar/` を `task/archive/0019-bar/` へ内容同一で移動した PR | ガード通過 |

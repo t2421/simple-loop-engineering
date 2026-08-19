@@ -316,3 +316,86 @@ test('別ファイルをチェッカーのパスへ上書きリネームする�
   });
   assert.equal(v.length, 1, '外から差し替える経路も塞ぐ');
 });
+
+// --- task/ レイアウトへの追随（0017-guard-task-paths） ---
+
+test('task/ 配下の既存 spec.md の内容変更は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'task/archive/0012-ci-lint/spec.md' }],
+  });
+  assert.equal(v.length, 1, '移行後は完了条件がここにある');
+});
+
+test('task/ 配下の progress.md は保護しない', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'task/0017-foo/progress.md' }],
+  });
+  assert.deepEqual(v, [], '進捗は工程ごとに更新する。保護すると全作業 PR がラベルを要する');
+});
+
+test('spec.md が同一なら、progress.md を書き換えたアーカイブ移動は通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/archive/0019-bar/spec.md', oldPath: 'task/0019-bar/spec.md', similarity: 100 },
+      { status: 'R', path: 'task/archive/0019-bar/progress.md', oldPath: 'task/0019-bar/progress.md', similarity: 88 },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('task/ の型は変更も移動も削除も許さない', () => {
+  for (const p of ['task/TEMPLATE-spec.md', 'task/TEMPLATE-progress.md']) {
+    assert.equal(findViolations({ ...empty, changes: [{ status: 'M', path: p }] }).length, 1, p);
+    assert.equal(findViolations({ ...empty, changes: [{ status: 'D', path: p }] }).length, 1, p);
+  }
+});
+
+test('新規 task/ の spec.md 追加は違反にならない', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'A', path: 'task/0019-bar/spec.md' },
+      { status: 'A', path: 'task/0019-bar/progress.md' },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('task/ 内の内容同一のアーカイブ移動は通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/archive/0019-bar/spec.md', oldPath: 'task/0019-bar/spec.md', similarity: 100 },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('task/ の外へ spec.md を出す移動は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'docs/bar.md', oldPath: 'task/0019-bar/spec.md', similarity: 100 },
+    ],
+  });
+  assert.equal(v.length, 1);
+});
+
+test('backlog/ は保護しない（完了条件が未確定の候補置き場）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'backlog/0013-cloudflare-preview/spec.md' }],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('task/ 配下の既存 spec.md の削除は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'task/archive/0012-ci-lint/spec.md' }],
+  });
+  assert.equal(v.length, 1);
+});

@@ -1,9 +1,9 @@
 # Progress: アーカイブ時の PR 帰属の検証
 
-- **Target Spec:** `specs/archive-pr-ownership.md`
+- **Target Spec:** `task/archive/0016-archive-pr-ownership/spec.md`
 - **Branch:** `feature/archive-pr-ownership`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/22
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -16,7 +16,7 @@
 - [x] 実装 (`tools/archive.mjs` の `checkPrWithGh` と `archive` の事前検査)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 
@@ -33,3 +33,5 @@
 - 17:16 - Medium 2 件を修正。(1) `getRepoWithGh` が `root` を無視して継承 cwd で `gh repo view` していた。別ディレクトリを対象にすると「A の PR を検証して B を書き換える」ことになる。`cwd: root` を渡し、`getRepo(root)` として呼ぶようにした。(2) owner/repo の比較が大小文字を区別していた。GitHub は case-insensitive なので、進捗に `T2421/...` と書かれた正当な PR を弾いてしまう。`toLowerCase()` 比較にした。どちらもテストを追加（132 pass）。
 - 17:17 - Low 1 件も対応。`checkPrWithGh` が返していた `owner` / `repo` は `checkOwnership` が URL を再パースするため未使用のデッドフィールドだった。読み手を誤らせるので削除した。残る Low（enterprise ホストや `.git` 付き URL の異形、`readBranch` の注釈付き値）はいずれも fail-closed で、アーカイブが通ってしまう方向には倒れないため据え置く。
 - 17:25 - PR #22 を作成し `allow-protected-change` ラベルを付与。ガードの検知は `tests/archive.test.mjs` と `specs/archive-pr-ownership.md` の 2 件で、いずれも改訂手続きに沿ったもの。マージ待ち。
+- 17:40 - PR #22 マージ後にアーカイブ。**`tools/archive.mjs` を使うと旧レイアウト（`specs/archive/` + `progress/archive/`）に置かれる**が、PR #21 の移行でアーカイブの実体は `task/archive/<id>-<slug>/` に移っており、`progress/archive/` はテスト用のシンボリックリンクだけになっている。ツールの出力はリポジトリの現状と食い違うため、手作業で `task/archive/0016-archive-pr-ownership/` に置いた。ID は `task/` と `backlog/` 共通の番号空間で 0001〜0015 が使用済みのため 0016。
+- 17:42 - **人間に上げる点が 2 つある。** (1) `tools/archive.mjs` が移行に追随していない（`specs/archive/` へ移し、Target Spec も `specs/archive/<名前>.md` に書き換える）。次にこのツールを使うと旧レイアウトの残骸を作る。(2) CLAUDE.md「アーカイブ」節の「`specs/` と `progress/` に残っている対は `tools/archive.mjs` に従う」は、そのツールが旧レイアウトを作る以上、従うと不整合になる。今回が最後の旧対だったので実害は出ないが、記述とツールの両方が現状と合っていない。

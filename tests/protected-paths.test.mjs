@@ -264,3 +264,40 @@ test('末尾が単独のバックスラッシュでも unquotePath が壊れな�
   const out = parseNameStatus('M\0"tests/a\\\\"\0');
   assert.equal(typeof out[0].path, 'string');
 });
+
+test('ガードの判定ロジック自体の変更は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'tools/check-protected-paths.mjs' }],
+  });
+  assert.equal(v.length, 1, 'base 由来で実行される以上、このファイルが信頼の根拠になる');
+});
+
+test('ガードの判定ロジックの削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'tools/check-protected-paths.mjs' }],
+  });
+  assert.equal(deleted.length, 1);
+
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'tools/x.mjs', oldPath: 'tools/check-protected-paths.mjs', similarity: 100 },
+    ],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('tools/ の他のファイルは保護対象ではない', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'M', path: 'tools/archive.mjs' }] });
+  assert.deepEqual(v, []);
+});
+
+test('ガードの判定ロジックの新規追加は違反にならない（導入 PR）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'A', path: 'tools/check-protected-paths.mjs' }],
+  });
+  assert.deepEqual(v, []);
+});

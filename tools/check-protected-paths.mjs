@@ -17,6 +17,12 @@ export const ALLOW_LABEL = 'allow-protected-change';
 const TEMPLATES = ['specs/TEMPLATE.md', 'progress/TEMPLATE.md'];
 
 /**
+ * 判定の根拠そのもの。ガードジョブは base リビジョンのこのファイルを実行するので、
+ * これを書き換えられるとガードを恒久的に無効化できる。移動も変更も削除も許さない。
+ */
+const CHECKER = 'tools/check-protected-paths.mjs';
+
+/**
  * 既存ファイルの内容変更・削除を禁じ、新規追加は許すディレクトリ。
  *
  * `archiveMove` が true のディレクトリだけ、同ディレクトリ内での内容同一の移動
@@ -136,6 +142,15 @@ export function findViolations({ changes, baseScripts, headScripts }) {
 
   for (const change of changes) {
     const { status, path, oldPath, similarity } = change;
+
+    // 新規追加（ガード導入 PR）は許可。変更・削除・移動は許さない
+    if ((path === CHECKER && status !== 'A') || oldPath === CHECKER) {
+      violations.push({
+        path: oldPath ? `${oldPath} -> ${path}` : path,
+        reason: 'ガードの判定ロジック自体は変更も移動もできない',
+      });
+      continue;
+    }
 
     // 型は移動も内容変更も削除も許さない
     if (TEMPLATES.includes(path) || TEMPLATES.includes(oldPath)) {

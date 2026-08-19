@@ -1,6 +1,6 @@
 # Progress: 保護パス変更の CI ガード
 
-- **Target Spec:** `specs/archive/guard-protected-paths.md`
+- **Target Spec:** `task/archive/0008-guard-protected-paths/spec.md`
 - **Branch:** `feature/guard-protected-paths`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/14
 - **Status:** Done

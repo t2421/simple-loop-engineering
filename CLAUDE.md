@@ -6,31 +6,38 @@
 
 | パス | 役割 |
 |---|---|
-| `specs/` | 未完了の作業仕様。1 ファイルが 1 作業 |
-| `specs/TEMPLATE.md` | 仕様の型。見出し名・順番は変えない |
-| `specs/archive/` | 完了した仕様 |
-| `progress/` | 未完了の作業状態。会話が切れてもここから再開する。Figma 抽出物もここに置く |
-| `progress/TEMPLATE.md` | 進捗の型。見出し名・順番は変えない |
-| `progress/archive/` | 完了した進捗と、その作業の抽出物 |
-| `backlog/` | 着手しない候補。spec の型で書くが完了条件は未確定。progress は作らない |
+| `task/` | 作業の単位。`task/<id>-<slug>/` に `spec.md`・`progress.md`・関連ファイルを置く |
+| `task/TEMPLATE-spec.md` | 仕様の型。見出し名・順番は変えない |
+| `task/TEMPLATE-progress.md` | 進捗の型。見出し名・順番は変えない |
+| `task/archive/` | 完了した作業 |
+| `specs/` | 移行前から残っている未完了仕様。新規は `task/` に置く |
+| `specs/TEMPLATE.md` | 旧型。凍結対象として残す。新規のコピー元は `task/TEMPLATE-spec.md` |
+| `progress/` | 移行前から残っている未完了進捗 |
+| `progress/TEMPLATE.md` | 旧型。凍結対象として残す |
+| `progress/archive/` | `tests/calc-page.test.mjs` 用のシンボリックリンク（本体は `task/archive/0003-calc-page/`） |
+| `backlog/` | 着手しない候補。`backlog/<id>-<slug>/spec.md`。完了条件は未確定。progress は作らない |
 | `src/` | 実装 |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`npm run ci` を実行する |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
-仕様と進捗は同名で対にする。例: `specs/math-add.md` と `progress/math-add.md`。
+作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規は既存の最大の次（いまは `0016`）。
 
 Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
 ## 状態
 
-作業を始める前に `progress/` を読む。`archive/` 以外が未完了の作業である。  
+作業を始める前に、次を読む。
+
+- `task/` の `archive/` 以外（`NNNN-slug` の作業ディレクトリ）
+- `progress/` の `archive/` 以外（移行前から残っている未完了）
+
 着手する作業の **Target Spec** を読み、完了条件を確認する。  
 タスクを進めたら、その進捗ファイルのチェックボックスと試行ログを更新する。
 
 ## 開発ループ
 
-1. **Plan** — `progress/` から次の 1 作業を選ぶ。何をするか 1〜3 行で宣言する
+1. **Plan** — `task/` の `archive/` 以外、または `progress/` の `archive/` 以外から次の 1 作業を選ぶ。何をするか 1〜3 行で宣言する
 2. **Implement** — 完了条件を満たす最小差分だけ実装する
 3. **Verify (自己)** — [共通の検証](#共通の検証)（CI と同じコマンド）を実行する。続けて対象仕様の完了条件に対して検証する。出力を会話に貼る
 4. **Verify (外部)** — 進捗に書いたレビューサブエージェントへ依頼する
@@ -46,7 +53,9 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 
 | 対象 | コミットのタイミング | マージ先・方法 |
 |---|---|---|
-| spec + progress の新規作成（Not Started） | 作成したらすぐ。`docs: add <作業名> spec/progress` | main から切った**計画用ブランチ**から、軽量な docs PR で main へ入れる。実装 PR に混ぜない。レビューサブエージェントは不要。人間がマージする |
+| spec + progress の新規作成（Not Started） | 作成したらすぐ。`docs: add <id>-<slug> spec/progress` | main から切った**計画用ブランチ**から、軽量な docs PR で main へ入れる。実装 PR に混ぜない。レビューサブエージェントは不要。人間がマージする |
+| backlog の新規・追記 | 残したくなったとき。`docs: add <id>-<slug> backlog` | 同上。実装 PR に混ぜない |
+| 昇格（backlog → task） | 着手すると決めたとき。同じ ID のまま `task/<id>-<slug>/` へ移し、完了条件を埋めて `progress.md` を足す | 同上。移動と完了条件の記入は同じ PR で行う |
 | progress の更新（チェック・試行ログ・PR URL） | 工程を進めるたび | その作業ブランチ。実装と同じ PR に含める |
 | spec の変更 | 着手後は原則変更しない。必要になったら変更内容と理由を試行ログに記録し、人間の承認を経る | — |
 | アーカイブ（Status を Done にし `archive/` へ移動） | 紐付けた実装 PR のマージ直後 | main に直接 `docs: archive <作業名>`。内容が同一の移動と Status 変更だけなので PR は不要 |
@@ -63,7 +72,7 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 - **1 worktree = 1 作業 = 1 ブランチ。** ブランチは main から切る
 - 各 worktree に `node_modules` が要る。作成後に `npm ci` を実行する
 - 進捗の更新は、その作業の worktree の、その作業のブランチで行う。他の作業の進捗ファイルを触らない
-- `progress/` や `CLAUDE.md` が競合したら、PR のマージ順に解決する。後からマージする側が main を取り込んで直す
+- `task/`・`progress/`・`CLAUDE.md` が競合したら、PR のマージ順に解決する。後からマージする側が main を取り込んで直す
 - [アーカイブ](#アーカイブ) はマージされた側から順に行う。未マージの作業を巻き込まない
 
 触るファイルが重ならない作業どうしを選べば衝突しない。重なる場合も並列にしてよいが、後からマージする側が main を取り込んで解決する。解決コストが実装より大きくなるなら直列にする。
@@ -93,18 +102,20 @@ npm run ci
 
 ## 仕様
 
-- 機能追加・バグ修正・改善を問わず `specs/TEMPLATE.md` をコピーして埋める
+- 機能追加・バグ修正・改善を問わず `task/TEMPLATE-spec.md` を `task/<id>-<slug>/spec.md` にコピーして埋める。進捗は `task/TEMPLATE-progress.md` を同じディレクトリの `progress.md` にする
 - 見出し名・順番は変えない。空でも見出しは残す
 - **完了条件は必須。** 検証はこの条件に対して行う
-- 機能追加の記入例は `specs/archive/math-add.md`
+- 機能追加の記入例は `task/archive/0001-math-add/spec.md`
 - UI なら「仕様」に構造・トークン表・状態を書く。見出しは増やさない。Figma の URL は「背景」に出典として書く
-- 着手しない候補は `backlog/` に置く。**仕様ではなく候補である。** 見出し名・順番は `specs/TEMPLATE.md` に従う（昇格時にそのまま `specs/` へ入るため）が、完了条件は埋めず「未確定（incomplete）。昇格時に埋める。」の 1 行を節の先頭に足す。**progress は作らない**
-- `backlog/` は未完了の作業ではない。次の作業を選ぶときの対象にしない。凍結対象でもない（`specs/` に移してから凍る）
-- 着手するときは `specs/` へ移して完了条件を埋め、progress を作る。**移動と完了条件の記入は同じ PR で行う**（分けると 2 本目が既存 spec の変更としてガードに当たる）。[コミットとマージ](#コミットとマージ) の spec 新規作成と同じく、計画用ブランチの docs PR で main へ入れる
+- 着手しない候補は `backlog/<id>-<slug>/spec.md` に置く。**仕様ではなく候補である。** 見出し名・順番は `task/TEMPLATE-spec.md` に従う。完了条件は埋めず「未確定（incomplete）。昇格時に埋める。」の 1 行を節の先頭に足す。**progress は作らない**
+- `backlog/` は未完了の作業ではない。次の作業を選ぶときの対象にしない
+- 着手するときは同じ ID のまま `backlog/<id>-<slug>/` を `task/<id>-<slug>/` へ移し、完了条件を埋めて `progress.md` を置く。**移動と完了条件の記入は同じ PR で行う**。[コミットとマージ](#コミットとマージ) の昇格と同じく、計画用ブランチの docs PR で main へ入れる
+- 最初から着手する作業は `task/<id>-<slug>/` を新しく作り、完了条件を埋めて `progress.md` を置く
+- `specs/` と `progress/` に残っている対（移行前の未完了）はこの構造では動かさない。完了後のアーカイブは、その時点の `tools/archive.mjs` に従う
 
 ## 見た目
 
-Figma のライブファイルは完了条件にしない。抽出して `progress/` に置いた JSON・PNG が正である。抽出は同じ進捗のチェック項目とし、実装より先に行う。手順・保存先・JSON の形は `.claude/skills/figma-extract` に従う。
+Figma のライブファイルは完了条件にしない。抽出して作業ディレクトリに置いた JSON・PNG が正である。抽出は同じ進捗のチェック項目とし、実装より先に行う。手順・保存先・JSON の形は `.claude/skills/figma-extract` に従う。
 
 見た目の完了条件は算術の例と同じく、検証可能な命題にする。
 
@@ -123,7 +134,7 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 
 ## 進捗
 
-書式・メタ情報・チェックボックスの意味は `progress/TEMPLATE.md` が正。コピーして埋める。
+書式・メタ情報・チェックボックスの意味は `task/TEMPLATE-progress.md` が正。コピーして埋める。移行前から残っている対は `progress/TEMPLATE.md` のまま。
 
 このリポジトリ固有の決めごとだけ、ここに書く。
 
@@ -140,13 +151,16 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 
 手順:
 
-1. 進捗の Status を `Done` にする
-2. 仕様を `specs/` から `specs/archive/` へ移動する
-3. 進捗を `progress/` から `progress/archive/` へ移動する（抽出物も同じディレクトリへ）
-4. 進捗の **Target Spec** を移動後のパス（`specs/archive/<ファイル>.md`）に直す
-5. `docs: archive <作業名>` として main に直接コミットする（[コミットとマージ](#コミットとマージ)）
+`task/<id>-<slug>/` の作業:
 
-`TEMPLATE.md` は移動しない。未完了の作業をアーカイブしない。PR 未作成・未マージの作業をアーカイブしない。
+1. 進捗の Status を `Done` にする
+2. ディレクトリを `task/archive/<id>-<slug>/` へ移動する
+3. 進捗の **Target Spec** を `task/archive/<id>-<slug>/spec.md` に直す
+4. `docs: archive <id>-<slug>` として main に直接コミットする（[コミットとマージ](#コミットとマージ)）
+
+`specs/` と `progress/` に残っている対は `tools/archive.mjs` に従う。
+
+テンプレは移動しない。未完了の作業をアーカイブしない。PR 未作成・未マージの作業をアーカイブしない。
 
 ## トークンコスト
 

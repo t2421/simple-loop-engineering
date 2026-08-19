@@ -1,6 +1,6 @@
 # Progress: `div` の追加
 
-- **Target Spec:** `specs/archive/math-div.md`
+- **Target Spec:** `task/archive/0006-math-div/spec.md`
 - **Branch:** `feature/math-div`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/10
 - **Status:** Done

@@ -1,3 +1,4 @@
 node_modules/
 progress/calc-page.diff.png
+**/*.diff.png
 .worktrees/

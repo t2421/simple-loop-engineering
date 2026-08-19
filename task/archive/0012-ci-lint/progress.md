@@ -1,6 +1,6 @@
 # Progress: Lint の導入
 
-- **Target Spec:** `specs/archive/ci-lint.md`
+- **Target Spec:** `task/archive/0012-ci-lint/spec.md`
 - **Branch:** `feature/ci-lint`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/20
 - **Status:** Done

@@ -22,9 +22,9 @@ CLAUDE.md「変えてはいけないもの」の一覧は、CI のガード（`.
 
 ### 1. 新しい作業として spec / progress を起こす
 
-保護を増やすことは新しい作業である。`specs/TEMPLATE.md` と `progress/TEMPLATE.md` からコピーして埋め、[コミットとマージ](../../../CLAUDE.md) の規約どおり計画用ブランチの docs PR で main へ入れる。
+保護を増やすことは新しい作業である。`task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md` からコピーして埋め、[コミットとマージ](../../../CLAUDE.md) の規約どおり計画用ブランチの docs PR で main へ入れる。
 
-**アーカイブ済みの `specs/archive/guard-protected-paths.md` は編集しない。** 完了した作業の記録である。
+**アーカイブ済みの `task/archive/0008-guard-protected-paths/spec.md` は編集しない。** 完了した作業の記録である。
 
 ### 2. CLAUDE.md「変えてはいけないもの」の一覧に行を足す
 

@@ -27,10 +27,11 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 
 テンプレは作業ディレクトリにしない。`task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md` をルートに置く（`NNNN-slug` の形ではないので混線しない）。
 
-足りない判断:
+既存の `specs/archive/` と `progress/archive/` は、関連ファイルごと `task/archive/<id>-<slug>/` へ移す。slug は現行のベース名。ID はアーカイブが古い順に `0001` から振る。同じコミットで複数あるときは、そのコミットメッセージに出た順とする。progress の **Target Spec** は移動後のパスに直す。
 
-- 既存の `calc-page` などアーカイブ済みを移すか、新規からだけか。移すなら番号の振り方
-- 進行中の `archive-automation` / `guard-protected-paths` / `claude-md-slim` との順序
+進行中の作業（`specs/` と `progress/` に残っているもの）はこの変更では動かさない。完了後のアーカイブは、そのときの手順に従う。
+
+`tests/calc-page.test.mjs` は `progress/archive/calc-page.*` を読むため、抽出物の本体は `task/archive/0003-calc-page/` に移し、`progress/archive/` にはシンボリックリンクを残す。テストコードは変えない。
 
 ## 仕様
 
@@ -39,12 +40,16 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 - 作業の ID はゼロ埋め 4 桁の十進連番である（`0001`、`0002`、…）。識別子は番号だけとする
 - 新しい作業には、既存の最大番号の次を振る。欠番や使い終わった番号は再利用しない
 - ルートは `task/`。作業ディレクトリは `task/<id>-<slug>/`（例: `task/0001-calc-page/`）
+- backlog も同じ形にする。`backlog/<id>-<slug>/spec.md`。progress は置かない。ID は `task/` と同じ番号空間
+- 昇格は同じ ID のまま `backlog/<id>-<slug>/` を `task/<id>-<slug>/` へ移し、`progress.md` を足す
 - 作業ディレクトリ直下の文書は `spec.md` と `progress.md`
 - テンプレは `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md`。見出し名・順番は現行テンプレのまま
 - slug は kebab-case のラベルで、一覧から内容が分かるように付ける。識別や突き合わせは ID で行う
 - spec と progress は別ディレクトリに置かない。同じ作業ディレクトリに同居する
 - その作業の過程で生まれた関連ファイルも、同じディレクトリへ属する
 - アーカイブは `task/archive/<id>-<slug>/` へディレクトリごと移す
+- 既存の `specs/archive/` と `progress/archive/` は関連ファイルごと移す。ID はアーカイブが古い順の連番、slug は現行ベース名。**Target Spec** は移動後のパスにする
+- 進行中の `specs/` / `progress/`（テンプレ以外）はこの作業では動かさない
 - テンプレは作業の実体と混線しない
 
 ## 範囲外
@@ -52,8 +57,7 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 - 開発ループ（Plan〜Archive）の工程の追加・削除
 - テンプレの見出し名・順番の変更
 - GitHub Issues などリポジトリ外への作業管理の移行
-
-既存アーカイブの一括移行は含めるか、昇格時に決める。
+- 進行中の作業を新しいディレクトリへ移すこと
 
 ## 失敗時
 
@@ -62,6 +66,7 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 - ID が 4 桁連番でない、欠ける、または既にある番号と衝突する: 新規作業として受け付けない
 - ディレクトリ名に slug が無い、または `task/<id>-<slug>` の形でない: 作業ディレクトリとして扱わない
 - 関連ファイルが作業ディレクトリの外にある: その作業の成果物として扱わない
+- 既存アーカイブの移行後、`specs/archive/` または `progress/archive/` に作業ファイルが残る: 移行未完了
 
 ## 例
 
@@ -69,11 +74,40 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 
 | 操作または入力 | 期待結果 |
 |---|---|
-| 作業 ID `0001` を指定する | `task/0001-<slug>/spec.md` と `progress.md`、関連ファイルがそのディレクトリに揃う |
-| `task/` を一覧する | ディレクトリ名から作業の内容が分かる（例: `0001-calc-page`） |
-| 次の作業を作る | ID は既存の最大の次（例: `0001` の次は `0002`） |
+| 作業 ID `0001` を指定する | `task/archive/0001-math-add/spec.md` と `progress.md` がそのディレクトリに揃う |
+| `task/` を一覧する | ディレクトリ名から作業の内容が分かる（例: `0001-math-add`、`0003-calc-page`） |
+| `backlog/` を一覧する | ディレクトリ名から候補の内容が分かる（例: `0013-cloudflare-preview`） |
+| 次の作業または backlog を作る | ID は既存の最大の次（いまは `0015` の次は `0016`） |
 | 過程で PNG や JSON が増える | 別作業のファイルを巻き込まない |
-| アーカイブする | `task/0001-calc-page/` が `task/archive/0001-calc-page/` へ移る |
+| アーカイブする | 例: `task/0016-new-work/` が `task/archive/0016-new-work/` へ移る |
+| 既存アーカイブを移す | 下表の ID で `task/archive/<id>-<slug>/` に spec・progress・関連ファイルが揃い、Target Spec が新しいパスになる |
+| 進行中の作業 | `specs/` と `progress/` に残ったままである |
+| 既存 backlog を移す | `backlog/<id>-<slug>/spec.md` になり、progress は無い |
+
+既存アーカイブの ID（アーカイブが古い順。同コミットはメッセージに出た順）:
+
+| ID | slug |
+|---|---|
+| `0001` | `math-add` |
+| `0002` | `math-sub` |
+| `0003` | `calc-page` |
+| `0004` | `commit-timing-rules` |
+| `0005` | `math-mul` |
+| `0006` | `math-div` |
+| `0007` | `parallel-worktrees` |
+| `0008` | `guard-protected-paths` |
+| `0009` | `archive-automation` |
+| `0010` | `claude-md-slim` |
+| `0011` | `scripts-freeze-procedure` |
+| `0012` | `ci-lint` |
+
+既存 backlog の ID（作成が古い順。同コミットは会話で出た順）:
+
+| ID | slug |
+|---|---|
+| `0013` | `cloudflare-preview` |
+| `0014` | `spec-progress-layout` |
+| `0015` | `playwright-setup-readonly-cache` |
 
 ## 完了条件
 

@@ -2,7 +2,7 @@
 
 - **Target Spec:** `specs/scripts-freeze-procedure.md`
 - **Branch:** `feature/scripts-freeze-procedure`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/16
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] CLAUDE.md「変えてはいけないもの」への改訂手続きの追記
 - [x] `tools/setup-playwright.mjs` の作成と `package.json` への `pretest` 追加
 - [x] `tests/calc-page.test.mjs` からの Chromium 自己インストール分岐の削除（アサーションは不変）
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。凍結対象に触れるため、ガード導入後は `allow-protected-change` ラベルを付ける）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く。凍結対象に触れるため、ガード導入後は `allow-protected-change` ラベルを付ける）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -36,3 +36,4 @@
 - 14:40 - 自前の判定をやめ、`playwright install chromium` 自身の no-op 判定に任せる形にした。フル Chromium だけ置いた一時ディレクトリで再現すると、旧判定は「存在: true」で素通り、新実装は headless shell を検知して補完する。導入済みのときのオーバーヘッドは 0.62 秒で、`pretest` に置いて許容範囲。
 - 14:42 - 「失敗時」を再確認。導入コマンドが失敗すると理由を表示して exit 1（無言でスキップしない）。`npm run ci` は 117 pass / 0 fail のまま。
 - 14:44 - **人間の判断に上げる点:** spec の「例」1 行目は「素の checkout で `npm ci && npm run ci` → 43/43 pass」だが、実測は 117 である。spec 作成時（`b123982`）の `tests/` は 3 ファイル、現在は 7 ファイルで、この作業とは無関係に陳腐化していた。完了条件 5（前後で件数一致）は満たすが、完了条件 2 を字義どおりには満たさない。**spec の期待値は凍結対象なので書き換えていない。** 更新するなら人間の承認を経た spec 改訂として別途行う。
+- 14:50 - PR #16 を作成し `allow-protected-change` ラベルを付与。ガードが検知した 2 件（`package.json` の scripts、`tests/calc-page.test.mjs`）はこの spec が意図した初適用そのもの。見た目の変更が無いためスクリーンキャプチャは添付しない。マージ待ち。

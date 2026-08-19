@@ -2,7 +2,7 @@
 
 - **Target Spec:** `specs/ci-lint.md`
 - **Branch:** `feature/ci-lint`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/20
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -15,8 +15,8 @@
 - [x] ESLint の導入 (`eslint.config.mjs`、devDependency)
 - [x] `scripts.lint` の追加と `ci` への組み込み（改訂手続きに従う）
 - [x] 既存コードの lint 通過（挙動を変えない修正のみ）
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。凍結対象に触れるため `allow-protected-change` ラベルを付ける）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く。凍結対象に触れるため `allow-protected-change` ラベルを付ける）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -31,3 +31,4 @@
 - 16:20 - `codex-reviewer` が承認（Critical 0 / High 0 / Medium 2）。`ignores` が対象を狭めていないことも実測で確認された（lint 対象 13 ファイル = リポジトリ内の対象拡張子 13 ファイルと一致。`progress/` `specs/` `backlog/` に JS は 0 件なので冗長なだけ）。
 - 16:23 - Medium 2 件を修正。(1) `engines.node` が `>=22` だが eslint 10 は `^20.19.0 || ^22.13.0 || >=24` を要求する。宣言と実態がずれていたので `>=22.13` に上げた（`engines` は保護対象の `scripts` ではないのでガードには当たらない）。(2) `tests/calc-page.test.mjs` にブラウザ globals を丸ごと合流させていたのを、実際にコールバックで使う `getComputedStyle` と `document` の 2 つだけに絞った。
 - 16:25 - (2) の穴が実際に塞がったことを確認。Node 側に `window.location` の参照を一時的に足すと `'window' is not defined` を検知する。union のままなら黙っていた。テストファイルは byte 単位で復元済み（`git diff` が空）。
+- 16:30 - PR #20 を作成し `allow-protected-change` ラベルを付与。ガードの検知は `package.json` の scripts 1 件で、改訂手続きの想定どおり。見た目の変更が無いためスクリーンキャプチャは添付しない。マージ待ち。

@@ -1,6 +1,6 @@
 # Progress: CLAUDE.md の整理と方針追記
 
-- **Target Spec:** `specs/archive/claude-md-slim.md`
+- **Target Spec:** `task/archive/0010-claude-md-slim/spec.md`
 - **Branch:** `feature/claude-md-slim`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/12
 - **Status:** Done

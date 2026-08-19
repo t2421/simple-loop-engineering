@@ -1,6 +1,6 @@
 # Progress: 凍結ファイルの改訂手続き
 
-- **Target Spec:** `specs/archive/scripts-freeze-procedure.md`
+- **Target Spec:** `task/archive/0011-scripts-freeze-procedure/spec.md`
 - **Branch:** `feature/scripts-freeze-procedure`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/16
 - **Status:** Done

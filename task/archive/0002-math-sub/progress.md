@@ -1,6 +1,6 @@
 # Progress: `sub` の追加
 
-- **Target Spec:** `specs/archive/math-sub.md`
+- **Target Spec:** `task/archive/0002-math-sub/spec.md`
 - **Branch:** `feature/math-sub`
 - **Status:** Done
 

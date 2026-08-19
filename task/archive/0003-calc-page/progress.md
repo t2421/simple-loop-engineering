@@ -1,6 +1,6 @@
 # Progress: 計算ページの追加
 
-- **Target Spec:** `specs/archive/calc-page.md`
+- **Target Spec:** `task/archive/0003-calc-page/spec.md`
 - **Branch:** `feature/calc-page`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/3
 - **Status:** Done

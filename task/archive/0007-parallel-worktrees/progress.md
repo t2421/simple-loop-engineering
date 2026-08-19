@@ -1,6 +1,6 @@
 # Progress: worktree による並列作業の導入
 
-- **Target Spec:** `specs/archive/parallel-worktrees.md`
+- **Target Spec:** `task/archive/0007-parallel-worktrees/spec.md`
 - **Branch:** `feature/parallel-worktrees`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/11
 - **Status:** Done

@@ -1,6 +1,6 @@
 # Progress: spec / progress のコミット・マージ規約
 
-- **Target Spec:** `specs/archive/commit-timing-rules.md`
+- **Target Spec:** `task/archive/0004-commit-timing-rules/spec.md`
 - **Branch:** `feature/commit-timing-rules`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/7
 - **Status:** Done

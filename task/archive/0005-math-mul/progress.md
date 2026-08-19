@@ -1,6 +1,6 @@
 # Progress: `mul` の追加
 
-- **Target Spec:** `specs/archive/math-mul.md`
+- **Target Spec:** `task/archive/0005-math-mul/spec.md`
 - **Branch:** `feature/math-mul`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/9
 - **Status:** Done

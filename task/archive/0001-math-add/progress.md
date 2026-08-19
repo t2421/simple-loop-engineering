@@ -1,6 +1,6 @@
 # Progress: `add` の追加
 
-- **Target Spec:** `specs/archive/math-add.md`
+- **Target Spec:** `task/archive/0001-math-add/spec.md`
 - **Branch:** `feature/math-add`
 - **Status:** Done
 

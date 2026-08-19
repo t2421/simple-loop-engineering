@@ -1,0 +1,200 @@
+{
+  "source": {
+    "fileKey": "KHrUQrYl0Motmr2nyyEOrB",
+    "nodeId": "1:2",
+    "nodeName": "Canvas",
+    "extractedAt": "2026-08-18"
+  },
+  "canvas": {
+    "nodeId": "1:2",
+    "width": 1512,
+    "height": 982,
+    "fill": "#ffffff"
+  },
+  "_note": "widthとheightは、値がその要素のCSSで明示的に固定されるトークン、またはflexの等分割から一意に決まる幾何値のみを載せる。フォントの行送りに依存して決まる文字要素の見た目上の幅・高さは載せない(残差としてスクショレビューで見る)。",
+  "elements": {
+    "container": {
+      "nodeId": "7:2",
+      "name": "Container (width: 80%)",
+      "width": 1152,
+      "fill": "#ffffff",
+      "border": { "width": 1, "style": "solid", "color": "#d9d9d9" },
+      "borderRadius": 8,
+      "padding": { "top": 40, "right": 40, "bottom": 40, "left": 40 }
+    },
+    "calculatorUi": {
+      "nodeId": "7:4",
+      "name": "Calculator UI",
+      "width": 480,
+      "gap": 24
+    },
+    "title": {
+      "nodeId": "7:5",
+      "name": "Title",
+      "text": "Calculator",
+      "fontFamily": "Inter",
+      "fontWeightName": "Semi Bold",
+      "fontWeight": 600,
+      "fontSize": 24,
+      "color": "#111827"
+    },
+    "inputs": {
+      "nodeId": "7:6",
+      "name": "Inputs",
+      "width": 480,
+      "gap": 16
+    },
+    "fieldNumber1": {
+      "nodeId": "7:7",
+      "name": "Field - Number 1",
+      "width": 232,
+      "gap": 8,
+      "label": {
+        "nodeId": "7:8",
+        "text": "Number 1",
+        "fontFamily": "Inter",
+        "fontWeightName": "Medium",
+        "fontWeight": 500,
+        "fontSize": 14,
+        "color": "#6b7280"
+      },
+      "input": {
+        "nodeId": "7:9",
+        "width": 232,
+        "height": 43,
+        "fill": "#ffffff",
+        "border": { "width": 1, "style": "solid", "color": "#d1d5db" },
+        "borderRadius": 6,
+        "padding": { "top": 12, "right": 16, "bottom": 12, "left": 16 },
+        "placeholder": {
+          "nodeId": "7:10",
+          "text": "0",
+          "fontFamily": "Inter",
+          "fontWeightName": "Regular",
+          "fontWeight": 400,
+          "fontSize": 16,
+          "color": "#9ca3af"
+        }
+      }
+    },
+    "fieldNumber2": {
+      "nodeId": "7:11",
+      "name": "Field - Number 2",
+      "width": 232,
+      "gap": 8,
+      "label": {
+        "nodeId": "7:12",
+        "text": "Number 2",
+        "fontFamily": "Inter",
+        "fontWeightName": "Medium",
+        "fontWeight": 500,
+        "fontSize": 14,
+        "color": "#6b7280"
+      },
+      "input": {
+        "nodeId": "7:13",
+        "width": 232,
+        "height": 43,
+        "fill": "#ffffff",
+        "border": { "width": 1, "style": "solid", "color": "#d1d5db" },
+        "borderRadius": 6,
+        "padding": { "top": 12, "right": 16, "bottom": 12, "left": 16 },
+        "placeholder": {
+          "nodeId": "7:14",
+          "text": "0",
+          "fontFamily": "Inter",
+          "fontWeightName": "Regular",
+          "fontWeight": 400,
+          "fontSize": 16,
+          "color": "#9ca3af"
+        }
+      }
+    },
+    "operationSelector": {
+      "nodeId": "7:22",
+      "name": "Operation Selector",
+      "width": 480,
+      "gap": 8
+    },
+    "operationAdd": {
+      "nodeId": "7:23",
+      "name": "Operation - Add",
+      "width": 236,
+      "height": 44,
+      "fill": "#2563eb",
+      "border": { "width": 1, "style": "solid", "color": "#2563eb" },
+      "borderRadius": 8,
+      "padding": { "top": 0, "right": 16, "bottom": 0, "left": 16 },
+      "label": {
+        "nodeId": "7:24",
+        "text": "+",
+        "fontFamily": "Inter",
+        "fontWeightName": "Semi Bold",
+        "fontWeight": 600,
+        "fontSize": 16,
+        "color": "#ffffff"
+      }
+    },
+    "operationSubtract": {
+      "nodeId": "7:25",
+      "name": "Operation - Subtract",
+      "width": 236,
+      "height": 44,
+      "fill": "#f3f4f6",
+      "border": { "width": 1, "style": "solid", "color": "#d1d5db" },
+      "borderRadius": 8,
+      "padding": { "top": 0, "right": 16, "bottom": 0, "left": 16 },
+      "label": {
+        "nodeId": "7:26",
+        "text": "−",
+        "fontFamily": "Inter",
+        "fontWeightName": "Semi Bold",
+        "fontWeight": 600,
+        "fontSize": 16,
+        "color": "#6b7280"
+      }
+    },
+    "calculateButton": {
+      "nodeId": "7:15",
+      "name": "Calculate Button",
+      "width": 480,
+      "height": 47,
+      "fill": "#2563eb",
+      "borderRadius": 8,
+      "padding": { "top": 14, "right": 24, "bottom": 14, "left": 24 },
+      "label": {
+        "nodeId": "7:16",
+        "text": "Calculate",
+        "fontFamily": "Inter",
+        "fontWeightName": "Semi Bold",
+        "fontWeight": 600,
+        "fontSize": 16,
+        "color": "#ffffff"
+      }
+    },
+    "resultArea": {
+      "nodeId": "7:17",
+      "name": "Result Area",
+      "width": 480,
+      "gap": 8,
+      "label": {
+        "nodeId": "7:18",
+        "text": "Result:",
+        "fontFamily": "Inter",
+        "fontWeightName": "Medium",
+        "fontWeight": 500,
+        "fontSize": 14,
+        "color": "#6b7280"
+      },
+      "value": {
+        "nodeId": "7:19",
+        "text": "—",
+        "fontFamily": "Inter",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 24,
+        "color": "#111827"
+      }
+    }
+  }
+}

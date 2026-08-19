@@ -31,6 +31,8 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 
 進行中の作業（`specs/` と `progress/` に残っているもの）はこの変更では動かさない。完了後のアーカイブは、そのときの手順に従う。
 
+`tests/calc-page.test.mjs` は `progress/archive/calc-page.*` を読むため、抽出物の本体は `task/archive/0003-calc-page/` に移し、`progress/archive/` にはシンボリックリンクを残す。テストコードは変えない。
+
 ## 仕様
 
 変更後に満たしたい振る舞い（検証可能な命題に落とすのは昇格時）。
@@ -72,9 +74,9 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 |---|---|
 | 作業 ID `0001` を指定する | `task/archive/0001-math-add/spec.md` と `progress.md` がそのディレクトリに揃う |
 | `task/` を一覧する | ディレクトリ名から作業の内容が分かる（例: `0001-math-add`、`0003-calc-page`） |
-| 次の作業を作る | ID は既存の最大の次（アーカイブ移行後なら `0011` の次は `0012`） |
+| 次の作業を作る | ID は既存の最大の次（アーカイブ移行後なら `0012` の次は `0013`） |
 | 過程で PNG や JSON が増える | 別作業のファイルを巻き込まない |
-| アーカイブする | 例: `task/0012-ci-lint/` が `task/archive/0012-ci-lint/` へ移る |
+| アーカイブする | 例: `task/0013-archive-pr-ownership/` が `task/archive/0013-archive-pr-ownership/` へ移る |
 | 既存アーカイブを移す | 下表の ID で `task/archive/<id>-<slug>/` に spec・progress・関連ファイルが揃い、Target Spec が新しいパスになる |
 | 進行中の作業 | `specs/` と `progress/` に残ったままである |
 
@@ -93,6 +95,7 @@ ID はゼロ埋め 4 桁の連番とする（`0001`、`0002`、…）。識別�
 | `0009` | `archive-automation` |
 | `0010` | `claude-md-slim` |
 | `0011` | `scripts-freeze-procedure` |
+| `0012` | `ci-lint` |
 
 ## 完了条件
 

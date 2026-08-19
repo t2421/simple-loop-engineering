@@ -1,6 +1,6 @@
 # Progress: アーカイブ手順の自動化
 
-- **Target Spec:** `specs/archive/archive-automation.md`
+- **Target Spec:** `task/archive/0009-archive-automation/spec.md`
 - **Branch:** `feature/archive-automation`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/13
 - **Status:** Done

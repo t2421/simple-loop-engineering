@@ -175,6 +175,10 @@ Figma のライブファイルは完了条件にしない。抽出して `progre
 - `package.json` の `scripts`（検証コマンド）
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
 
+この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
+
+守る対象を増やす・外すときは `.claude/skills/add-protected-path` に従う。**この節に行を足すだけではガードは検知しない。**
+
 ## コーディング規約
 
 - 依存は最小限。vanilla の JavaScript（`.mjs`）でよい

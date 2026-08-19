@@ -334,11 +334,70 @@ test('task/ 配下の spec.md 以外の関連ファイルも保護する', () =>
   });
   assert.equal(figma.length, 1, '抽出物は見た目の完了条件の正であり、期待値そのもの');
 
-  const alias = findViolations({
+  // 実際の攻撃は「新規追加（A）」である。M で試すと既存ファイルの変更として
+  // 検知されてしまい、穴が塞がったように見える
+  const aliasAdded = findViolations({
+    ...empty,
+    changes: [{ status: 'A', path: 'task/0017-foo/spec-v2.md' }],
+  });
+  assert.equal(aliasAdded.length, 1, '別名 spec の追加で Target Spec を付け替える迂回を塞ぐ');
+
+  const aliasChanged = findViolations({
     ...empty,
     changes: [{ status: 'M', path: 'task/0017-foo/spec-v2.md' }],
   });
-  assert.equal(alias.length, 1, '別名 spec を足して Target Spec を向ける迂回を塞ぐ');
+  assert.equal(aliasChanged.length, 1);
+});
+
+test('作業ディレクトリの spec.md / progress.md の新規追加は通る', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'A', path: 'task/0019-bar/spec.md' },
+      { status: 'A', path: 'task/0019-bar/progress.md' },
+      { status: 'A', path: 'task/0019-bar/bar.figma.json' },
+    ],
+  });
+  assert.deepEqual(v, [], '新規作業と抽出物の追加は正当');
+});
+
+test('旧 specs/ のフラット命名は別名 spec 扱いしない', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'A', path: 'specs/foo.md' }] });
+  assert.deepEqual(v, []);
+});
+
+test('跡地への外部からのリネームイン（すり替え）は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: 'task/archive/0017-foo/spec.md', oldPath: 'task/0017-foo/spec.md', similarity: 100 },
+      { status: 'R', path: 'task/0017-foo/spec.md', oldPath: 'backlog/0099-x/spec.md', similarity: 90 },
+    ],
+  });
+  assert.equal(v.length, 1);
+});
+
+test('archiveMove が false のディレクトリの違反メッセージは archive/ を案内しない', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'R', path: 'tests/archive/a.test.mjs', oldPath: 'tests/a.test.mjs', similarity: 100 }],
+  });
+  assert.equal(v.length, 1);
+  assert.doesNotMatch(v[0].reason, /archive\/ への移動以外/, '存在しない逃げ道を案内しない');
+});
+
+test('exclude は作業ディレクトリ直下の progress.md だけを外す', () => {
+  const top = findViolations({ ...empty, changes: [{ status: 'M', path: 'task/progress.md' }] });
+  assert.equal(top.length, 1, 'task/ 直下は作業ディレクトリではない');
+
+  const nested = findViolations({ ...empty, changes: [{ status: 'M', path: 'task/0017-foo/sub/progress.md' }] });
+  assert.equal(nested.length, 1, '深い階層の progress.md は除外対象ではない');
+
+  const proper = findViolations({ ...empty, changes: [{ status: 'M', path: 'task/0017-foo/progress.md' }] });
+  assert.deepEqual(proper, []);
+
+  const archived = findViolations({ ...empty, changes: [{ status: 'M', path: 'task/archive/0012-x/progress.md' }] });
+  assert.deepEqual(archived, [], 'アーカイブ済みの進捗も除外');
 });
 
 test('task/ 配下の progress.md は保護しない', () => {

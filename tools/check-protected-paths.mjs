@@ -27,6 +27,9 @@ const TEMPLATES = [
  */
 const CHECKER = 'tools/check-protected-paths.mjs';
 
+/** 作業の仕様はこのファイル名だけにする */
+const SPEC_FILE = 'spec.md';
+
 /**
  * 既存ファイルの内容変更・削除を禁じ、新規追加は許すディレクトリ。
  *
@@ -39,11 +42,29 @@ const APPEND_ONLY_DIRS = [
   // 同居する。期待値は spec.md だけでなく抽出物にもあるので、配下は原則すべて守る。
   // 除外は progress.md だけ。進捗は工程を進めるたびに更新するもので、保護すると
   // 作業 PR が毎回ラベルを要求することになり、ガードが形骸化する。
-  { prefix: 'task/', label: '仕様', archiveMove: true, exclude: 'progress.md' },
+  { prefix: 'task/', label: '仕様', archiveMove: true, exclude: 'progress.md', specFile: SPEC_FILE },
   { prefix: 'specs/', label: '仕様', archiveMove: true },
   { prefix: 'tests/', label: 'テスト', archiveMove: false },
   { prefix: '.github/workflows/', label: 'ワークフロー', archiveMove: false },
 ];
+
+/**
+ * 別名の spec の追加かを判定する純関数。
+ * 作業ディレクトリ直下に足された `.md` のうち、`spec.md` と除外対象以外を指す。
+ *
+ * @param {{prefix: string, exclude?: string}} dir
+ * @param {string} p
+ * @returns {boolean}
+ */
+function isAliasSpec(dir, p) {
+  // `specFile` を持つディレクトリだけが「1 作業 1 spec」の規約に従う。
+  // 旧 `specs/` はフラット命名（`specs/<名前>.md`）なので対象外。
+  if (!dir.specFile) return false;
+  if (!p.startsWith(dir.prefix) || !p.endsWith('.md')) return false;
+  const rest = p.slice(dir.prefix.length).split('/');
+  const name = rest[rest.length - 1];
+  return name !== dir.specFile && name !== dir.exclude;
+}
 
 /**
  * アーカイブ移動の唯一の正しい移動先を返す純関数。
@@ -69,7 +90,12 @@ function archiveDestination(dir, oldPath) {
 function covers(dir, p) {
   if (!p.startsWith(dir.prefix)) return false;
   if (!dir.exclude) return true;
-  return !p.endsWith(`/${dir.exclude}`);
+  // 除外は `<prefix><作業ディレクトリ>/<exclude>` の 1 階層だけ。
+  // 末尾一致にすると `task/progress.md` や深い階層まで外れてしまう
+  const rest = p.slice(dir.prefix.length).split('/');
+  const inArchive = rest[0] === 'archive';
+  const depth = inArchive ? 3 : 2;
+  return !(rest.length === depth && rest[rest.length - 1] === dir.exclude);
 }
 
 /**
@@ -224,8 +250,17 @@ export function findViolations({ changes, baseScripts, headScripts }) {
     const dir = APPEND_ONLY_DIRS.find((d) => covers(d, path));
 
     if (isRename) {
-      // 保護ディレクトリの外から中へ移すのは新規追加と同じ。許可する
-      if (!fromDir) continue;
+      // 保護ディレクトリの外から中へ移すのは新規追加と同じ。ただし、
+      // 同じ差分で保護ファイルを退かせた跡地へ移し込むのはすり替えである
+      if (!fromDir) {
+        if (dir && movedAwayFrom.has(path)) {
+          violations.push({
+            path: `${oldPath} -> ${path}`,
+            reason: `既存の${dir.label}を移動させた跡地に別の内容を移し込んでいる（すり替え）`,
+          });
+        }
+        continue;
+      }
 
       // 免除するのはアーカイブ移動だけ。移動先が保護ディレクトリ内であればよい、
       // では足りない。それだと `task/A/spec.md -> task/B/spec.md` で凍結対象を
@@ -244,21 +279,31 @@ export function findViolations({ changes, baseScripts, headScripts }) {
 
       const reason = !stayedInside
         ? `既存の${fromDir.label}が保護ディレクトリの外へ移動されている`
-        : similarity === 100
-          ? `既存の${fromDir.label}は、${fromDir.prefix}archive/ への移動以外はできない`
-          : `既存の${fromDir.label}が内容ごと移動されている`;
+        : similarity !== 100
+          ? `既存の${fromDir.label}が内容ごと移動されている`
+          : fromDir.archiveMove
+            ? `既存の${fromDir.label}は、${fromDir.prefix}archive/ への移動以外はできない`
+            : `既存の${fromDir.label}は内容が同一でも移動できない`;
       violations.push({ path: `${oldPath} -> ${path}`, reason });
       continue;
     }
 
     if (!dir) continue;
 
-    // 新規追加は許可。ただし同じ差分で移動させた跡地への追加は、すり替えなので許さない
+    // 新規追加は許可。ただし 2 つだけ許さない
     if (status === 'A') {
       if (movedAwayFrom.has(path)) {
+        // 移動させた跡地への追加は、移動と追加の合わせ技によるすり替え
         violations.push({
           path,
           reason: `既存の${dir.label}を移動させた跡地に別の内容を置いている（すり替え）`,
+        });
+      } else if (isAliasSpec(dir, path)) {
+        // 別名の spec を足して progress の Target Spec をそこへ向ければ、
+        // 以後その完了条件は保護を受けずに書き換えられる
+        violations.push({
+          path,
+          reason: `${dir.label}は ${SPEC_FILE} だけにする（別名の spec は Target Spec の付け替えで凍結を迂回できる）`,
         });
       }
       continue;

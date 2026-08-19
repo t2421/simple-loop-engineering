@@ -42,3 +42,12 @@
 - 19:05 - 12 経路を通しで確認。検知すべき 7 件（完了条件の書き換え・Figma 抽出物・別名 spec・型・archive の入れ子・別作業への付け替え・退避+すり替え）をすべて DETECT、通すべき 5 件（進捗の更新・backlog・新規追加・正当なアーカイブ移動・進捗のアーカイブ移動）をすべて PASS。`npm run ci` は 147 pass / 0 fail。
 - 19:07 - **人間の作業ツリーを汚す事故を起こした。** 人間がこのチェックアウトを `feature/ci-e2e-when-needed` に切り替えたあと、それに気づかず `tests/protected-paths.test.mjs` へテストを追記していた。該当箇所だけ `git checkout --` で戻し、人間の他の変更には触れていない。以後は `.worktrees/feature/guard-task-paths-only` で作業する。**自分でマージした「1 つのチェックアウトで 2 作業を持たない」を破っていた。** 並行作業をするなら最初から worktree を使う。
 - 19:08 - なお人間の `GATE_HELPERS`（`tools/run-unit-tests.mjs` / `tools/e2e-needed.mjs` の保護）と本作業は、どちらも `tools/check-protected-paths.mjs` の同じ領域を変更する。規約どおり後からマージする側が解決する。
+- 19:20 - 再レビュー（3 回目）で **不承認**（Critical 0 / High 2 / Medium 2 / Low 3）。
+  - **High-1 は私の誤報だった。** 19:05 に「別名 spec を DETECT」と報告したが、私が試したのは `M task/0017-foo/spec-v2.md`（既存ファイルの変更）で、実際の攻撃は `A`（新規追加）である。`A` は素通りしていた。**検証すべき経路と違うものを試して「塞がった」と報告した。** spec の「例」も「追加して」と書いており、実装・テスト・報告のすべてが食い違っていた。
+  - High-2: 跡地への外部からのリネームイン。`movedAwayFrom` を `A` でしか見ていなかった。レビュアーは「実 git 経路では `M` が先に捕まえるので悪用不能」と判定したが、防御の非対称は残るため 1 行で塞いだ。
+  - Medium-1: CLAUDE.md が実装より狭い記述のままだった。
+  - Medium-2: **今回の退行。** `archiveMove: false` の `tests/` に対して「`tests/archive/` への移動以外はできない」という、存在しない逃げ道を案内するメッセージを出していた。
+- 19:25 - High-1 を修正。`specFile` を持つディレクトリ（`task/` のみ）で、作業ディレクトリ直下に `spec.md` / `progress.md` 以外の `.md` を新規追加することを違反にした。旧 `specs/` はフラット命名（`specs/<名前>.md`）なので対象外にする必要があり、`specFile` フラグで区別した。抽出物（`.json` / `.png`）の追加は引き続き許可する。spec の「仕様」にもこの例外を明記した（「例」が既に要求していた内容の明文化）。
+- 19:28 - High-2 を修正（リネーム先が跡地なら弾く）。Medium-1 を修正（CLAUDE.md を「`task/` 配下のファイル全部。除外は各作業ディレクトリ直下の `progress.md` だけ」に）。Medium-2 を修正（`archiveMove` の有無でメッセージを分ける）。Low-1 も修正し、除外を作業ディレクトリ直下の 1 階層に限定した（`task/progress.md` や `task/X/sub/progress.md` が外れていた）。
+- 19:30 - 途中で 2 度、自分のミスで足止めした。(1) `SPEC_FILE` を使用箇所より後に定義して TDZ エラーにした。(2) Medium-2 の置換に assert を付けず、当たっていないことにテストで初めて気づいた。**文字列置換は必ず assert を付ける。**
+- 19:32 - テストを 46 → 58 件に拡充。`npm run ci` は 152 pass / 0 fail。

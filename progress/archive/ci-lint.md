@@ -1,9 +1,9 @@
 # Progress: Lint の導入
 
-- **Target Spec:** `specs/ci-lint.md`
+- **Target Spec:** `specs/archive/ci-lint.md`
 - **Branch:** `feature/ci-lint`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/20
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -17,7 +17,7 @@
 - [x] 既存コードの lint 通過（挙動を変えない修正のみ）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。凍結対象に触れるため `allow-protected-change` ラベルを付ける）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

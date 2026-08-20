@@ -16,6 +16,7 @@ import {
   pathsFromChanges,
   progressWorks,
   resolveCoupling,
+  strayProgressPaths,
 } from '../tools/check-progress-coupling.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -191,6 +192,153 @@ test('移動先が base に既にある作業なら、その 1 作業だけを�
   assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md')), ['0027-b']);
   // 移動先が base に無ければ数えない（使い捨ての作業名への逃げ）
   assert.deepEqual(progressWorks(changes, baseWith('task/0026-a/progress.md')), []);
+});
+
+// --- 同乗（有効な progress 更新 1 件に、別作業の progress を相乗りさせる） ---
+
+test('P1-A: 有効な更新 1 件に、別作業の progress の新規追加を同乗させたら失敗', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+      { status: 'A', path: 'task/0028-c/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'stray');
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.strays, ['task/0028-c/progress.md']);
+});
+
+test('P1-D: 有効な更新 1 件に、別作業の progress の削除を同乗させたら失敗', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+      { status: 'D', path: 'task/0027-b/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'stray');
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.strays, ['task/0027-b/progress.md']);
+});
+
+test('P1-R: 有効な更新 1 件に、別作業の archive 移動を同乗させたら失敗', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+      {
+        status: 'R',
+        path: 'task/archive/0027-b/progress.md',
+        oldPath: 'task/0027-b/progress.md',
+      },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'stray');
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.strays, ['task/0027-b/progress.md']);
+});
+
+test('数えない差分は黙って捨てず拒否する（strayProgressPaths）', () => {
+  const baseHas = baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md');
+  // その場の更新だけなら stray は無い
+  assert.deepEqual(strayProgressPaths(modified('task/0026-a/progress.md'), baseHas), []);
+  // 新規追加・削除・作業外へのリネーム元・base に無いリネーム先はすべて拒否
+  assert.deepEqual(
+    strayProgressPaths(
+      [
+        { status: 'A', path: 'task/0028-c/progress.md' },
+        { status: 'D', path: 'task/0027-b/progress.md' },
+        { status: 'R', path: 'task/9999-x/progress.md', oldPath: 'task/0026-a/progress.md' },
+      ],
+      baseHas,
+    ),
+    [
+      'task/0026-a/progress.md',
+      'task/0027-b/progress.md',
+      'task/0028-c/progress.md',
+      'task/9999-x/progress.md',
+    ],
+  );
+  // archive 側・作業の形でないパスは progress 更新ではないので stray にもしない
+  assert.deepEqual(
+    strayProgressPaths(
+      [
+        { status: 'A', path: 'task/archive/0001-math-add/progress.md' },
+        { status: 'D', path: 'task/not-a-work/progress.md' },
+        { status: 'A', path: 'task/0026-a/spec.md' },
+      ],
+      baseHas,
+    ),
+    [],
+  );
+});
+
+test('docs だけの PR は progress を新規追加していても通過する（順序: docs-only が先）', () => {
+  // 計画用ブランチの docs PR。新しい作業の spec + progress を足す
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'A', path: 'task/0028-c/spec.md' },
+      { status: 'A', path: 'task/0028-c/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'docs-only');
+  // 拒否対象としては見えているが、docs だけの PR では判定に使わない
+  assert.deepEqual(result.strays, ['task/0028-c/progress.md']);
+});
+
+test('docs だけの PR は archive 移動を含んでいても通過する', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'R', path: 'task/archive/0027-b/spec.md', oldPath: 'task/0027-b/spec.md' },
+      {
+        status: 'R',
+        path: 'task/archive/0027-b/progress.md',
+        oldPath: 'task/0027-b/progress.md',
+      },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0027-b/progress.md'),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'docs-only');
+});
+
+test('no-progress-needed ラベルは stray があっても通す（人間の明示承認）', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'tools/x.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+      { status: 'A', path: 'task/0028-c/progress.md' },
+    ],
+    labels: [BYPASS_LABEL],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'bypass-label');
+});
+
+test('正当な実装 PR（実装 + base にある progress のその場更新）は通る', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'tests/add.test.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'coupled');
+  assert.deepEqual(result.strays, []);
 });
 
 test('作業の形をしていないディレクトリの progress.md は数えない', () => {
@@ -463,6 +611,98 @@ test('CLI: 既存 progress を使い捨ての作業名へリネームしても�
   const result = runCli(cwd);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /更新が含まれていません/);
+});
+
+/**
+ * base に 2 つの作業（`0026-a`・`0027-b`）の progress.md を持つリポジトリを作り、
+ * `work` ブランチへ切り替えて返す。同乗（stray）の経路を実 git で確かめるのに使う。
+ */
+function makeTwoWorkRepo(t) {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'coupling-repo2-'));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  git(cwd, 'init', '-q', '-b', 'main');
+  git(cwd, 'config', 'user.email', 'test@example.com');
+  git(cwd, 'config', 'user.name', 'test');
+  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
+  for (const work of ['0026-a', '0027-b']) {
+    fs.mkdirSync(path.join(cwd, 'task', work), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'task', work, 'progress.md'), `# ${work}\n`);
+  }
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'base');
+  git(cwd, 'checkout', '-q', '-b', 'work');
+  return cwd;
+}
+
+test('CLI/P1-A: 有効な更新に別作業の progress の新規追加を同乗させても通せない', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  fs.mkdirSync(path.join(cwd, 'task/0028-c'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'task/0028-c/progress.md'), '# 0028-c\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /その場の更新でない変更/);
+  assert.match(result.stderr, /task\/0028-c\/progress\.md/);
+});
+
+test('CLI/P1-D: 有効な更新に別作業の progress の削除を同乗させても通せない', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'rm', '-q', 'task/0027-b/progress.md');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /その場の更新でない変更/);
+  assert.match(result.stderr, /task\/0027-b\/progress\.md/);
+});
+
+test('CLI/P1-R: 有効な更新に別作業の archive 移動を同乗させても通せない', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  fs.mkdirSync(path.join(cwd, 'task/archive/0027-b'), { recursive: true });
+  git(cwd, 'mv', 'task/0027-b/progress.md', 'task/archive/0027-b/progress.md');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /その場の更新でない変更/);
+  assert.match(result.stderr, /task\/0027-b\/progress\.md/);
+});
+
+test('CLI: docs だけの PR は progress を新規追加していても通過する', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.mkdirSync(path.join(cwd, 'task/0028-c'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'task/0028-c/spec.md'), '# 0028-c\n');
+  fs.writeFileSync(path.join(cwd, 'task/0028-c/progress.md'), '# 0028-c\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'docs');
+  const result = runCli(cwd);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /対象外/);
+});
+
+test('CLI: no-progress-needed ラベルは stray があっても通す', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  fs.mkdirSync(path.join(cwd, 'task/0028-c'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'task/0028-c/progress.md'), '# 0028-c\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = spawnSync(process.execPath, [CLI, 'main'], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, PR_LABELS: JSON.stringify([BYPASS_LABEL]) },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /人間による明示承認/);
 });
 
 test('CLI は base との差分が取れないと終了コード非 0 で終わる', (t) => {

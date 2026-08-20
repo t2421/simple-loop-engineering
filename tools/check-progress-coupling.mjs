@@ -5,8 +5,11 @@
  * 「工程を進めるたびに progress を更新し、実装と同じ PR に含める」「1 PR = 1 作業」は
  * 規約だが強制されていなかった。progress 更新の抜けと、複数作業の混載を検知する。
  *
- * 数えるのは **base に既に存在する** progress.md の更新だけである。使い捨ての
+ * 数えるのは **base に既に存在する** progress.md の、その場の更新だけである。使い捨ての
  * progress.md を PR 内で新規に足して通すのを塞ぐ（`progressWorks()` の注記を見よ）。
+ * 数えないものは **黙って捨てず、拒否する**（`strayProgressPaths()` の注記を見よ）。
+ * 捨てるだけだと、有効な progress 更新 1 件に別作業の progress の追加・削除・移動を
+ * 同乗させて 1 PR に 2 作業を混ぜられる。
  *
  * 判定ロジックは純関数として公開し、差分リストとラベルを注入してテストできる。
  * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
@@ -194,6 +197,47 @@ export function progressWorks(changes, baseHas = NOTHING_IN_BASE) {
 }
 
 /**
+ * 進行中の作業の progress.md に当たる差分のうち、**その場の更新でないもの**を返す純関数。
+ *
+ * `progressWorks()` が数えないものを黙って捨てると裏面ができる。有効な progress 更新
+ * 1 件に、別作業の progress の新規追加・削除・移動を同乗させれば works は 1 件のままで、
+ * 1 PR に 2 作業を混ぜられてしまう（spec の「失敗時」に反する）。数えないものは
+ * 捨てるのではなく、**1 件でもあれば落とす**。
+ *
+ * 拒否するのは次のすべて。
+ *
+ * - 新規追加（`A`）— base に無い作業の progress を足す経路
+ * - 削除（`D`）— 進行中の作業の progress を消す経路
+ * - リネーム先が base に無い（使い捨ての作業名へ逃がす経路）
+ * - リネーム元が作業ディレクトリの progress（`task/archive/` へのアーカイブ移動を含む。
+ *   アーカイブは main へ直接コミットする手順なので、実装 PR に混ざるのは逸脱である）
+ * - base に無いパスのその場の更新（`baseHas` が未注入のときもここに倒れる）
+ *
+ * docs だけの PR（`src/`・`tests/`・`tools/` に変更が無い）は対象外なので、
+ * 呼び出し側（`evaluateCoupling()`）は docs-only の判定を先に行う。計画用ブランチの
+ * docs PR（新しい spec + progress を足す PR）をここで落とさないためである。
+ *
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
+ * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか
+ * @returns {string[]} 名前順
+ */
+export function strayProgressPaths(changes, baseHas = NOTHING_IN_BASE) {
+  const strays = new Set();
+  for (const change of changes) {
+    // 作業ディレクトリから出ていく移動元（archive への移動を含む）
+    if (change.oldPath && isActiveProgressPath(change.oldPath)) strays.add(change.oldPath);
+    if (!isActiveProgressPath(change.path)) continue;
+    if (change.status === 'D') {
+      strays.add(change.path);
+      continue;
+    }
+    // その場の更新以外（新規追加、base に無い作業名へのリネーム先）
+    if (change.status === 'A' || !baseHas(change.path)) strays.add(change.path);
+  }
+  return [...strays].sort();
+}
+
+/**
  * 実装変更と progress 更新の結合を判定する純関数。
  *
  * @param {object} input
@@ -201,24 +245,30 @@ export function progressWorks(changes, baseHas = NOTHING_IN_BASE) {
  * @param {string[] | null | undefined} input.labels - PR のラベル。読めなければ null
  * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
  *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「無い」（fail-closed）。
- * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'multiple', works: string[]}}
+ * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'stray'|'multiple', works: string[], strays: string[]}}
  */
 export function evaluateCoupling({ changes, labels, baseHas = NOTHING_IN_BASE }) {
   const works = progressWorks(changes, baseHas);
+  const strays = strayProgressPaths(changes, baseHas);
   const paths = pathsFromChanges(changes);
 
   // 人間が明示的に付けた逃げ道。ラベルが読めないときは通さない（安全側）
   if (Array.isArray(labels) && labels.includes(BYPASS_LABEL)) {
-    return { ok: true, reason: 'bypass-label', works };
+    return { ok: true, reason: 'bypass-label', works, strays };
   }
 
+  // docs だけの PR は対象外。**stray より先に判定する。**
+  // 計画用ブランチの docs PR は新しい作業の progress.md を新規追加する（＝ stray）ので、
+  // 順序を逆にすると正当な docs PR が落ちる。
   if (!paths.some((p) => isImplementationPath(p))) {
-    return { ok: true, reason: 'docs-only', works };
+    return { ok: true, reason: 'docs-only', works, strays };
   }
 
-  if (works.length === 0) return { ok: false, reason: 'missing', works };
-  if (works.length > 1) return { ok: false, reason: 'multiple', works };
-  return { ok: true, reason: 'coupled', works };
+  if (works.length === 0) return { ok: false, reason: 'missing', works, strays };
+  // 数えない差分を同乗させて 2 作業を 1 PR に混ぜる経路を塞ぐ
+  if (strays.length > 0) return { ok: false, reason: 'stray', works, strays };
+  if (works.length > 1) return { ok: false, reason: 'multiple', works, strays };
+  return { ok: true, reason: 'coupled', works, strays };
 }
 
 /**
@@ -257,11 +307,11 @@ function makeBaseHas(mergeBase, execGit) {
  * @param {(args: string[], options?: {quiet?: boolean}) => string} [input.execGit]
  * @param {(path: string) => boolean} [input.baseHas] - テストからの注入用。
  *   省略時は merge-base を解決して `git cat-file -e` で問い合わせる。
- * @returns {{ok: boolean, reason: string | null, works: string[], error: 'usage'|'diff'|null}}
+ * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], error: 'usage'|'diff'|null}}
  */
 export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit, baseHas }) {
   if (!baseRef) {
-    return { ok: false, reason: null, works: [], error: 'usage' };
+    return { ok: false, reason: null, works: [], strays: [], error: 'usage' };
   }
   let changes;
   let has = baseHas;
@@ -275,7 +325,7 @@ export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit, bas
     }
   } catch {
     // 差分が取れないまま素通りさせない（shallow clone・出力の破損）
-    return { ok: false, reason: null, works: [], error: 'diff' };
+    return { ok: false, reason: null, works: [], strays: [], error: 'diff' };
   }
   return { ...evaluateCoupling({ changes, labels, baseHas: has }), error: null };
 }
@@ -342,6 +392,13 @@ function main() {
     console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');
     console.error('この PR で新しく作った progress.md は数えません。spec + progress は');
     console.error('先に計画用ブランチの docs PR で main へ入れてください。');
+  } else if (result.reason === 'stray') {
+    console.error('進行中の作業の progress.md に、その場の更新でない変更が含まれています:');
+    for (const stray of result.strays) console.error(`  - ${stray}`);
+    console.error('新規追加・削除・作業ディレクトリをまたぐ移動（アーカイブを含む）は、');
+    console.error('実装 PR に混ぜないでください。1 PR = 1 作業です。');
+    console.error('spec + progress の新規作成は計画用ブランチの docs PR へ、');
+    console.error('アーカイブは main への直接コミットへ分けてください。');
   } else {
     console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
     for (const work of result.works) console.error(`  - ${work}`);

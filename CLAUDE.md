@@ -189,8 +189,9 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 
 停止条件を満たすために、以下を書き換えない。書き換えれば大抵の条件は「達成」できてしまう。
 
-- `specs/` の完了条件と例の期待値、および仕様のトークン表
-- `specs/TEMPLATE.md` と `progress/TEMPLATE.md`
+- `task/` 配下のファイル全部（`task/archive/` を含む）。完了条件・例の期待値・トークン表・Figma 抽出物などの期待値がここにある。**除外は各作業ディレクトリ直下の `progress.md` だけ**
+- `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md`
+- `specs/` の完了条件と例の期待値（移行前の資産）、`specs/TEMPLATE.md` と `progress/TEMPLATE.md`
 - `tests/` 配下のテストコードと期待値（存在するようになったら）
 - `package.json` の `scripts`（検証コマンド）
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）

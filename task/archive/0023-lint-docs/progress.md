@@ -1,9 +1,9 @@
 # Progress: `0023-lint-docs`
 
-- **Target Spec:** `task/0023-lint-docs/spec.md`
+- **Target Spec:** `task/archive/0023-lint-docs/spec.md`
 - **Branch:** `feature/lint-docs`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/33
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] 現状の docs 全件が lint を通ることの確認（出力を会話に貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

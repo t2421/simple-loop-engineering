@@ -23,12 +23,22 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 /** その場で内容が変わった差分（M）に揃えるテスト用ヘルパ */
 const modified = (...paths) => paths.map((p) => ({ status: 'M', path: p }));
 
+/**
+ * base に存在するパスを列挙するテスト用ヘルパ。
+ * 実装 PR の時点で progress.md は計画用 docs PR 経由で base にある、という前提を表す。
+ */
+const baseWith = (...paths) => (p) => paths.includes(p);
+
+/** base の中身を問わない検査で使う（存在する側に倒す） */
+const anythingInBase = () => true;
+
 // --- 仕様の「例」 ---
 
 test('例1: src/math.mjs と task/0026-a/progress.md を変更した PR は通過', () => {
   const result = evaluateCoupling({
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
@@ -36,7 +46,11 @@ test('例1: src/math.mjs と task/0026-a/progress.md を変更した PR は通�
 });
 
 test('例2: src/math.mjs のみ変更した PR は失敗', () => {
-  const result = evaluateCoupling({ changes: modified('src/math.mjs'), labels: [] });
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs'),
+    labels: [],
+    baseHas: anythingInBase,
+  });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
 });
@@ -45,6 +59,7 @@ test('例3: progress 更新が 2 件の PR は失敗（1 PR = 1 作業）', () =
   const result = evaluateCoupling({
     changes: modified('src/math.mjs', 'task/0026-a/progress.md', 'task/0027-b/progress.md'),
     labels: [],
+    baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'multiple');
@@ -52,13 +67,21 @@ test('例3: progress 更新が 2 件の PR は失敗（1 PR = 1 作業）', () =
 });
 
 test('例4: task/0026-a/spec.md のみ変更した docs だけの PR は通過', () => {
-  const result = evaluateCoupling({ changes: modified('task/0026-a/spec.md'), labels: [] });
+  const result = evaluateCoupling({
+    changes: modified('task/0026-a/spec.md'),
+    labels: [],
+    baseHas: anythingInBase,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
 });
 
 test('例5: tools/x.mjs のみ変更し no-progress-needed ラベルが付いた PR は通過', () => {
-  const result = evaluateCoupling({ changes: modified('tools/x.mjs'), labels: [BYPASS_LABEL] });
+  const result = evaluateCoupling({
+    changes: modified('tools/x.mjs'),
+    labels: [BYPASS_LABEL],
+    baseHas: anythingInBase,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'bypass-label');
 });
@@ -68,12 +91,66 @@ test('例6: archive の progress は progress 更新として数えない', () =
   const result = evaluateCoupling({
     changes: modified('src/math.mjs', 'task/archive/0001-math-add/progress.md'),
     labels: [],
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
 });
 
 // --- 抜け道（候補側に progress が残らない差分） ---
+
+test('base に無い progress.md の新規追加（A）は数えない', () => {
+  // 使い捨ての作業ディレクトリを 1 つ足すだけでゲートを通す抜け道
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'A', path: 'task/9999-disposable/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'missing');
+  assert.deepEqual(result.works, []);
+});
+
+test('既存 progress.md を base に無い作業名へリネームしても数えない', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'R', path: 'task/9999-x/progress.md', oldPath: 'task/0026-a/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'missing');
+  assert.deepEqual(result.works, []);
+});
+
+test('base に存在する progress.md のその場の更新（M）は通過する', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+    ],
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'coupled');
+  assert.deepEqual(result.works, ['0026-a']);
+});
+
+test('baseHas を渡し忘れたら通さない（既定は fail-closed）', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'missing');
+  assert.deepEqual(progressWorks(modified('task/0026-a/progress.md')), []);
+});
 
 test('progress.md の削除は progress 更新として数えない', () => {
   const result = evaluateCoupling({
@@ -82,6 +159,7 @@ test('progress.md の削除は progress 更新として数えない', () => {
       { status: 'D', path: 'task/0026-a/progress.md' },
     ],
     labels: [],
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -99,17 +177,20 @@ test('progress.md を archive へ移すリネームは progress 更新として�
       },
     ],
     labels: [],
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
   assert.deepEqual(result.works, []);
 });
 
-test('進行中の作業どうしの移動は移動先の 1 作業だけを数える', () => {
+test('移動先が base に既にある作業なら、その 1 作業だけを数える', () => {
   const changes = [
     { status: 'R', path: 'task/0027-b/progress.md', oldPath: 'task/0026-a/progress.md' },
   ];
-  assert.deepEqual(progressWorks(changes), ['0027-b']);
+  assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md')), ['0027-b']);
+  // 移動先が base に無ければ数えない（使い捨ての作業名への逃げ）
+  assert.deepEqual(progressWorks(changes, baseWith('task/0026-a/progress.md')), []);
 });
 
 test('作業の形をしていないディレクトリの progress.md は数えない', () => {
@@ -117,6 +198,7 @@ test('作業の形をしていないディレクトリの progress.md は数え�
   const result = evaluateCoupling({
     changes: modified('src/math.mjs', 'task/not-a-work/progress.md'),
     labels: [],
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -159,6 +241,7 @@ test('実装ファイルを外へ移すリネームも実装変更として数�
   const result = evaluateCoupling({
     changes: [{ status: 'R', path: 'docs/old.mjs', oldPath: 'src/old.mjs' }],
     labels: [],
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -174,18 +257,29 @@ test('progress として数えるのは task/<id>-<slug>/progress.md だけ', ()
 });
 
 test('同じ作業の progress を 2 度数えない', () => {
-  const works = progressWorks(modified('task/0026-a/progress.md', 'task/0026-a/progress.md'));
+  const works = progressWorks(
+    modified('task/0026-a/progress.md', 'task/0026-a/progress.md'),
+    anythingInBase,
+  );
   assert.deepEqual(works, ['0026-a']);
 });
 
 test('ワークフローだけの PR は docs 扱いで通過する', () => {
-  const result = evaluateCoupling({ changes: modified('.github/workflows/guard.yml'), labels: [] });
+  const result = evaluateCoupling({
+    changes: modified('.github/workflows/guard.yml'),
+    labels: [],
+    baseHas: anythingInBase,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
 });
 
 test('ラベルが読めない（null）ときは通過させない', () => {
-  const result = evaluateCoupling({ changes: modified('src/math.mjs'), labels: null });
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs'),
+    labels: null,
+    baseHas: anythingInBase,
+  });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
 });
@@ -208,12 +302,13 @@ test('name-status が途中で切れていたら例外にする（差分なし�
   assert.throws(() => parseNameStatus('M\0'), /途中で切れています/);
 });
 
-test('差分から判定する（progress が付いていれば通過）', () => {
+test('差分から判定する（base にある progress を更新していれば通過）', () => {
   const raw = 'M\0src/math.mjs\0M\0task/0026-a/progress.md\0';
   const result = resolveCoupling({
     baseRef: 'origin/main',
     labels: [],
     execGit: () => raw,
+    baseHas: baseWith('task/0026-a/progress.md'),
   });
   assert.equal(result.ok, true);
   assert.equal(result.error, null);
@@ -225,9 +320,42 @@ test('差分から判定する（progress を消しただけなら失敗）', ()
     baseRef: 'origin/main',
     labels: [],
     execGit: () => raw,
+    baseHas: anythingInBase,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
+});
+
+test('baseHas を渡さないときは merge-base と cat-file で base の存在を問う', () => {
+  const calls = [];
+  const raw = 'M\0src/math.mjs\0A\0task/9999-disposable/progress.md\0';
+  const execGit = (args) => {
+    calls.push(args);
+    if (args[0] === 'diff') return raw;
+    if (args[0] === 'merge-base') return 'abc123\n';
+    if (args[0] === 'cat-file') {
+      // base にあるのは 0026-a だけ
+      if (args[2] === 'abc123:task/0026-a/progress.md') return '';
+      throw new Error('does not exist');
+    }
+    throw new Error(`想定外の git 呼び出し: ${args.join(' ')}`);
+  };
+  const result = resolveCoupling({ baseRef: 'origin/main', labels: [], execGit });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'missing');
+  assert.ok(calls.some((c) => c[0] === 'merge-base'));
+  assert.ok(calls.some((c) => c[0] === 'cat-file'));
+});
+
+test('merge-base が解決できないときは fail-closed', () => {
+  const result = resolveCoupling({
+    baseRef: 'origin/main',
+    labels: [],
+    execGit: (args) =>
+      args[0] === 'diff' ? 'M\0src/math.mjs\0M\0task/0026-a/progress.md\0' : '',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'diff');
 });
 
 test('差分が取れないときは fail-closed（チェック失敗）', () => {
@@ -266,6 +394,75 @@ test('CLI に base ref が無いと終了コード非 0 で使い方を出す', 
   );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /使い方:/);
+});
+
+// --- CLI の配線（実際の git リポジトリで確かめる） ---
+
+const CLI = path.join(rootDir, 'tools/check-progress-coupling.mjs');
+
+/** 一時 git リポジトリで git を叩く */
+const git = (cwd, ...args) => {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+  return r.stdout;
+};
+
+/**
+ * base に `src/math.mjs` と `task/0026-a/progress.md` を持つリポジトリを作り、
+ * `work` ブランチへ切り替えて返す。
+ */
+function makeRepo(t) {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'coupling-repo-'));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  git(cwd, 'init', '-q', '-b', 'main');
+  git(cwd, 'config', 'user.email', 'test@example.com');
+  git(cwd, 'config', 'user.name', 'test');
+  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(cwd, 'task/0026-a'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
+  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), '# 0026-a\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'base');
+  git(cwd, 'checkout', '-q', '-b', 'work');
+  return cwd;
+}
+
+const runCli = (cwd) =>
+  spawnSync(process.execPath, [CLI, 'main'], { cwd, encoding: 'utf8', env: { ...process.env, PR_LABELS: '[]' } });
+
+test('CLI: base にある progress を更新した実装 PR は通過する', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ちょうど 1 件/);
+});
+
+test('CLI: 使い捨ての progress.md を新規追加しても通せない', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.mkdirSync(path.join(cwd, 'task/9999-disposable'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'task/9999-disposable/progress.md'), '# x\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /更新が含まれていません/);
+});
+
+test('CLI: 既存 progress を使い捨ての作業名へリネームしても通せない', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.mkdirSync(path.join(cwd, 'task/9999-x'), { recursive: true });
+  git(cwd, 'mv', 'task/0026-a/progress.md', 'task/9999-x/progress.md');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /更新が含まれていません/);
 });
 
 test('CLI は base との差分が取れないと終了コード非 0 で終わる', (t) => {

@@ -5,6 +5,9 @@
  * 「工程を進めるたびに progress を更新し、実装と同じ PR に含める」「1 PR = 1 作業」は
  * 規約だが強制されていなかった。progress 更新の抜けと、複数作業の混載を検知する。
  *
+ * 数えるのは **base に既に存在する** progress.md の更新だけである。使い捨ての
+ * progress.md を PR 内で新規に足して通すのを塞ぐ（`progressWorks()` の注記を見よ）。
+ *
  * 判定ロジックは純関数として公開し、差分リストとラベルを注入してテストできる。
  * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
@@ -153,16 +156,38 @@ export function isActiveProgressPath(filePath) {
 }
 
 /**
+ * base に存在するかを問う関数の既定値。**「存在しない」と答える。**
+ *
+ * 渡し忘れたときに倒れる向きを、通す側ではなく落ちる側にしておく
+ * （既定が「存在する」だと、配線を忘れた瞬間にゲートが黙って無力化する）。
+ *
+ * @returns {boolean}
+ */
+const NOTHING_IN_BASE = () => false;
+
+/**
  * 差分に含まれる、進行中の作業の一覧（作業ディレクトリ名）を返す純関数。
- * 数えるのは候補側に実在し続ける progress.md だけ（削除・移動元は数えない）。
+ *
+ * 数えるのは **base リビジョンに既に存在する** `task/<id>-<slug>/progress.md` の、
+ * その場での更新だけ。CLAUDE.md「コミットとマージ」は spec + progress の新規作成を
+ * 計画用の docs PR で先に main へ入れると定めているので、実装 PR の時点でその作業の
+ * progress.md は base に存在する。
+ *
+ * base に無いものを数えると、実装 PR に `task/9999-disposable/progress.md` を
+ * 1 つ足すだけでこの検査を通せる（progress.md は保護パスからも除外されているので
+ * 他のガードも止めない）。新規追加（`A`）も、作業外から作業内へのリネーム先も、
+ * base に無いので数えない。削除（`D`）と移動元は `headPaths()` が落とす。
  *
  * @param {Array<{status: string, path: string, oldPath?: string}>} changes
+ * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか。
+ *   **CLI（`main()`）は必ず渡すこと。** 既定は「無い」なので、渡さないと 0 件になる。
  * @returns {string[]} 名前順
  */
-export function progressWorks(changes) {
+export function progressWorks(changes, baseHas = NOTHING_IN_BASE) {
   const works = new Set();
   for (const p of headPaths(changes)) {
     if (!isActiveProgressPath(p)) continue;
+    if (!baseHas(p)) continue;
     works.add(p.slice(TASK_DIR.length).split('/')[0]);
   }
   return [...works].sort();
@@ -174,10 +199,12 @@ export function progressWorks(changes) {
  * @param {object} input
  * @param {Array<{status: string, path: string, oldPath?: string}>} input.changes - 差分
  * @param {string[] | null | undefined} input.labels - PR のラベル。読めなければ null
+ * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
+ *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「無い」（fail-closed）。
  * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'multiple', works: string[]}}
  */
-export function evaluateCoupling({ changes, labels }) {
-  const works = progressWorks(changes);
+export function evaluateCoupling({ changes, labels, baseHas = NOTHING_IN_BASE }) {
+  const works = progressWorks(changes, baseHas);
   const paths = pathsFromChanges(changes);
 
   // 人間が明示的に付けた逃げ道。ラベルが読めないときは通さない（安全側）
@@ -195,32 +222,74 @@ export function evaluateCoupling({ changes, labels }) {
 }
 
 /**
+ * merge base に存在するパスかを問う関数を組み立てる。
+ *
+ * 差分は `base...HEAD`（三点）なので、存在確認も分岐点（merge-base）に揃える。
+ * base の先端を見ると、分岐後に main 側で作られた progress を「base にある」と
+ * 読んでしまう（`tools/check-protected-paths.mjs` の `main()` と同じ理由）。
+ *
+ * `git cat-file -e <rev>:<path>` は存在しなければ非 0 で終わる。git 自体が壊れた
+ * ときも同じく false を返すが、この検査では false が落ちる側（fail-closed）である。
+ *
+ * @param {string} mergeBase
+ * @param {(args: string[], options?: {quiet?: boolean}) => string} execGit
+ * @returns {(path: string) => boolean}
+ */
+function makeBaseHas(mergeBase, execGit) {
+  return (filePath) => {
+    try {
+      // 「base に無い」は正常な結果なので、git の fatal を画面に出さない
+      execGit(['cat-file', '-e', `${mergeBase}:${filePath}`], { quiet: true });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
+
+/**
  * base ref との差分を見て結合を判定する。
  * 差分が取れない・読めないときは fail-closed（チェック失敗）。
  *
  * @param {object} input
  * @param {string | undefined} input.baseRef
  * @param {string[] | null | undefined} input.labels
- * @param {(args: string[]) => string} [input.execGit]
+ * @param {(args: string[], options?: {quiet?: boolean}) => string} [input.execGit]
+ * @param {(path: string) => boolean} [input.baseHas] - テストからの注入用。
+ *   省略時は merge-base を解決して `git cat-file -e` で問い合わせる。
  * @returns {{ok: boolean, reason: string | null, works: string[], error: 'usage'|'diff'|null}}
  */
-export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit }) {
+export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit, baseHas }) {
   if (!baseRef) {
     return { ok: false, reason: null, works: [], error: 'usage' };
   }
   let changes;
+  let has = baseHas;
   try {
     const raw = execGit(['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`]);
     changes = parseNameStatus(raw);
+    if (!has) {
+      const mergeBase = execGit(['merge-base', baseRef, 'HEAD']).trim();
+      if (!mergeBase) throw new Error('merge-base を解決できませんでした');
+      has = makeBaseHas(mergeBase, execGit);
+    }
   } catch {
     // 差分が取れないまま素通りさせない（shallow clone・出力の破損）
     return { ok: false, reason: null, works: [], error: 'diff' };
   }
-  return { ...evaluateCoupling({ changes, labels }), error: null };
+  return { ...evaluateCoupling({ changes, labels, baseHas: has }), error: null };
 }
 
-function defaultExecGit(args) {
-  return execFileSync('git', args, { encoding: 'utf8' });
+/**
+ * @param {string[]} args
+ * @param {{quiet?: boolean}} [options] - quiet なら git の stderr を捨てる
+ * @returns {string}
+ */
+function defaultExecGit(args, options = {}) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: options.quiet ? ['ignore', 'pipe', 'ignore'] : ['ignore', 'pipe', 'inherit'],
+  });
 }
 
 /**
@@ -271,6 +340,8 @@ function main() {
     console.error('実装（src/・tests/・tools/）を変更していますが、進行中の作業の');
     console.error('progress.md（task/<id>-<slug>/progress.md）の更新が含まれていません。');
     console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');
+    console.error('この PR で新しく作った progress.md は数えません。spec + progress は');
+    console.error('先に計画用ブランチの docs PR で main へ入れてください。');
   } else {
     console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
     for (const work of result.works) console.error(`  - ${work}`);

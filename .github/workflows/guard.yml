@@ -45,3 +45,35 @@ jobs:
             echo "::warning::base にチェッカーが無いため候補側で判定します（ガード導入 PR のみ想定）。"
           fi
           node "$CHECKER" "origin/$BASE_REF"
+
+  progress-coupling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # base との差分を取るため、全履歴が要る
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check progress coupling
+        env:
+          # ${{ }} を run: へ直接展開しない（コマンドインジェクション対策）
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          # protected-paths と同じ理由で、実行するのは必ず base リビジョンの版にする。
+          # 候補側を実行すると、判定を骨抜きにする変更と実装変更を同じ PR に入れる
+          # だけで検査を回避できる。
+          CHECKER="$RUNNER_TEMP/check-progress-coupling.mjs"
+          if git cat-file -e "origin/$BASE_REF:tools/check-progress-coupling.mjs" 2>/dev/null; then
+            git show "origin/$BASE_REF:tools/check-progress-coupling.mjs" > "$CHECKER"
+            echo "base（origin/$BASE_REF）のチェッカーで判定します。"
+          else
+            # このチェックを導入する PR だけがここに来る。base にまだ存在しないため、
+            # 候補側を使うほかない。マージ後は必ず上の経路になる。
+            CHECKER="tools/check-progress-coupling.mjs"
+            echo "::warning::base にチェッカーが無いため候補側で判定します（導入 PR のみ想定）。"
+          fi
+          node "$CHECKER" "origin/$BASE_REF"

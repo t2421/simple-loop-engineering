@@ -1,9 +1,9 @@
 # Progress: `0022-spec-author-agent`
 
-- **Target Spec:** `task/0022-spec-author-agent/spec.md`
+- **Target Spec:** `task/archive/0022-spec-author-agent/spec.md`
 - **Branch:** `feature/spec-author-agent`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/32
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] 試行 1 件で生成物の見出しがテンプレートと一致することの確認（出力を会話に貼る。生成物は破棄）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

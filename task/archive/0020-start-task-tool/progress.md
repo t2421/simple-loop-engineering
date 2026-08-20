@@ -1,9 +1,9 @@
 # Progress: `0020-start-task-tool`
 
-- **Target Spec:** `task/0020-start-task-tool/spec.md`
+- **Target Spec:** `task/archive/0020-start-task-tool/spec.md`
 - **Branch:** `feature/start-task-tool`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/29
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done` (Phase: `Archive`)
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] CLAUDE.md の追随（Plan 工程・採番・worktree 作成手順）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

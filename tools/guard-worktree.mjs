@@ -22,6 +22,9 @@
  * のいずれでもブロックしない。誤爆で docs 作業を止めるより素通りを許す。
  * ガードの本丸は CI 側（`.github/workflows/guard.yml`）にある。
  *
+ * ただし**黙って**無効化はしない。想定外で素通りしたときは理由を stderr に 1 行出す。
+ * ガードが効いていないことに気づけないのが、いちばん悪い失敗の仕方である。
+ *
  * 手動実行: `echo '{"tool_input":{"file_path":"..."}}' | node tools/guard-worktree.mjs`
  */
 
@@ -88,6 +91,9 @@ export function resolvePrimaryRoot(gitCommonDir) {
 /**
  * 編集対象のパスを分類する純関数。判定はこの関数だけが持つ。
  *
+ * ファイルシステムを見ない。symlink の解決（`realPathOrSelf`）は呼び出し側の
+ * 責任で、両引数に同じ解決を掛けてから渡す。
+ *
  * @param {object} input
  * @param {unknown} input.filePath - hook が渡した `tool_input.file_path`
  * @param {unknown} input.rootDir - プライマリチェックアウトのルート（絶対パス）
@@ -115,6 +121,33 @@ export function classifyEdit({ filePath, rootDir }) {
 }
 
 /**
+ * 実在する最も深い祖先まで symlink を解決し、残りの部分を継ぎ足す。
+ *
+ * `fs.realpathSync` は存在しないパスで投げる。Write は「まだ無いファイル」に
+ * 対しても走るので、そのまま使えない。ルート側だけ解決して対象側を素通しにすると、
+ * symlink 経由のパス（`/tmp/...` → `/private/tmp/...` など）が全部 `outside-repo`
+ * になり、ガードが無言で無効化される。両側を同じ関数に通して揃える。
+ *
+ * @param {string} target - 絶対パス
+ * @returns {string} 解決後の絶対パス。解決できない部分は与えられたまま残す
+ */
+export function realPathOrSelf(target) {
+  const absolute = path.resolve(target);
+  let current = absolute;
+  const rest = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(current), ...rest);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return absolute;
+      rest.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
  * プライマリチェックアウトのルートを実行時に求める。求まらなければ undefined。
  *
  * @returns {string | undefined}
@@ -125,26 +158,44 @@ function primaryRoot() {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (out === '') return undefined;
-    return fs.realpathSync(resolvePrimaryRoot(out));
-  } catch {
+    if (out === '') {
+      warnFailOpen('git がリポジトリのルートを返しませんでした');
+      return undefined;
+    }
+    return realPathOrSelf(resolvePrimaryRoot(out));
+  } catch (err) {
+    warnFailOpen(`リポジトリのルートを特定できません: ${err.message}`);
     return undefined;
   }
+}
+
+/**
+ * 素通りさせた理由を stderr に 1 行出す。ブロックはしない（fail-open）。
+ *
+ * @param {string} reason
+ */
+function warnFailOpen(reason) {
+  console.error(`guard-worktree: ガードを適用せず通過させます（${reason}）`);
 }
 
 function main() {
   let raw;
   try {
     raw = fs.readFileSync(0, 'utf8');
-  } catch {
-    // stdin が読めない（対話起動など）。ブロックしない
+  } catch (err) {
+    // stdin が読めない（対話起動など）。ブロックしないが、黙ってはいない
+    warnFailOpen(`stdin を読めません: ${err.message}`);
     return;
   }
 
   const filePath = readFilePath(raw);
   if (filePath === undefined) return;
 
-  const { blocked } = classifyEdit({ filePath, rootDir: primaryRoot() });
+  const rootDir = primaryRoot();
+  const resolved =
+    rootDir === undefined ? filePath : realPathOrSelf(path.resolve(rootDir, filePath));
+
+  const { blocked } = classifyEdit({ filePath: resolved, rootDir });
   if (!blocked) return;
 
   console.error(blockMessage(filePath));

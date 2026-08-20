@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npm run ci"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npm run ci 1>&2"
           }
         ]
       }

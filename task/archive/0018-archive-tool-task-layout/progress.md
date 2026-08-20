@@ -1,9 +1,9 @@
 # Progress: `tools/archive.mjs` を `task/` レイアウトへ追随させる
 
-- **Target Spec:** `task/0018-archive-tool-task-layout/spec.md`
+- **Target Spec:** `task/archive/0018-archive-tool-task-layout/spec.md`
 - **Branch:** `feature/archive-tool-task-layout`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/31
-- **Status:** In Progress (Phase: Verify (外部))
+- **Status:** `Done`
 
 ## タスクチェックリスト
 
@@ -17,7 +17,7 @@
 - [x] CLAUDE.md「アーカイブ」節から旧対の記述を落とす
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

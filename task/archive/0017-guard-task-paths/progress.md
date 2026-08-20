@@ -1,9 +1,9 @@
 # Progress: 保護パスを `task/` へ追随させる
 
-- **Target Spec:** `task/0017-guard-task-paths/spec.md`
+- **Target Spec:** `task/archive/0017-guard-task-paths/spec.md`
 - **Branch:** `feature/guard-task-paths-only`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/28
-- **Status:** In Progress
+- **Status:** Done
 
 ## タスクチェックリスト
 
@@ -17,7 +17,7 @@
 - [x] CLAUDE.md「変えてはいけないもの」の一覧の更新
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得（7 回目で承認。以後の検証方式は 21:50 参照）
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

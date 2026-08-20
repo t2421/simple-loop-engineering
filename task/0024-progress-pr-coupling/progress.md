@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -48,3 +48,21 @@
 - `08:55` - **spec の変更内容と理由:** レビュー指摘 High を受け、人間の承認を得て spec に帰属検証を追記した。「仕様」に 2 行（Branch と head ブランチの照合／head ブランチ名が得られないときの扱い）、「失敗時」に 2 行、「例」に 4 行。あわせて、前回まで**人間の判断待ち**として保留していた Medium（`.claude/skills/add-protected-path` の手順 5 が求める「仕様」「例」への保護の記載）も、同じ機会に人間の承認を得て埋めた——「仕様」に 1 行、「例」に 2 行。**いずれも検証を強める追記で、既存の完了条件・例の期待値・「範囲外」は書き換えていない。**
 - `09:00` - 回帰テストを追加（純関数 9 件 ＋ CLI 5 件 ＋ ガードの自己保護 2 件）。CLI テストの `runCli` は `GITHUB_HEAD_REF`・`GITHUB_ACTIONS` を**既定で落とす**ようにした（実行環境にたまたま入っていると判定が変わるため、必要なテストだけが明示的に足す）。完了条件 5 が「例」の各行を `tests/progress-coupling.test.mjs` で網羅することを求めているので、保護の 2 行も同ファイルから `findViolations` を呼んで固定した（`tests/gate-helpers.test.mjs` と同じ判定を、網羅先に合わせて置いた）。
 - `09:05` - 実測。旧版（`50c60f5`）と新版を同じ差分に当て、レビュアーの経路（`M src/math.mjs` ＋ `M task/0027-b/progress.md`、head は `feature/a`）が **exit 0 → exit 1**（`Branch: feature/b` / `head: feature/a`）に変わることを確認。壊してはいけない性質も実 git で確認した——docs のみ（新規 spec + progress を含む）exit 0、`no-progress-needed` exit 0、正当な実装 PR exit 0、stray の `A` / `D` / `R` は exit 1、merge-base 未解決・差分取得失敗・`GITHUB_ACTIONS` で head ref 欠落はいずれも exit 1（`baseHas` 未注入の fail-closed はユニットテスト）。この作業自身のブランチ（`origin/main...HEAD`、`GITHUB_HEAD_REF=feature/progress-pr-coupling`）も exit 0 で `作業: 0024-progress-pr-coupling`。`npm run ci` は 286 tests / 0 fail。
+- `01:20` - 5 回目のレビューで **不承認**（Critical 0 / High 1 / Low 1）。不承認は通算 5 回に達したため、レビュアーのエージェント定義に従い **Status を `Blocked` にして人間の判断を待つ**。追加の Fix は行わない。
+  - **High: 帰属の照合が自己申告の照合にすぎない。** `makeBranchOf` が照合相手の **Branch** を **HEAD 側**（＝攻撃者が同じ PR で書き換えられる側）から読んでいる。`progress.md` は保護対象から除外されているので、別作業の progress の Branch 行を 1 行書き換えるだけで通る。実測:
+
+```
+=== CASE 2: foreign — 0027-b (Branch feature/b) だけ触る ===
+更新された progress.md がこの PR の作業のものではありません: 0027-b
+exit=1
+
+=== CASE 3: BYPASS — 0027-b を触り、かつその Branch 行を書き換える ===
+実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。
+  作業: 0027-b
+exit=0        ← 4 回目の High が塞がっていない
+```
+
+  - 4 回目の High は「任意の 1 行を触る」から「Branch 行を触る」に難度が変わっただけだった。**しかも失敗メッセージ自身が「進捗の Branch を直してください」と、検査対象のフィールドの書き換えを誘導している。** 緑を目指すエージェントにはこれが修復手順として読める。
+  - Low: `GITHUB_ACTIONS === 'true'` が大小文字を区別する（`TRUE` だと fail-closed が効かない）。ランナーは常に小文字を入れ、攻撃者は env を制御できないため実害なし。
+- `01:22` - **これで 5 回連続、修正のたびに別の面が開いている。** (1) status を捨てて削除を数える → (2) base 限定にして新規追加を数える → (3) 数えない対象を黙って捨てる → (4) 別作業の progress で通る → (5) Branch 行の書き換えで通る。spec が「対応する作業の progress」と書くとき、**何をもって対応と見なすかを操作的に定義していなかった**ことが根にある。
+- `01:24` - レビュアーが示した論点は 1 つ: **`makeBranchOf` を merge-base 読み取りに変えるか**（＝進捗の Branch は着手時点で main に確定しており、実装 PR 内での変更は認めないというモデルを機械化する）。`progressWorks()` は既に `baseHas()` で merge-base の存在を要求しているため追加コストはほぼゼロで、spec の「例」6 行は base 側読み取りでも同じ期待結果になるため spec 改訂も不要、とのこと。代案は Branch 行の変更自体を stray として拒否する形。**人間の判断待ち。**

@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0021-loop-hooks/spec.md`
 - **Branch:** `feature/loop-hooks`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/34
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] テストの作成 (`tests/guard-worktree.test.mjs`)
 - [x] 実装 (`tools/guard-worktree.mjs`、`.claude/settings.json`)
 - [x] Stop hook の実セッションでの動作確認（出力を会話に貼る）
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -32,3 +32,4 @@
 - `07:20` - High-1 を解消: この worktree をプロジェクトルートにしたヘッドレスセッション（`cd <worktree> && claude -p "..." --output-format json --max-turns 1 --model haiku < /dev/null`）を実際に走らせ、Stop hook の発火を transcript（`~/.claude/projects/-...-worktrees-feature-loop-hooks/*.jsonl`）の `attachment.hookEvent === "Stop"` で確認した。成功時は `type: hook_success` / `stdout: ""` / `stderr` に `npm run ci` の全出力（`# pass 204` / `# fail 0`）。cwd はこの worktree。
 - `07:22` - 同じくヘッドレスセッションで**失敗時**を確認: `tools/tmp-ci-break.mjs`（一時ファイル）で lint を壊すと `type: hook_non_blocking_error` / `stderr` に eslint の `no-undef` 診断が入り、セッションに表示された。比較のため Stop hook のコマンドを一時的に旧版（`npm run ci`）へ戻して同じ実験をすると、同じ状況で `stderr: "Failed with non-blocking status code: No stderr output"`（診断は `stdout` に埋もれ、セッションには何も出ない）。Medium-2 の指摘どおりで、`1>&2` がそれを解いていることを実測で示した。実験後に `.claude/settings.json` と一時ファイルは元に戻し、`git status` で確認済み。
 - `07:24` - 補足: `claude -p` のプロセスは応答と Stop hook の完了後も終了せず（このネスト実行環境の都合）、標準出力に応答が出ないまま残る。証跡は transcript 側から取った。プロセスは実験ごとに終了させた。
+- `23:10` - 再レビュー（2 回目）で **承認**（Critical 0 / High 0 / Medium 1 / Low 2）。レビュアーは進捗の自己申告に頼らず transcript を直接読んで Stop hook の発火を裏取りした。Medium 1 件（Stop hook の `cd "$CLAUDE_PROJECT_DIR"` がセッションの起動ルートを指すため、プライマリ起点のセッションでは worktree ではなくプライマリの CI を回す）は完了条件外のため backlog 候補として申し送り。main（`c8831b9`）を取り込み、`npm run ci` は 236 pass / 0 fail。PR #34 を作成。

@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0022-spec-author-agent/spec.md`
 - **Branch:** `feature/spec-author-agent`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/32
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] エージェント定義の作成 (`.claude/agents/spec-author.md`)
 - [x] CLAUDE.md「仕様」節への追記
 - [x] 試行 1 件で生成物の見出しがテンプレートと一致することの確認（出力を会話に貼る。生成物は破棄）
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -67,3 +67,4 @@
 生成物は `git clean -fd task/9999-verify-only` で破棄済み。コミットに含まれていない。`npm run ci` は 184 pass / 0 fail。
 - `12:24` - Medium-3（`subagent_type: spec-author` としての起動）は**未達のまま残す**。新規エージェント定義はセッション開始時に読まれるため、同一セッションでは登録されず起動できない（実測のエラー: `Agent type 'spec-author' not found`）。マージ後の新しいセッションで 1 回叩けば確認できる。**できていないことをできたことにしない。**
 - `12:26` - なお spec を変更したため、この PR は `task/` 配下の凍結対象に触れる。`allow-protected-change` ラベルが要る。
+- `12:40` - 再レビュー（2 回目）で **承認**（Critical 0 / High 0 / Medium 4 / Low 2）。完了条件 5 の変更は「緩和が合格を買っていない」（生成物の H1 は外さなくても通っていた）として検証を弱めないと判定された。PR #32 を `allow-protected-change` ラベル付きで作成。backlog 経路の設計不備 2 件（種別の受け渡し、完了条件の書き方の矛盾）は別作業への申し送りとした。

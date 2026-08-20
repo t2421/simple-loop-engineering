@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0023-lint-docs/spec.md`
 - **Branch:** `feature/lint-docs`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/33
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] テストの作成 (`tests/lint-docs.test.mjs`)
 - [x] 実装 (`tools/lint-docs.mjs`、`package.json` の `lint:docs` 追加)
 - [x] 現状の docs 全件が lint を通ることの確認（出力を会話に貼る）
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -33,3 +33,4 @@
 - `06:35` - Medium-6 を修正。`LEGACY_PROGRESS_WITHOUT_PR` の根拠コメントが「`task/` 配下は凍結対象なので後から足せない」と書いていたが、これは事実と違う。`tools/check-protected-paths.mjs` の `task/` エントリは `exclude: 'progress.md'` を持ち、CLAUDE.md も除外は各作業ディレクトリ直下の `progress.md` だけと書いている。誤った根拠を残すと「task/ 配下の progress は触れない」と誤学習して例外リストが横に伸びるので、根拠を「**存在しなかった PR** なので書ける値が無く、lint を黙らせるために完了済みの記録に無かった事実を足すのは本末転倒」に直した。例外リストを残す判断自体は変えていない。
 - `06:40` - 直さなかった指摘。Medium-2（progress の見出し検証）と Medium-3（`[xx]` のような 2 文字の角括弧の素通し）は spec の「仕様」に規則が無い。lint が spec より強い規則を課すと、規約の正典が spec から実装へ移り、着手後の spec 変更（人間の承認が要る）を経ずにルールが増えていく。Low-5（フェンスの区切り長を厳密に照合しない）は、閉じ側が開き側より短いフェンスという Markdown を実際に書く経路が無く、判定を複雑にするだけで検証は強まらない。いずれも必要になったら別作業の spec に起こす。
 - `06:45` - 再検証。`node --test tests/lint-docs.test.mjs` → 32 tests, pass 32, fail 0。`npm run lint:docs` → `docs の形式違反はありません（27 件の作業ディレクトリを確認）。` 終了コード 0。`npm run ci` → 216 tests, pass 216, fail 0、終了コード 0。CLI 実演で `0026-api_v2` / `0026-v1.2` / `0026-日本語` / `0026-Mixed-Case` が終了コード 0 で通ることも確認した。
+- `13:20` - 再レビュー（2 回目）で **承認**（Critical 0 / High 0 / Medium 3 / Low 2）。High-1（slug 文法）は `tools/archive.mjs` の `isWorkName` と正規表現・trim 判定とも同一であることが確認された。残る Medium 3 件は「壊れた文書を故意に作ったときだけ通る」偽陰性で、正しい文書を落とすものではないため別作業への申し送りとした。PR #33 を `allow-protected-change` ラベル付きで作成（ラベル付与は完了条件 5 の一部）。

@@ -61,6 +61,9 @@ jobs:
           # ${{ }} を run: へ直接展開しない（コマンドインジェクション対策）
           BASE_REF: ${{ github.base_ref }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          # 進捗の **Branch** と照合する head ブランチ。pull_request では必ず入る。
+          # GITHUB_HEAD_REF は既定でも入るが、依存を見えるように明示する。
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           # protected-paths と同じ理由で、実行するのは必ず base リビジョンの版にする。

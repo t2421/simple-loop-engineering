@@ -11,6 +11,11 @@
  * 捨てるだけだと、有効な progress 更新 1 件に別作業の progress の追加・削除・移動を
  * 同乗させて 1 PR に 2 作業を混ぜられる。
  *
+ * 数が合っているだけでも足りない。更新された progress が **その PR の作業のもの**
+ * であることまで見る（`checkAttribution()` の注記を見よ）。`tools/archive.mjs` の
+ * `checkOwnership()` が「マージ済みであることだけでは足りない」を解いたのと同型で、
+ * PR の head ブランチと進捗の **Branch** を照合する。
+ *
  * 判定ロジックは純関数として公開し、差分リストとラベルを注入してテストできる。
  * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
@@ -238,6 +243,62 @@ export function strayProgressPaths(changes, baseHas = NOTHING_IN_BASE) {
 }
 
 /**
+ * 進捗ファイルの本文から **Branch** の行を読む純関数。
+ *
+ * 書式の解釈は `tools/archive.mjs` の `readBranch()` と同じにする（バッククォートを
+ * 剥がし、前後の空白を落とす）。**あちらを import しない**のは、このファイルが
+ * ローカル import を持てないため（CI は base 版を一時ファイルへ取り出して実行する）。
+ * 書式を変えるときは両方を揃えること。
+ *
+ * @param {string} text - progress.md の中身
+ * @returns {string | null} ブランチ名。欄が無ければ null
+ */
+export function readBranch(text) {
+  if (typeof text !== 'string') return null;
+  const m = /^- \*\*Branch:\*\*\s*(.+?)\s*$/m.exec(text);
+  if (!m) return null;
+  const value = m[1].replace(/^`|`$/g, '').trim();
+  return value === '' ? null : value;
+}
+
+/**
+ * 作業の **Branch** を問う関数の既定値。**「読めない」と答える。**
+ *
+ * `NOTHING_IN_BASE` と同じ考え方で、配線を忘れたときに落ちる側へ倒す。
+ *
+ * @returns {null}
+ */
+const NO_BRANCH = () => null;
+
+/**
+ * 更新された progress が、**その PR の作業のもの**かを判定する純関数。
+ *
+ * 「実装の変更に progress 更新がちょうど 1 件伴う」だけでは足りない。別作業の
+ * progress.md を 1 行触るだけで、その PR の作業と無関係な進捗を担保に通せてしまう
+ * （`src/` を変える PR が `task/0027-b/progress.md` だけ更新する経路）。
+ * `tools/archive.mjs` の `checkOwnership()` が「マージ済みであることだけでは足りない。
+ * 別作業の PR を貼れば通ってしまう」を解いたのと同じ問題なので、同じ形で解く。
+ * 照合するものも同じ——PR の head ブランチと、進捗の **Branch** メタ情報である。
+ *
+ * head ブランチ名が得られないとき（`headBranch` が空）は照合しない。ローカルで
+ * CLI を手で回す経路がこれに当たる。**抜け道にはならない。** ゲートの実体は
+ * `pull_request` イベントで動く CI であり、そこでは `GITHUB_HEAD_REF` が必ず入る。
+ * CI で空になっていたら配線の異常なので、`main()` 側が別途落とす。
+ *
+ * @param {string} work - 作業ディレクトリ名
+ * @param {object} input
+ * @param {string | null | undefined} input.headBranch - PR の head ブランチ
+ * @param {(work: string) => string | null} [input.branchOf] - その作業の進捗の **Branch**。
+ *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「読めない」（fail-closed）。
+ * @returns {{ok: boolean, branch: string | null}}
+ */
+export function checkAttribution(work, { headBranch, branchOf = NO_BRANCH }) {
+  if (!headBranch) return { ok: true, branch: null };
+  const branch = branchOf(work);
+  return { ok: branch === headBranch, branch };
+}
+
+/**
  * 実装変更と progress 更新の結合を判定する純関数。
  *
  * @param {object} input
@@ -245,30 +306,52 @@ export function strayProgressPaths(changes, baseHas = NOTHING_IN_BASE) {
  * @param {string[] | null | undefined} input.labels - PR のラベル。読めなければ null
  * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
  *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「無い」（fail-closed）。
- * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'stray'|'multiple', works: string[], strays: string[]}}
+ * @param {string | null} [input.headBranch] - PR の head ブランチ。空なら帰属を照合しない
+ * @param {(work: string) => string | null} [input.branchOf] - 作業の進捗の **Branch**
+ * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'stray'|'multiple'|'foreign', works: string[], strays: string[], branch: string | null, headBranch: string | null}}
  */
-export function evaluateCoupling({ changes, labels, baseHas = NOTHING_IN_BASE }) {
+export function evaluateCoupling({
+  changes,
+  labels,
+  baseHas = NOTHING_IN_BASE,
+  headBranch = null,
+  branchOf = NO_BRANCH,
+}) {
   const works = progressWorks(changes, baseHas);
   const strays = strayProgressPaths(changes, baseHas);
   const paths = pathsFromChanges(changes);
 
+  const at = (reason, ok, branch = null) => ({
+    ok,
+    reason,
+    works,
+    strays,
+    branch,
+    headBranch: headBranch ?? null,
+  });
+
   // 人間が明示的に付けた逃げ道。ラベルが読めないときは通さない（安全側）
   if (Array.isArray(labels) && labels.includes(BYPASS_LABEL)) {
-    return { ok: true, reason: 'bypass-label', works, strays };
+    return at('bypass-label', true);
   }
 
   // docs だけの PR は対象外。**stray より先に判定する。**
   // 計画用ブランチの docs PR は新しい作業の progress.md を新規追加する（＝ stray）ので、
   // 順序を逆にすると正当な docs PR が落ちる。
   if (!paths.some((p) => isImplementationPath(p))) {
-    return { ok: true, reason: 'docs-only', works, strays };
+    return at('docs-only', true);
   }
 
-  if (works.length === 0) return { ok: false, reason: 'missing', works, strays };
+  if (works.length === 0) return at('missing', false);
   // 数えない差分を同乗させて 2 作業を 1 PR に混ぜる経路を塞ぐ
-  if (strays.length > 0) return { ok: false, reason: 'stray', works, strays };
-  if (works.length > 1) return { ok: false, reason: 'multiple', works, strays };
-  return { ok: true, reason: 'coupled', works, strays };
+  if (strays.length > 0) return at('stray', false);
+  if (works.length > 1) return at('multiple', false);
+
+  // 数が合っていても、その progress がこの PR の作業のものとは限らない
+  const attribution = checkAttribution(works[0], { headBranch, branchOf });
+  if (!attribution.ok) return at('foreign', false, attribution.branch);
+
+  return at('coupled', true, attribution.branch);
 }
 
 /**
@@ -298,21 +381,59 @@ function makeBaseHas(mergeBase, execGit) {
 }
 
 /**
+ * 作業の進捗の **Branch** を、候補側（HEAD）の内容から読む関数を組み立てる。
+ *
+ * 差分は `base...HEAD` なので、照合する進捗も HEAD 側の内容で読む。読めなければ
+ * null を返し、`checkAttribution()` が不一致として落とす（fail-closed）。
+ *
+ * @param {(args: string[], options?: {quiet?: boolean}) => string} execGit
+ * @returns {(work: string) => string | null}
+ */
+function makeBranchOf(execGit) {
+  return (work) => {
+    try {
+      // 「読めない」は判定結果として扱うので、git の fatal を画面に出さない
+      const text = execGit(['show', `HEAD:${TASK_DIR}${work}/${PROGRESS_FILE}`], { quiet: true });
+      return readBranch(text);
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
  * base ref との差分を見て結合を判定する。
  * 差分が取れない・読めないときは fail-closed（チェック失敗）。
  *
  * @param {object} input
  * @param {string | undefined} input.baseRef
  * @param {string[] | null | undefined} input.labels
+ * @param {string | null} [input.headBranch] - PR の head ブランチ。空なら帰属を照合しない
  * @param {(args: string[], options?: {quiet?: boolean}) => string} [input.execGit]
  * @param {(path: string) => boolean} [input.baseHas] - テストからの注入用。
  *   省略時は merge-base を解決して `git cat-file -e` で問い合わせる。
- * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], error: 'usage'|'diff'|null}}
+ * @param {(work: string) => string | null} [input.branchOf] - テストからの注入用。
+ *   省略時は `git show HEAD:task/<work>/progress.md` から読む。
+ * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], branch: string | null, headBranch: string | null, error: 'usage'|'diff'|null}}
  */
-export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit, baseHas }) {
-  if (!baseRef) {
-    return { ok: false, reason: null, works: [], strays: [], error: 'usage' };
-  }
+export function resolveCoupling({
+  baseRef,
+  labels,
+  headBranch = null,
+  execGit = defaultExecGit,
+  baseHas,
+  branchOf,
+}) {
+  const failed = (error) => ({
+    ok: false,
+    reason: null,
+    works: [],
+    strays: [],
+    branch: null,
+    headBranch,
+    error,
+  });
+  if (!baseRef) return failed('usage');
   let changes;
   let has = baseHas;
   try {
@@ -325,9 +446,13 @@ export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit, bas
     }
   } catch {
     // 差分が取れないまま素通りさせない（shallow clone・出力の破損）
-    return { ok: false, reason: null, works: [], strays: [], error: 'diff' };
+    return failed('diff');
   }
-  return { ...evaluateCoupling({ changes, labels, baseHas: has }), error: null };
+  const readWorkBranch = branchOf ?? makeBranchOf(execGit);
+  return {
+    ...evaluateCoupling({ changes, labels, baseHas: has, headBranch, branchOf: readWorkBranch }),
+    error: null,
+  };
 }
 
 /**
@@ -360,6 +485,22 @@ function readLabels() {
   }
 }
 
+/**
+ * PR の head ブランチ名を環境変数から読む。
+ *
+ * `GITHUB_HEAD_REF` は GitHub Actions が `pull_request` イベントで必ず入れる既定の
+ * 環境変数である（`guard.yml` でも `env:` に明示して依存を見えるようにしてある。
+ * `${{ }}` は `run:` へ直接展開しない）。ローカルで手で回すときは空になる。
+ *
+ * @returns {string | null}
+ */
+function readHeadBranch() {
+  const raw = process.env.GITHUB_HEAD_REF;
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return value === '' ? null : value;
+}
+
 const MESSAGES = {
   'bypass-label': `ラベル ${BYPASS_LABEL} があるため通過させます（人間による明示承認）。`,
   'docs-only': 'src/・tests/・tools/ に変更がないため対象外です。',
@@ -368,7 +509,18 @@ const MESSAGES = {
 
 function main() {
   const baseRef = process.argv[2];
-  const result = resolveCoupling({ baseRef, labels: readLabels() });
+  const headBranch = readHeadBranch();
+
+  // CI では `pull_request` イベントで必ず入る。空なら配線の異常（他のイベントで
+  // 動かしている・env を外した）なので、帰属の検査を黙って飛ばさず落とす。
+  // ローカル実行で飛ばすのは、ゲートの実体が CI 側だから許される。
+  if (!headBranch && process.env.GITHUB_ACTIONS === 'true') {
+    console.error('GITHUB_HEAD_REF が空です。進捗の Branch と照合できません。');
+    console.error('このチェックは pull_request イベントで動かしてください。');
+    process.exit(1);
+  }
+
+  const result = resolveCoupling({ baseRef, labels: readLabels(), headBranch });
 
   if (result.error === 'usage') {
     console.error('使い方: node tools/check-progress-coupling.mjs <base-ref>');
@@ -399,6 +551,14 @@ function main() {
     console.error('実装 PR に混ぜないでください。1 PR = 1 作業です。');
     console.error('spec + progress の新規作成は計画用ブランチの docs PR へ、');
     console.error('アーカイブは main への直接コミットへ分けてください。');
+  } else if (result.reason === 'foreign') {
+    console.error(`更新された progress.md がこの PR の作業のものではありません: ${result.works[0]}`);
+    console.error(
+      `  task/${result.works[0]}/progress.md の Branch: ${result.branch ?? '（行がありません）'}`,
+    );
+    console.error(`  この PR の head ブランチ: ${result.headBranch}`);
+    console.error('自分の作業の progress.md を更新してください。進捗の **Branch** は');
+    console.error('着手時に切ったブランチ名に直してください。');
   } else {
     console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
     for (const work of result.works) console.error(`  - ${work}`);

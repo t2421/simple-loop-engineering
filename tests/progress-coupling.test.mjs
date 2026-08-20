@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   BYPASS_LABEL,
+  checkAttribution,
   evaluateCoupling,
   headPaths,
   isActiveProgressPath,
@@ -15,9 +16,11 @@ import {
   parseNameStatus,
   pathsFromChanges,
   progressWorks,
+  readBranch,
   resolveCoupling,
   strayProgressPaths,
 } from '../tools/check-progress-coupling.mjs';
+import { findViolations } from '../tools/check-protected-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -555,9 +558,13 @@ const git = (cwd, ...args) => {
   return r.stdout;
 };
 
+/** テスト用の progress.md。**Branch** の行だけ本物の書式に揃える */
+const progressText = (work, branch) =>
+  `# Progress: \`${work}\`\n\n- **Branch:** \`${branch}\`\n- **Status:** \`In Progress\`\n`;
+
 /**
  * base に `src/math.mjs` と `task/0026-a/progress.md` を持つリポジトリを作り、
- * `work` ブランチへ切り替えて返す。
+ * `work` ブランチへ切り替えて返す。progress の **Branch** は `work`。
  */
 function makeRepo(t) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'coupling-repo-'));
@@ -568,15 +575,27 @@ function makeRepo(t) {
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.mkdirSync(path.join(cwd, 'task/0026-a'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
-  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), '# 0026-a\n');
+  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), progressText('0026-a', 'work'));
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'base');
   git(cwd, 'checkout', '-q', '-b', 'work');
   return cwd;
 }
 
-const runCli = (cwd) =>
-  spawnSync(process.execPath, [CLI, 'main'], { cwd, encoding: 'utf8', env: { ...process.env, PR_LABELS: '[]' } });
+/**
+ * CLI を走らせる。
+ *
+ * CI 由来の環境変数（`GITHUB_HEAD_REF`・`GITHUB_ACTIONS`）は**既定で落とす**。
+ * 実行環境にたまたま入っていると判定が変わってしまうため、必要なテストだけが
+ * `extra` で明示的に足す。
+ */
+const runCli = (cwd, extra = {}) => {
+  const env = { ...process.env, PR_LABELS: '[]', ...extra };
+  for (const key of ['GITHUB_HEAD_REF', 'GITHUB_ACTIONS']) {
+    if (!(key in extra)) delete env[key];
+  }
+  return spawnSync(process.execPath, [CLI, 'main'], { cwd, encoding: 'utf8', env });
+};
 
 test('CLI: base にある progress を更新した実装 PR は通過する', (t) => {
   const cwd = makeRepo(t);
@@ -625,9 +644,14 @@ function makeTwoWorkRepo(t) {
   git(cwd, 'config', 'user.name', 'test');
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
-  for (const work of ['0026-a', '0027-b']) {
+  // 0026-a は `work` ブランチの作業、0027-b は別ブランチ（`other`）の作業。
+  // 帰属（**Branch** と head ブランチの照合）を実 git で確かめるのに使う。
+  for (const [work, branch] of [
+    ['0026-a', 'work'],
+    ['0027-b', 'other'],
+  ]) {
     fs.mkdirSync(path.join(cwd, 'task', work), { recursive: true });
-    fs.writeFileSync(path.join(cwd, 'task', work, 'progress.md'), `# ${work}\n`);
+    fs.writeFileSync(path.join(cwd, 'task', work, 'progress.md'), progressText(work, branch));
   }
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'base');
@@ -696,11 +720,7 @@ test('CLI: no-progress-needed ラベルは stray があっても通す', (t) => 
   fs.writeFileSync(path.join(cwd, 'task/0028-c/progress.md'), '# 0028-c\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'work');
-  const result = spawnSync(process.execPath, [CLI, 'main'], {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env, PR_LABELS: JSON.stringify([BYPASS_LABEL]) },
-  });
+  const result = runCli(cwd, { PR_LABELS: JSON.stringify([BYPASS_LABEL]) });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /人間による明示承認/);
 });
@@ -717,4 +737,232 @@ test('CLI は base との差分が取れないと終了コード非 0 で終わ�
   );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /差分を取得できませんでした/);
+});
+
+// --- 帰属（更新された progress が、その PR の作業のものか） ---
+
+test('進捗の Branch が head ブランチと一致すれば通過する', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => 'feature/a',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'coupled');
+  assert.deepEqual(result.works, ['0026-a']);
+});
+
+test('別作業の progress だけを更新した実装 PR は失敗する（foreign）', () => {
+  // レビュアーが実測で再現した経路。ブランチ feature/a が src/ を変え、
+  // 更新するのは別作業 0027-b の progress だけ。数は 1 件なので従来は通っていた。
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0027-b/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => 'feature/b',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'foreign');
+  assert.deepEqual(result.works, ['0027-b']);
+  assert.equal(result.branch, 'feature/b');
+  assert.equal(result.headBranch, 'feature/a');
+});
+
+test('進捗に Branch の行が無ければ失敗する（foreign）', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => null,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'foreign');
+  assert.equal(result.branch, null);
+});
+
+test('branchOf を渡し忘れたら通さない（既定は fail-closed）', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'foreign');
+});
+
+test('head ブランチ名が無いときは帰属を照合しない（ローカル CLI 実行）', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: null,
+    branchOf: () => 'まったく別のブランチ',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'coupled');
+});
+
+test('checkAttribution は head ブランチが空なら照合しない', () => {
+  assert.deepEqual(checkAttribution('0026-a', { headBranch: '', branchOf: () => 'x' }), {
+    ok: true,
+    branch: null,
+  });
+  assert.deepEqual(checkAttribution('0026-a', { headBranch: 'x', branchOf: () => 'x' }), {
+    ok: true,
+    branch: 'x',
+  });
+  assert.deepEqual(checkAttribution('0026-a', { headBranch: 'x', branchOf: () => 'y' }), {
+    ok: false,
+    branch: 'y',
+  });
+});
+
+test('readBranch は tools/archive.mjs と同じ書式解釈をする', () => {
+  assert.equal(readBranch('- **Branch:** `feature/a`\n'), 'feature/a');
+  assert.equal(readBranch('- **Branch:** feature/a  \n'), 'feature/a');
+  assert.equal(readBranch('- **Branch:** ``\n'), null);
+  assert.equal(readBranch('- **Status:** `In Progress`\n'), null);
+  assert.equal(readBranch(undefined), null);
+});
+
+test('帰属の判定は multiple / stray より後に来る', () => {
+  // 2 作業が混ざっているときは、帰属ではなく件数の理由で落とす（誘導が変わる）
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => 'feature/a',
+  });
+  assert.equal(result.reason, 'multiple');
+});
+
+test('docs だけの PR とラベルは帰属を見ずに通る', () => {
+  const docsOnly = evaluateCoupling({
+    changes: modified('task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => 'まったく別のブランチ',
+  });
+  assert.equal(docsOnly.ok, true);
+  assert.equal(docsOnly.reason, 'docs-only');
+
+  const bypassed = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0027-b/progress.md'),
+    labels: [BYPASS_LABEL],
+    baseHas: anythingInBase,
+    headBranch: 'feature/a',
+    branchOf: () => 'feature/b',
+  });
+  assert.equal(bypassed.ok, true);
+  assert.equal(bypassed.reason, 'bypass-label');
+});
+
+test('resolveCoupling は branchOf を渡さなければ HEAD の progress から Branch を読む', () => {
+  const calls = [];
+  const execGit = (args) => {
+    calls.push(args.join(' '));
+    if (args[0] === 'diff') {
+      return ['M', 'src/math.mjs', 'M', 'task/0026-a/progress.md', ''].join('\0');
+    }
+    if (args[0] === 'merge-base') return 'abc123\n';
+    if (args[0] === 'show') return '- **Branch:** `feature/a`\n';
+    return '';
+  };
+  const result = resolveCoupling({
+    baseRef: 'origin/main',
+    labels: [],
+    headBranch: 'feature/a',
+    execGit,
+    baseHas: anythingInBase,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'coupled');
+  assert.ok(calls.includes('show HEAD:task/0026-a/progress.md'));
+});
+
+// --- CLI の帰属（実際の git リポジトリで確かめる） ---
+
+test('CLI: head ブランチと進捗の Branch が一致する実装 PR は通過する', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ちょうど 1 件/);
+});
+
+test('CLI: 別作業の progress だけを更新した実装 PR は通せない', (t) => {
+  // レビュアーが実測で再現した経路そのもの
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0027-b/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /この PR の作業のものではありません/);
+  assert.match(result.stderr, /0027-b/);
+});
+
+test('CLI: 進捗に Branch の行が無ければ通せない', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), '# 0026-a\n- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /行がありません/);
+});
+
+test('CLI: head ブランチ名が無いローカル実行では帰属を照合しない', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0027-b/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ちょうど 1 件/);
+});
+
+test('CLI: GITHUB_ACTIONS で head ブランチ名が空なら fail-closed', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_ACTIONS: 'true', GITHUB_HEAD_REF: '' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /GITHUB_HEAD_REF が空です/);
+});
+
+// --- ガードによる自己保護（`.claude/skills/add-protected-path` の手順 4） ---
+
+const noScripts = { changes: [], baseScripts: {}, headScripts: {} };
+
+test('ガードは tools/check-progress-coupling.mjs の変更を違反として検知する', () => {
+  const changed = findViolations({
+    ...noScripts,
+    changes: [{ status: 'M', path: 'tools/check-progress-coupling.mjs' }],
+  });
+  assert.equal(changed.length, 1);
+  assert.equal(changed[0].path, 'tools/check-progress-coupling.mjs');
+});
+
+test('ガードは tools/check-progress-coupling.mjs の新規追加を違反にしない', () => {
+  const added = findViolations({
+    ...noScripts,
+    changes: [{ status: 'A', path: 'tools/check-progress-coupling.mjs' }],
+  });
+  assert.deepEqual(added, []);
 });

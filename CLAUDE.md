@@ -106,6 +106,7 @@ npm run ci
 
 ## 仕様
 
+- 新規 spec / progress の起草は `spec-author` サブエージェントに依頼する（意図・ID・slug を渡す）
 - 機能追加・バグ修正・改善を問わず `task/TEMPLATE-spec.md` を `task/<id>-<slug>/spec.md` にコピーして埋める。進捗は `task/TEMPLATE-progress.md` を同じディレクトリの `progress.md` にする
 - 見出し名・順番は変えない。空でも見出しは残す
 - **完了条件は必須。** 検証はこの条件に対して行う

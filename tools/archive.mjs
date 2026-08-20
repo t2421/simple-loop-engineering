@@ -1,7 +1,7 @@
 /**
  * PR マージ後のアーカイブ（Status 更新・ファイル移動・パス書き換え）を 1 コマンドで行う。
  *
- * 使い方: node tools/archive.mjs <作業名>
+ * 使い方: node tools/archive.mjs <id>-<slug>
  *
  * 条件を満たさないときはファイルを一切変更せず、終了コード非 0 で理由を表示する。
  * 移動ロジックは PR 確認部と分離してあり、`checkPr` を注入すればテストできる。
@@ -15,8 +15,23 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-/** 移動してはいけない作業名 */
-const FORBIDDEN = 'TEMPLATE';
+/**
+ * 作業名（`<id>-<slug>`）として受け付ける形。
+ *
+ * ゼロ埋め 4 桁の ID で始まることを要求すると、型（`TEMPLATE-spec` /
+ * `TEMPLATE-progress`）とパス区切り・`..` を同時に弾ける。
+ */
+const WORK_NAME_RE = /^\d{4}-[A-Za-z0-9][A-Za-z0-9-]*$/;
+
+/**
+ * 作業名として正しいかを判定する純関数。
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isWorkName(name) {
+  return typeof name === 'string' && WORK_NAME_RE.test(name);
+}
 
 /** 進捗の PR 欄が未作成であることを示す値 */
 const PR_NOT_CREATED = '未作成';
@@ -110,8 +125,8 @@ export function checkOwnership({ url, repo, headRefName, branch }) {
  * 試行ログなど他の行は触らない。
  *
  * @param {string} text - 進捗ファイルの中身
- * @param {string} name - 作業名
- * @returns {string} 書き換え後の中身
+ * @param {string} name - 作業名（`<id>-<slug>`）
+ * @returns {{text: string, missing: string[]}} 書き換え後の中身と、当たらなかった行
  */
 export function rewriteProgress(text, name) {
   const statusRe = /^- \*\*Status:\*\*.*$/m;
@@ -120,43 +135,12 @@ export function rewriteProgress(text, name) {
   if (!statusRe.test(text)) missing.push('Status');
   if (!targetRe.test(text)) missing.push('Target Spec');
   const rewritten = text
-    .replace(statusRe, '- **Status:** Done')
-    .replace(targetRe, `- **Target Spec:** \`specs/archive/${name}.md\``)
+    .replace(statusRe, '- **Status:** `Done`')
+    .replace(targetRe, `- **Target Spec:** \`task/archive/${name}/spec.md\``)
     // 手作業の手順どおり、アーカイブのチェック項目も閉じる。
     // Done なのに「PR マージ後のアーカイブ」が未着手のまま残るのを防ぐ
     .replace(/^- \[[ /]\] (PRマージ後のアーカイブ.*)$/m, '- [x] $1');
   return { text: rewritten, missing };
-}
-
-/**
- * 進捗と同じベース名の抽出物を探す純関数。
- * `<name>.md` 自身と、`<name>.` で始まるファイルだけを対象にする。
- * `<name>-other.md` のような別作業は巻き込まない。
- *
- * @param {string[]} entries - progress/ 直下のファイル名一覧
- * @param {string} name - 作業名
- * @returns {string[]} 移動対象のファイル名
- */
-export function collectArtifacts(entries, name) {
-  // 進捗（.md）の存在が作業の定義である。
-  // 前提: 判定は progress/ 直下だけを見る。`foo.v2` が既にアーカイブ済みだと
-  // `foo.v2.png` は `foo` の抽出物として拾われる（既知の限界）。`foo` と `foo.v2` の両方に進捗があるなら、
-  // `foo.v2.png` は `foo.v2` のものであって `foo` のものではない。
-  // 名前がドットを含む作業を巻き込まないよう、最長一致する作業名に割り当てる。
-  const longerWorks = entries
-    .filter((e) => e.endsWith('.md') && e !== `${name}.md`)
-    .map((e) => e.slice(0, -'.md'.length))
-    .filter((work) => work.startsWith(`${name}.`));
-
-  return entries
-    .filter((e) => {
-      if (e === `${name}.md`) return true;
-      if (!e.startsWith(`${name}.`)) return false;
-      // `foo.v2.md` は別作業の進捗であって `foo` の抽出物ではない
-      if (e.endsWith('.md')) return false;
-      return !longerWorks.some((work) => e.startsWith(`${work}.`));
-    })
-    .sort();
 }
 
 /**
@@ -211,29 +195,36 @@ export async function archive(
   name,
   { root = process.cwd(), checkPr = checkPrWithGh, getRepo = getRepoWithGh } = {},
 ) {
-  if (!name || name.includes('/') || name.includes('..')) {
-    return { ok: false, reason: `作業名が不正です: ${name}` };
-  }
-  if (name === FORBIDDEN) {
-    return { ok: false, reason: 'TEMPLATE.md は移動しません' };
+  if (!isWorkName(name)) {
+    // 型（TEMPLATE-spec / TEMPLATE-progress）とパス区切り・`..` もここで弾く
+    return { ok: false, reason: `作業名が <id>-<slug> の形ではありません: ${name}` };
   }
 
-  const specPath = path.join(root, 'specs', `${name}.md`);
-  const progressPath = path.join(root, 'progress', `${name}.md`);
+  const workDir = path.join(root, 'task', name);
+  const specPath = path.join(workDir, 'spec.md');
+  const progressPath = path.join(workDir, 'progress.md');
 
+  if (!fs.existsSync(workDir)) {
+    return { ok: false, reason: `task/${name}/ がありません` };
+  }
   if (!fs.existsSync(specPath)) {
-    return { ok: false, reason: `specs/${name}.md がありません` };
+    return { ok: false, reason: `task/${name}/spec.md がありません` };
   }
   if (!fs.existsSync(progressPath)) {
-    return { ok: false, reason: `progress/${name}.md がありません` };
+    return { ok: false, reason: `task/${name}/progress.md がありません` };
   }
 
-  const progressText = fs.readFileSync(progressPath, 'utf8');
+  let progressText;
+  try {
+    progressText = fs.readFileSync(progressPath, 'utf8');
+  } catch (err) {
+    return { ok: false, reason: `task/${name}/progress.md を読めませんでした: ${err.message}` };
+  }
   const prUrl = readPrUrl(progressText);
   if (!prUrl) {
     return {
       ok: false,
-      reason: `progress/${name}.md の PR が ${PR_NOT_CREATED} です。PR を作ってマージしてから実行してください`,
+      reason: `task/${name}/progress.md の PR が ${PR_NOT_CREATED} です。PR を作ってマージしてから実行してください`,
     };
   }
 
@@ -262,54 +253,43 @@ export async function archive(
     return { ok: false, reason: ownership.reason };
   }
 
-  // 移動計画を先に立てる。ここまでは一切ファイルを変更しない
-  const specArchiveDir = path.join(root, 'specs', 'archive');
-  const progressArchiveDir = path.join(root, 'progress', 'archive');
-  const artifacts = collectArtifacts(fs.readdirSync(path.join(root, 'progress')), name);
-
-  const plan = [
-    { from: specPath, to: path.join(specArchiveDir, `${name}.md`), label: `specs/${name}.md -> specs/archive/${name}.md` },
-    ...artifacts.map((file) => ({
-      from: path.join(root, 'progress', file),
-      to: path.join(progressArchiveDir, file),
-      label: `progress/${file} -> progress/archive/${file}`,
-    })),
-  ];
+  // 移動先と書式を先に確かめる。ここまでは一切ファイルを変更しない
+  const archiveParent = path.join(root, 'task', 'archive');
+  const archiveDir = path.join(archiveParent, name);
 
   // 移動先がすでにあるなら、上書きせず失敗する。
   // archive/ は完了した作業の履歴であり、黙って壊してよいものではない。
-  const collisions = plan.filter((m) => fs.existsSync(m.to)).map((m) => path.relative(root, m.to));
-  if (collisions.length > 0) {
+  if (fs.existsSync(archiveDir)) {
     return {
       ok: false,
-      reason: `移動先がすでに存在します: ${collisions.join(', ')}。既存のアーカイブを上書きしません`,
+      reason: `移動先がすでに存在します: task/archive/${name}/。既存のアーカイブを上書きしません`,
     };
   }
 
   // 書き換えが空振りしないことも、動かす前に確かめる。
-  // Status / Target Spec の行が無いまま移動すると、手順 2・5 が達成されないのに成功してしまう
+  // Status / Target Spec の行が無いまま移動すると、手順 1・3 が達成されないのに成功してしまう
   const { missing } = rewriteProgress(progressText, name);
   if (missing.length > 0) {
     return {
       ok: false,
-      reason: `progress/${name}.md に ${missing.join(' / ')} の行がありません。書式を直してから実行してください`,
+      reason: `task/${name}/progress.md に ${missing.join(' / ')} の行がありません。書式を直してから実行してください`,
     };
   }
 
-  // ここから先がファイルの変更。途中で失敗したら、やった分を巻き戻す
-  fs.mkdirSync(specArchiveDir, { recursive: true });
-  fs.mkdirSync(progressArchiveDir, { recursive: true });
-
-  const moved = [];
-  const done = [];
+  // ここから先がファイルの変更。途中で失敗したら、やった分を巻き戻す。
+  // 作業ディレクトリごと 1 回で移すので、spec だけ動いて progress が残る、
+  // 関連ファイルが取り残される、といった中途半端な状態は原理的に起きない
   try {
-    for (const step of plan) {
-      fs.renameSync(step.from, step.to);
-      done.push(step);
-      moved.push(step.label);
-    }
+    fs.mkdirSync(archiveParent, { recursive: true });
+    fs.renameSync(workDir, archiveDir);
+  } catch (err) {
+    // 移動できなかった。まだ何も変わっていないので巻き戻すものはない
+    return { ok: false, reason: `移動できませんでした（変更していません）: ${err.message}` };
+  }
 
-    const movedProgress = path.join(progressArchiveDir, `${name}.md`);
+  const moved = [`task/${name}/ -> task/archive/${name}/`];
+  try {
+    const movedProgress = path.join(archiveDir, 'progress.md');
     const rewritten = rewriteProgress(fs.readFileSync(movedProgress, 'utf8'), name);
     // 直接上書きすると、truncate 後・書き込み中に落ちたとき進捗が壊れる。
     // 隣に書ききってから rename で置き換える
@@ -317,17 +297,16 @@ export async function archive(
     fs.writeFileSync(tmp, rewritten.text);
     fs.renameSync(tmp, movedProgress);
   } catch (err) {
-    // 逆順に戻す。spec だけ移動して progress が残る中途半端な状態を作らない
-    for (const step of done.reverse()) {
-      try {
-        fs.renameSync(step.to, step.from);
-      } catch {
-        // 巻き戻しにも失敗したら、下で状態を伝える
-      }
+    // 進捗を書き換えられなかったら、移動そのものを取り消す。
+    // Status が In Progress のまま archive/ に置かれた状態を残さない
+    try {
+      fs.renameSync(archiveDir, workDir);
+    } catch {
+      // 巻き戻しにも失敗したら、下で状態を伝える
     }
     return {
       ok: false,
-      reason: `移動中に失敗したため巻き戻しました: ${err.message}`,
+      reason: `進捗の書き換えに失敗したため移動を巻き戻しました: ${err.message}`,
     };
   }
 
@@ -337,7 +316,7 @@ export async function archive(
 async function main() {
   const name = process.argv[2];
   if (!name) {
-    console.error('使い方: node tools/archive.mjs <作業名>');
+    console.error('使い方: node tools/archive.mjs <id>-<slug>');
     process.exit(1);
   }
 

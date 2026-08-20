@@ -9,6 +9,7 @@
 ## 対象
 
 - 場所: `tools/check-progress-coupling.mjs`、`tests/progress-coupling.test.mjs`、`.github/workflows/guard.yml`（ジョブ追加）
+- 場所: `tools/check-protected-paths.mjs` の `GATE_HELPERS`、`CLAUDE.md`「変えてはいけないもの」、`tests/gate-helpers.test.mjs`（新チェッカーを保護対象に加える。`.claude/skills/add-protected-path` の手順に従う）
 - 公開面: PR 上の `progress-coupling` チェック
 
 ## 背景

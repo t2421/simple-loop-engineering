@@ -31,11 +31,36 @@ const PROGRESS_FILE = 'progress.md';
 const TASK_DIR = 'task/';
 
 /**
+ * 作業ディレクトリ名の形。**ID の 4 桁だけを縛り、slug の文字種は絞らない。**
+ * `tools/archive.mjs` の `WORK_NAME_RE`・`tools/start-task.mjs` の `WORK_DIR_RE` と
+ * 同じ広さに揃える。ここだけ `[a-z0-9-]` などに絞ると、`0026-api_v2` のような
+ * 正当な作業がこのゲートだけ通れなくなる。
+ */
+const WORK_NAME_RE = /^\d{4}-[^/\\]+$/;
+
+/**
+ * 作業ディレクトリ名として正しいかを判定する純関数。
+ * 前後の空白は名前の一部にしない（`tools/archive.mjs` の `isWorkName` と同じ）。
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isWorkName(name) {
+  if (typeof name !== 'string') return false;
+  if (name !== name.trim()) return false;
+  return WORK_NAME_RE.test(name);
+}
+
+/**
  * `git diff --name-status -M -z` のパス一覧。import 無しで動かすため、
  * ガード側の parser は使わない。
  *
+ * **status は捨てない。** 削除（D）と移動元（R/C の旧パス）を「progress を更新した」と
+ * 数えてしまうと、実装 PR に `git rm task/<id>-<slug>/progress.md` を 1 行足すだけで
+ * この検査を通せる。progress.md は保護パスからも除外されているので他のガードも止めない。
+ *
  * @param {string} raw
- * @returns {Array<{path: string, oldPath?: string}>}
+ * @returns {Array<{status: string, path: string, oldPath?: string}>}
  */
 export function parseNameStatus(raw) {
   const fields = raw.split('\0').filter((f) => f !== '');
@@ -50,10 +75,10 @@ export function parseNameStatus(raw) {
       throw new Error(`差分の出力が途中で切れています: ${JSON.stringify(fields.slice(i))}`);
     }
     if (rename) {
-      changes.push({ path: fields[i + 2], oldPath: fields[i + 1] });
+      changes.push({ status: rename[1], path: fields[i + 2], oldPath: fields[i + 1] });
       i += 3;
     } else {
-      changes.push({ path: fields[i + 1] });
+      changes.push({ status: code, path: fields[i + 1] });
       i += 2;
     }
   }
@@ -62,8 +87,10 @@ export function parseNameStatus(raw) {
 
 /**
  * name-status の変更から、移動元・移動先を含むパス一覧を取る。
+ * **実装変更の検知に使う。** src/ から出ていくリネームも「実装を触った」と数えたいので、
+ * こちらは両側を見る（progress を要求する側なので広く取るのが安全側）。
  *
- * @param {Array<{path: string, oldPath?: string}>} changes
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
  * @returns {string[]}
  */
 export function pathsFromChanges(changes) {
@@ -73,6 +100,21 @@ export function pathsFromChanges(changes) {
     if (change.oldPath) paths.push(change.oldPath);
   }
   return paths;
+}
+
+/**
+ * 候補側（head）に実在し続けるパスだけを返す純関数。
+ * **progress の更新を数えるのに使う。**
+ *
+ * - `D`（削除）は head に残らないので数えない
+ * - `R` / `C` は移動先だけを数える。移動元（`task/<id>-<slug>/` から
+ *   `task/archive/` へ出ていくアーカイブ移動など）は head に残らない
+ *
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
+ * @returns {string[]}
+ */
+export function headPaths(changes) {
+  return changes.filter((c) => c.status !== 'D').map((c) => c.path);
 }
 
 /**
@@ -92,6 +134,10 @@ export function isImplementationPath(filePath) {
  * 完了済みの記録なので数えない（数えると、アーカイブ済みの progress を触るだけで
  * 結合の検査を通せてしまう）。
  *
+ * ディレクトリ名が作業の形（`<4 桁 ID>-<slug>`）であることも要求する。
+ * 任意の直下ディレクトリを受け入れると、`task/not-a-work/progress.md` のような
+ * 使い捨てのパスを 1 つ足すだけでこの検査を通せる。
+ *
  * @param {string} filePath
  * @returns {boolean}
  */
@@ -99,20 +145,23 @@ export function isActiveProgressPath(filePath) {
   if (!filePath.startsWith(TASK_DIR)) return false;
   const rest = filePath.slice(TASK_DIR.length).split('/');
   if (rest.length !== 2) return false;
+  if (rest[1] !== PROGRESS_FILE) return false;
+  // `archive` は `<4 桁 ID>-` で始まらないので下の名前検査でも落ちるが、
+  // 「完了済みは数えない」という意図は独立させて明示しておく
   if (rest[0] === 'archive') return false;
-  return rest[1] === PROGRESS_FILE;
+  return isWorkName(rest[0]);
 }
 
 /**
  * 差分に含まれる、進行中の作業の一覧（作業ディレクトリ名）を返す純関数。
- * 同じ作業を移動元・移動先の両方で数えないよう重複は除く。
+ * 数えるのは候補側に実在し続ける progress.md だけ（削除・移動元は数えない）。
  *
- * @param {string[]} paths
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
  * @returns {string[]} 名前順
  */
-export function progressWorks(paths) {
+export function progressWorks(changes) {
   const works = new Set();
-  for (const p of paths) {
+  for (const p of headPaths(changes)) {
     if (!isActiveProgressPath(p)) continue;
     works.add(p.slice(TASK_DIR.length).split('/')[0]);
   }
@@ -123,12 +172,13 @@ export function progressWorks(paths) {
  * 実装変更と progress 更新の結合を判定する純関数。
  *
  * @param {object} input
- * @param {string[]} input.paths - 差分のパス一覧（移動元も含む）
+ * @param {Array<{status: string, path: string, oldPath?: string}>} input.changes - 差分
  * @param {string[] | null | undefined} input.labels - PR のラベル。読めなければ null
  * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'multiple', works: string[]}}
  */
-export function evaluateCoupling({ paths, labels }) {
-  const works = progressWorks(paths);
+export function evaluateCoupling({ changes, labels }) {
+  const works = progressWorks(changes);
+  const paths = pathsFromChanges(changes);
 
   // 人間が明示的に付けた逃げ道。ラベルが読めないときは通さない（安全側）
   if (Array.isArray(labels) && labels.includes(BYPASS_LABEL)) {
@@ -158,15 +208,15 @@ export function resolveCoupling({ baseRef, labels, execGit = defaultExecGit }) {
   if (!baseRef) {
     return { ok: false, reason: null, works: [], error: 'usage' };
   }
-  let paths;
+  let changes;
   try {
     const raw = execGit(['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`]);
-    paths = pathsFromChanges(parseNameStatus(raw));
+    changes = parseNameStatus(raw);
   } catch {
     // 差分が取れないまま素通りさせない（shallow clone・出力の破損）
     return { ok: false, reason: null, works: [], error: 'diff' };
   }
-  return { ...evaluateCoupling({ paths, labels }), error: null };
+  return { ...evaluateCoupling({ changes, labels }), error: null };
 }
 
 function defaultExecGit(args) {

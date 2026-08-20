@@ -204,6 +204,7 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
 - `tools/run-unit-tests.mjs`（ユニットテストの列挙。`ci` が委譲する）
 - `tools/e2e-needed.mjs`（e2e を回すかの判定。CI は base リビジョンを実行する）
+- `tools/check-progress-coupling.mjs`（実装 PR と progress 更新の結合の判定。CI は base リビジョンを実行する）
 
 この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
 

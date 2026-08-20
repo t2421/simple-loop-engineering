@@ -155,14 +155,19 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 
 手順:
 
-`task/<id>-<slug>/` の作業:
+```
+node tools/archive.mjs <id>-<slug>
+git add -A && git commit -m "docs: archive <id>-<slug>"
+```
 
-1. 進捗の Status を `Done` にする
-2. ディレクトリを `task/archive/<id>-<slug>/` へ移動する
-3. 進捗の **Target Spec** を `task/archive/<id>-<slug>/spec.md` に直す
-4. `docs: archive <id>-<slug>` として main に直接コミットする（[コミットとマージ](#コミットとマージ)）
+ツールは次を行う。条件を満たさないときは何も変更せず終了コード非 0 で終わる。
 
-`specs/` と `progress/` に残っている対は `tools/archive.mjs` に従う。
+1. 進捗の **PR** がマージ済みで、この作業のものであることを確かめる
+2. 進捗の Status を `Done` にする
+3. ディレクトリを `task/archive/<id>-<slug>/` へ移動する
+4. 進捗の **Target Spec** を `task/archive/<id>-<slug>/spec.md` に直す
+
+コミットは [コミットとマージ](#コミットとマージ) のとおり main に直接行う。
 
 テンプレは移動しない。未完了の作業をアーカイブしない。PR 未作成・未マージの作業をアーカイブしない。
 

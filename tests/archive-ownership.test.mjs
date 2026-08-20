@@ -5,21 +5,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { archive, readBranch, parsePrUrl, checkOwnership } from '../tools/archive.mjs';
 
-/** 帰属検証つきのリポジトリ骨格を作る */
+const NAME = '0019-foo';
+
+/** 帰属検証つきのリポジトリ骨格を作る（task/ レイアウト） */
 function makeRepo({ pr = 'https://github.com/t2421/simple-loop-engineering/pull/1', branch = 'feature/foo' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ownership-test-'));
-  for (const d of ['specs', 'specs/archive', 'progress', 'progress/archive']) {
-    fs.mkdirSync(path.join(root, d), { recursive: true });
-  }
-  fs.writeFileSync(path.join(root, 'specs/foo.md'), '# foo の仕様\n');
+  fs.mkdirSync(path.join(root, 'task', NAME), { recursive: true });
+  fs.mkdirSync(path.join(root, 'task', 'archive'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'task', NAME, 'spec.md'), '# foo の仕様\n');
   const branchLine = branch === null ? '' : `- **Branch:** \`${branch}\`\n`;
   fs.writeFileSync(
-    path.join(root, 'progress/foo.md'),
+    path.join(root, 'task', NAME, 'progress.md'),
     '# Progress: foo\n\n'
-      + '- **Target Spec:** `specs/foo.md`\n'
+      + `- **Target Spec:** \`task/${NAME}/spec.md\`\n`
       + branchLine
       + `- **PR:** ${pr}\n`
-      + '- **Status:** In Progress\n',
+      + '- **Status:** `In Progress`\n',
   );
   return root;
 }
@@ -91,16 +92,16 @@ test('checkOwnership: head ブランチが違えば失敗', () => {
 
 test('このリポジトリの、その作業の head ブランチのマージ済み PR ならアーカイブされる', async () => {
   const root = makeRepo();
-  const r = await archive('foo', { root, checkPr: prBeing(), getRepo: thisRepo });
+  const r = await archive(NAME, { root, checkPr: prBeing(), getRepo: thisRepo });
 
   assert.equal(r.ok, true);
-  assert.deepEqual(ls(path.join(root, 'specs/archive')), ['foo.md']);
-  assert.deepEqual(ls(path.join(root, 'progress/archive')), ['foo.md']);
+  assert.deepEqual(ls(path.join(root, 'task/archive')), [NAME]);
+  assert.deepEqual(ls(path.join(root, 'task/archive', NAME)).sort(), ['progress.md', 'spec.md']);
 });
 
 test('別リポジトリのマージ済み PR の URL なら、何も変更せず失敗する', async () => {
   const root = makeRepo({ pr: 'https://github.com/other/repo/pull/1' });
-  const r = await archive('foo', {
+  const r = await archive(NAME, {
     root,
     checkPr: prBeing({ owner: 'other', repo: 'repo' }),
     getRepo: thisRepo,
@@ -108,13 +109,13 @@ test('別リポジトリのマージ済み PR の URL なら、何も変更せ�
 
   assert.equal(r.ok, false);
   assert.match(r.reason, /リポジトリ/);
-  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
-  assert.deepEqual(ls(path.join(root, 'progress/archive')), []);
+  assert.ok(fs.existsSync(path.join(root, 'task', NAME, 'spec.md')));
+  assert.deepEqual(ls(path.join(root, 'task/archive')), []);
 });
 
 test('同じリポジトリだが別ブランチのマージ済み PR なら、何も変更せず失敗する', async () => {
   const root = makeRepo();
-  const r = await archive('foo', {
+  const r = await archive(NAME, {
     root,
     checkPr: prBeing({ head: 'feature/someone-else' }),
     getRepo: thisRepo,
@@ -122,43 +123,43 @@ test('同じリポジトリだが別ブランチのマージ済み PR なら、�
 
   assert.equal(r.ok, false);
   assert.match(r.reason, /ブランチ/);
-  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
-  assert.deepEqual(ls(path.join(root, 'progress/archive')), []);
+  assert.ok(fs.existsSync(path.join(root, 'task', NAME, 'spec.md')));
+  assert.deepEqual(ls(path.join(root, 'task/archive')), []);
 });
 
 test('進捗に Branch 欄が無ければ、何も変更せず失敗する', async () => {
   const root = makeRepo({ branch: null });
-  const r = await archive('foo', { root, checkPr: prBeing(), getRepo: thisRepo });
+  const r = await archive(NAME, { root, checkPr: prBeing(), getRepo: thisRepo });
 
   assert.equal(r.ok, false);
   assert.match(r.reason, /Branch/);
-  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
+  assert.ok(fs.existsSync(path.join(root, 'task', NAME, 'spec.md')));
 });
 
 test('リポジトリ情報が取れなければ、素通りさせず失敗する', async () => {
   const root = makeRepo();
-  const r = await archive('foo', {
+  const r = await archive(NAME, {
     root,
     checkPr: prBeing(),
     getRepo: async () => { throw new Error('gh repo view failed'); },
   });
 
   assert.equal(r.ok, false);
-  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
-  assert.deepEqual(ls(path.join(root, 'progress/archive')), []);
+  assert.ok(fs.existsSync(path.join(root, 'task', NAME, 'spec.md')));
+  assert.deepEqual(ls(path.join(root, 'task/archive')), []);
 });
 
 test('PR の head ブランチが取得できなければ失敗する', async () => {
   const root = makeRepo();
   // head を返さない確認関数。prBeing の既定値に潰されないよう直接組む
-  const r = await archive('foo', {
+  const r = await archive(NAME, {
     root,
     checkPr: async () => ({ merged: true }),
     getRepo: thisRepo,
   });
 
   assert.equal(r.ok, false);
-  assert.ok(fs.existsSync(path.join(root, 'specs/foo.md')));
+  assert.ok(fs.existsSync(path.join(root, 'task', NAME, 'spec.md')));
 });
 
 test('owner / repo の大小文字は区別しない', () => {
@@ -174,7 +175,7 @@ test('owner / repo の大小文字は区別しない', () => {
 test('getRepo は root を受け取る（判定の対象と変更の対象を一致させる）', async () => {
   const root = makeRepo();
   let seen = null;
-  await archive('foo', {
+  await archive(NAME, {
     root,
     checkPr: prBeing(),
     getRepo: async (r) => { seen = r; return { owner: 't2421', repo: 'simple-loop-engineering' }; },

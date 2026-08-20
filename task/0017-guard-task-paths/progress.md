@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0017-guard-task-paths/spec.md`
 - **Branch:** `feature/guard-task-paths-only`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/28
 - **Status:** In Progress
 
 ## タスクチェックリスト
@@ -16,7 +16,7 @@
 - [x] 実装 (`tools/check-protected-paths.mjs` の `APPEND_ONLY_DIRS` と `TEMPLATES`)
 - [x] CLAUDE.md「変えてはいけないもの」の一覧の更新
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得（7 回目で承認。以後の検証方式は 21:50 参照）
-- [ ] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
+- [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -89,3 +89,4 @@
 - 21:50 - **人間の決定（別セッション経由）: 以後 codex-reviewer は使わない。** 不承認 5 回の上限に達しているため。代わりに実 git での検証出力を会話・PR に貼り、人間が PR 上で最終レビューしてマージ判断する。7 回目の承認はこの決定と行き違いで実行されたものだが、結果は承認であり矛盾しない。
 - 21:52 - spec の「範囲外」の予約 ID を更新。`0020-target-spec-binding` の 0020 は main 側で `start-task-tool` に採番されたため、ID は採番時に付す表現に直した。
 - 21:55 - PR を作成する。ガードはこの PR 自身の保護変更 3 件（spec・tests・checker）を検知する。いずれも人間承認済みの改訂であり、`allow-protected-change` ラベルで通す。
+- 22:00 - PR #28 を作成し `allow-protected-change` ラベルを付与。実 git の総当たり 22/22 と保護の全体像を PR 本文に貼った。人間の最終レビュー待ち。Status は Done にせず、アーカイブもしない。

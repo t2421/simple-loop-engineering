@@ -21,7 +21,7 @@
 | `.github/workflows/` | CI。`verify` が `npm run ci`、`e2e` は計算ページに影響しうる差分と `main` への push で `npm run test:e2e` |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
-作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規は既存の最大の次（いまは `0016`）。
+作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規の採番は `node tools/start-task.mjs --next-id` で計算する。
 
 Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
@@ -37,7 +37,7 @@ Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
 ## 開発ループ
 
-1. **Plan** — `task/` の `archive/` 以外、または `progress/` の `archive/` 以外から次の 1 作業を選ぶ。何をするか 1〜3 行で宣言する
+1. **Plan** — `node tools/start-task.mjs` を実行する。ツールが次の 1 作業（`task/` の `archive/` 以外で Blocked / Done でない最小 ID）を選び、worktree を用意する。何をするか 1〜3 行で宣言する
 2. **Implement** — 完了条件を満たす最小差分だけ実装する
 3. **Verify (自己)** — [共通の検証](#共通の検証)（CI と同じコマンド）を実行する。続けて対象仕様の完了条件に対して検証する。出力を会話に貼る
 4. **Verify (外部)** — 進捗に書いたレビューサブエージェントへ依頼する
@@ -76,6 +76,8 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 - [アーカイブ](#アーカイブ) はマージされた側から順に行う。未マージの作業を巻き込まない
 
 触るファイルが重ならない作業どうしを選べば衝突しない。重なる場合も並列にしてよいが、後からマージする側が main を取り込んで解決する。解決コストが実装より大きくなるなら直列にする。
+
+次の 1 作業の worktree は `node tools/start-task.mjs` が用意する。選択を待たずに特定の作業を並行で開始するときだけ、手動で作る。
 
 ```
 git worktree add .worktrees/<ブランチ名> -b <ブランチ名> main

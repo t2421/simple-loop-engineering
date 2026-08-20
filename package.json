@@ -11,7 +11,8 @@
     "test:e2e": "node --test tests/calc-page.test.mjs",
     "test": "npm run test:unit && npm run test:e2e",
     "lint": "eslint .",
-    "ci": "npm run lint && npm run test:unit"
+    "lint:docs": "node tools/lint-docs.mjs",
+    "ci": "npm run lint && npm run lint:docs && npm run test:unit"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

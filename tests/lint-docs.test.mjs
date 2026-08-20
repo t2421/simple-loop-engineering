@@ -20,9 +20,12 @@ import {
   BACKLOG_INCOMPLETE_LINE,
   LEGACY_PROGRESS_WITHOUT_PR,
   extractHeadings,
+  linesOutsideFences,
+  matchWorkDirName,
   parseMetadata,
   normalizeStatus,
   findBadCheckboxes,
+  checkBacklogCompletion,
   lintDocs,
 } from '../tools/lint-docs.mjs';
 
@@ -340,6 +343,34 @@ test('ディレクトリ名は NNNN-slug でなければ違反', (t) => {
   assert.ok(reasons.some((r) => r.includes('ディレクトリ名')), JSON.stringify(reasons));
 });
 
+const WIDE_SLUG_NAMES = ['0026-api_v2', '0026-v1.2', '0026-日本語', '0026-Mixed-Case'];
+
+test('matchWorkDirName: slug の文字種は絞らない（選択側・アーカイブ側と同じ広さにする）', () => {
+  // tools/start-task.mjs は `^(\d{4})-(.+)$` を作業として選び、
+  // tools/archive.mjs は `^\d{4}-[^/\\]+$` をアーカイブする。
+  // ここで絞ると「選べてアーカイブもできるのに lint だけ落ちる」作業が生まれ、
+  // そのリポジトリの全 PR が緑にならなくなる。
+  for (const name of WIDE_SLUG_NAMES) {
+    assert.ok(matchWorkDirName(name), name);
+    assert.equal(matchWorkDirName(name)[1], '0026', name);
+  }
+  // 緩めたのは文字種だけ。型・パス区切り・前後空白は引き続き拒む
+  assert.equal(matchWorkDirName('TEMPLATE-spec'), null);
+  assert.equal(matchWorkDirName('0026-a/b'), null);
+  assert.equal(matchWorkDirName('0026-a\\b'), null);
+  assert.equal(matchWorkDirName(' 0026-a'), null);
+  assert.equal(matchWorkDirName('0026-a '), null);
+  assert.equal(matchWorkDirName('0026-'), null);
+});
+
+test('文字種の広い slug の作業ディレクトリは lint を通る', (t) => {
+  for (const name of WIDE_SLUG_NAMES) {
+    const root = putValidLayout(makeRoot(t));
+    putTask(root, name);
+    assert.deepEqual(lintDocs(root), [], name);
+  }
+});
+
 test('task と task/archive の間でも ID 重複を見る', (t) => {
   const root = putValidLayout(makeRoot(t));
   putTask(root, '0030-dup', { archived: true, status: 'Done' });
@@ -358,6 +389,31 @@ test('コードフェンス内の # は見出しとして数えない', (t) => {
   const root = putValidLayout(makeRoot(t));
   const extra = '\n```\n# これはコメント\n## これも\n```\n';
   write(root, 'task/0030-a/spec.md', specMarkdown({ title: '0030-a', extra }));
+  assert.deepEqual(lintDocs(root), []);
+});
+
+test('コードフェンス内に貼ったコマンド出力は文書構造として読まない', (t) => {
+  const root = putValidLayout(makeRoot(t));
+  // CLAUDE.md「報告の作法」が要求するとおり、progress にはコマンド出力を貼る。
+  // その中の `- **Status:** …`・`- [X] …`・`#` は進捗のメタ情報でもチェックでもない
+  const pasted = [
+    '',
+    '```',
+    '- **Status:** WIP',
+    '- **Target Spec:** `task/0099-nope/spec.md`',
+    '- [X] 出力の中のチェック',
+    '# 出力の中の見出し',
+    '```',
+    '',
+  ].join('\n');
+  write(root, 'task/0030-a/progress.md', progressMarkdown() + pasted);
+  assert.deepEqual(lintDocs(root), []);
+});
+
+test('コードフェンス内の「完了条件」節は backlog 判定に使わない', (t) => {
+  const root = putValidLayout(makeRoot(t));
+  const extra = ['', '```', '## 完了条件', '', 'これは出力の一部である。', '```', ''].join('\n');
+  write(root, 'backlog/0032-c/spec.md', specMarkdown({ title: '0032-c', backlog: true, extra }));
   assert.deepEqual(lintDocs(root), []);
 });
 
@@ -415,5 +471,24 @@ test('findBadCheckboxes はリンク記法を拾わない', () => {
   assert.deepEqual(
     findBadCheckboxes('- [X] ng\n').map((c) => c.token),
     ['[X]'],
+  );
+});
+
+test('linesOutsideFences はフェンスの中を落とし、行番号は元のまま返す', () => {
+  const md = ['外1', '```sh', '中', '```', '外2', '~~~', '中2', '~~~', '外3'].join('\n');
+  assert.deepEqual(linesOutsideFences(md), [
+    { number: 1, text: '外1' },
+    { number: 5, text: '外2' },
+    { number: 9, text: '外3' },
+  ]);
+});
+
+test('フェンス内はメタ情報・チェックボックス・完了条件の走査から外れる', () => {
+  const fenced = '```\n- **PR:** `フェンスの中`\n- [X] フェンスの中\n```\n';
+  assert.equal(parseMetadata(`${fenced}- **PR:** \`未作成\`\n`).get('PR'), '`未作成`');
+  assert.deepEqual(findBadCheckboxes(fenced), []);
+  assert.deepEqual(
+    checkBacklogCompletion(`## 完了条件\n\n${BACKLOG_INCOMPLETE_LINE}\n\n\`\`\`\n## 完了条件\n\n別物\n\`\`\`\n`),
+    [],
   );
 });

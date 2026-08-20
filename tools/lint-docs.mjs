@@ -43,8 +43,31 @@ export const STATUS_VALUES = Object.freeze(['Not Started', 'In Progress', 'Block
 /** backlog の「完了条件」節はこの 1 行で始まる（仕様ではなく候補である印） */
 export const BACKLOG_INCOMPLETE_LINE = '未確定（incomplete）。昇格時に埋める。';
 
-/** 作業ディレクトリの名前。ゼロ埋め 4 桁 ID + slug */
-export const WORK_DIR_PATTERN = /^(\d{4})-([a-z0-9]+(?:-[a-z0-9]+)*)$/;
+/**
+ * 作業ディレクトリの名前。ゼロ埋め 4 桁 ID + slug。
+ *
+ * slug の文字種は**絞らない**。CLAUDE.md が制約するのは 4 桁の ID だけで、
+ * slug は一覧用のラベルである。同じ名前を扱う他のツールは
+ * `tools/start-task.mjs` が `^(\d{4})-(.+)$`、`tools/archive.mjs` が
+ * `^\d{4}-[^/\\]+$`（前後空白は禁止）で受ける。ここで `[a-z0-9-]` などに絞ると
+ * `0026-api_v2` のような作業が「start-task は選び archive は通すのに lint だけ
+ * 落ちる」状態になり、そのリポジトリの全 PR が緑にならなくなる。
+ * 狭い側ではなく、**選択側・アーカイブ側と同じ広さ**に揃える。
+ */
+export const WORK_DIR_PATTERN = /^(\d{4})-([^/\\]+)$/;
+
+/**
+ * 作業ディレクトリ名を判定する純関数。`tools/archive.mjs` の `isWorkName` と同じ広さ。
+ *
+ * @param {string} name
+ * @returns {RegExpExecArray | null} 一致したら [全体, ID, slug]、しなければ null
+ */
+export function matchWorkDirName(name) {
+  if (typeof name !== 'string') return null;
+  // 前後の空白は名前の一部にしない。見えない差でディレクトリを取り違えない
+  if (name !== name.trim()) return null;
+  return WORK_DIR_PATTERN.exec(name);
+}
 
 /** チェックボックスとして許す印 */
 const CHECKBOX_MARKS = Object.freeze([' ', '/', 'x']);
@@ -52,8 +75,14 @@ const CHECKBOX_MARKS = Object.freeze([' ', '/', 'x']);
 /**
  * **PR** 行を持たない、移行前からある進捗。
  *
- * この 2 件はメタ情報の規約が固まる前に書かれ、そのままアーカイブされた。
- * `task/` 配下は凍結対象なので後から足せない。ここで列挙して例外にする。
+ * この 2 件はメタ情報の規約（と PR を通す運用）が固まる前に書かれ、
+ * そのままアーカイブされた。**存在しなかった PR** なので書ける値が無い。
+ *
+ * 技術的には編集できる（`tools/check-protected-paths.mjs` の `task/` エントリは
+ * `exclude: 'progress.md'` を持ち、CLAUDE.md も除外は各作業ディレクトリ直下の
+ * `progress.md` だけと書いている）。それでも書き換えないのは、lint を黙らせるために
+ * 完了済みの記録に無かった事実を足すのが本末転倒だからである。
+ * ルール側で緩めるのでもなく、記録を作るのでもなく、ここで列挙して例外にする。
  *
  * 例外は**このパスの PR 行だけ**に効く。他のファイルや他のメタ情報には広がらない
  * （テストで担保している）。新しく書かれる進捗は 4 項目すべてを要求される。
@@ -64,6 +93,33 @@ export const LEGACY_PROGRESS_WITHOUT_PR = Object.freeze([
 ]);
 
 /**
+ * コードフェンス（``` / ~~~）の外にある行だけを返す純関数。
+ *
+ * progress にはコマンド出力をフェンスで貼る運用があり（CLAUDE.md「報告の作法」が
+ * それを要求している）、貼った出力の中の `#`・`- **Status:** …`・`- [X] …` は
+ * 文書構造ではない。すべての走査をこの関数の上に載せ、偽の違反を出さない。
+ *
+ * @param {string} markdown
+ * @returns {Array<{number: number, text: string}>} 1 始まりの行番号と行の内容
+ */
+export function linesOutsideFences(markdown) {
+  const kept = [];
+  let fence = null;
+  markdown.split('\n').forEach((text, index) => {
+    const opener = /^\s*(```+|~~~+)/.exec(text);
+    if (opener) {
+      const mark = opener[1][0];
+      if (fence === null) fence = mark;
+      else if (fence === mark) fence = null;
+      return;
+    }
+    if (fence !== null) return;
+    kept.push({ number: index + 1, text });
+  });
+  return kept;
+}
+
+/**
  * Markdown の見出しを取り出す純関数。
  * コードフェンス（``` / ~~~）の中は見出しとして数えない。
  *
@@ -72,17 +128,8 @@ export const LEGACY_PROGRESS_WITHOUT_PR = Object.freeze([
  */
 export function extractHeadings(markdown) {
   const headings = [];
-  let fence = null;
-  for (const line of markdown.split('\n')) {
-    const opener = /^\s*(```+|~~~+)/.exec(line);
-    if (opener) {
-      const mark = opener[1][0];
-      if (fence === null) fence = mark;
-      else if (fence === mark) fence = null;
-      continue;
-    }
-    if (fence !== null) continue;
-    const heading = /^(#{1,6})\s+(.*?)\s*$/.exec(line);
+  for (const { text } of linesOutsideFences(markdown)) {
+    const heading = /^(#{1,6})\s+(.*?)\s*$/.exec(text);
     if (heading) headings.push({ level: heading[1].length, text: heading[2] });
   }
   return headings;
@@ -114,14 +161,15 @@ export function checkSpecHeadings(markdown) {
 
 /**
  * `- **キー:** 値` のメタ情報を読む純関数。同じキーが複数あれば最初を採る。
+ * コードフェンスの中は読まない（貼ったログの中の同じ形をメタ情報にしない）。
  *
  * @param {string} markdown
  * @returns {Map<string, string>}
  */
 export function parseMetadata(markdown) {
   const metadata = new Map();
-  for (const line of markdown.split('\n')) {
-    const entry = /^\s*[-*]\s+\*\*(.+?):\*\*\s*(.*)$/.exec(line);
+  for (const { text } of linesOutsideFences(markdown)) {
+    const entry = /^\s*[-*]\s+\*\*(.+?):\*\*\s*(.*)$/.exec(text);
     if (entry && !metadata.has(entry[1])) metadata.set(entry[1], entry[2].trim());
   }
   return metadata;
@@ -154,29 +202,31 @@ export function normalizeStatus(value) {
  *
  * `[...]` の中身が 0〜1 文字で、閉じ括弧の直後が空白の行だけを対象にする。
  * こうしないと `- [説明](https://…)` のリンク記法を拾ってしまう。
+ * コードフェンスの中も見ない（貼った出力の中の `- [-] …` は進捗のチェックではない）。
  *
  * @param {string} markdown
  * @returns {Array<{line: number, token: string}>}
  */
 export function findBadCheckboxes(markdown) {
   const bad = [];
-  markdown.split('\n').forEach((line, index) => {
-    const box = /^\s*[-*]\s+\[(.?)\](\s|$)/.exec(line);
+  for (const { number, text } of linesOutsideFences(markdown)) {
+    const box = /^\s*[-*]\s+\[(.?)\](\s|$)/.exec(text);
     if (box && !CHECKBOX_MARKS.includes(box[1])) {
-      bad.push({ line: index + 1, token: `[${box[1]}]` });
+      bad.push({ line: number, token: `[${box[1]}]` });
     }
-  });
+  }
   return bad;
 }
 
 /**
  * backlog の「完了条件」節が未確定の印で始まるかを判定する純関数。
+ * 見出しの探索も本文の探索もコードフェンスの外だけで行う。
  *
  * @param {string} markdown
  * @returns {string[]} 違反の理由。空なら通過
  */
 export function checkBacklogCompletion(markdown) {
-  const lines = markdown.split('\n');
+  const lines = linesOutsideFences(markdown).map((line) => line.text);
   const start = lines.findIndex((line) => /^##\s+完了条件\s*$/.test(line));
   if (start === -1) return []; // 見出し自体の欠落は checkSpecHeadings が報告する
   const first = lines.slice(start + 1).find((line) => line.trim() !== '');
@@ -305,7 +355,7 @@ export function lintDocs(rootDir) {
   const owners = new Map();
 
   for (const { kind, relDir, name } of workDirs) {
-    const matched = WORK_DIR_PATTERN.exec(name);
+    const matched = matchWorkDirName(name);
     if (matched) {
       const id = matched[1];
       owners.set(id, [...(owners.get(id) ?? []), relDir]);

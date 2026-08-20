@@ -258,12 +258,35 @@ test('isWorkName: <id>-<slug> だけを受ける', () => {
   assert.equal(isWorkName('0019-bar'), true);
   assert.equal(isWorkName('0003-calc-page'), true);
   assert.equal(isWorkName('TEMPLATE-spec'), false);
+  assert.equal(isWorkName('TEMPLATE-progress'), false);
   assert.equal(isWorkName('19-bar'), false);
   assert.equal(isWorkName('0019'), false);
   assert.equal(isWorkName('0019-'), false);
   assert.equal(isWorkName('../0019-bar'), false);
   assert.equal(isWorkName('task/0019-bar'), false);
+  assert.equal(isWorkName('0019-bar/../../etc'), false);
+  assert.equal(isWorkName('0019-bar\\evil'), false);
+  assert.equal(isWorkName(' 0019-bar'), false);
+  assert.equal(isWorkName('0019-bar '), false);
   assert.equal(isWorkName(''), false);
+});
+
+test('isWorkName: slug の文字種は絞らない（選択側と同じ広さにする）', () => {
+  // tools/start-task.mjs は `^(\d{4})-(.+)$` を作業として選ぶ。
+  // ここで絞ると「選べるがアーカイブできない作業」が生まれ、必須工程が詰まる
+  assert.equal(isWorkName('0026-api_v2'), true, 'アンダースコア');
+  assert.equal(isWorkName('0026-v1.2'), true, 'ドット');
+  assert.equal(isWorkName('0026-日本語'), true, '非 ASCII');
+  assert.equal(isWorkName('0026-Mixed-Case'), true, '大文字');
+});
+
+test('文字種の広い slug でも実際にアーカイブできる', async () => {
+  const name = '0026-api_v2';
+  const root = makeRepo({ name });
+  const result = await archive(name, { root, checkPr: merged, getRepo: thisRepo });
+
+  assert.equal(result.ok, true, result.reason);
+  assert.deepEqual(ls(path.join(root, 'task/archive')), [name]);
 });
 
 test('rewriteProgress: 当たらなかった行を missing で返す', () => {

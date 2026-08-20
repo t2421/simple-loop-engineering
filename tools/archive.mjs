@@ -19,9 +19,16 @@ const execFileAsync = promisify(execFile);
  * 作業名（`<id>-<slug>`）として受け付ける形。
  *
  * ゼロ埋め 4 桁の ID で始まることを要求すると、型（`TEMPLATE-spec` /
- * `TEMPLATE-progress`）とパス区切り・`..` を同時に弾ける。
+ * `TEMPLATE-progress`）を弾ける。パス区切りを禁じることで `..` による
+ * 脱出も防ぐ。
+ *
+ * slug の文字種は**絞らない**。CLAUDE.md が制約するのは 4 桁の ID だけで、
+ * slug は一覧用のラベルである。ここで `[a-z0-9-]` などに絞ると、
+ * `tools/start-task.mjs` が作業として選べる名前（`^(\d{4})-(.+)$`）を
+ * アーカイブだけ拒む状態になり、**必須工程であるアーカイブが実行不能な作業**が
+ * 生まれる。緩い側ではなく、選択側と同じ広さに揃える。
  */
-const WORK_NAME_RE = /^\d{4}-[A-Za-z0-9][A-Za-z0-9-]*$/;
+const WORK_NAME_RE = /^\d{4}-[^/\\]+$/;
 
 /**
  * 作業名として正しいかを判定する純関数。
@@ -30,7 +37,10 @@ const WORK_NAME_RE = /^\d{4}-[A-Za-z0-9][A-Za-z0-9-]*$/;
  * @returns {boolean}
  */
 export function isWorkName(name) {
-  return typeof name === 'string' && WORK_NAME_RE.test(name);
+  if (typeof name !== 'string') return false;
+  // 前後の空白は名前の一部にしない。見えない差でディレクトリを取り違えない
+  if (name !== name.trim()) return false;
+  return WORK_NAME_RE.test(name);
 }
 
 /** 進捗の PR 欄が未作成であることを示す値 */

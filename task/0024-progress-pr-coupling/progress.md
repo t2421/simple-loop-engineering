@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -103,3 +103,29 @@ exit=0
   - **失敗メッセージは「進捗の内容を書け」と促す。** 「progress.md の中身が変わっていません（実行ビットなど、ファイルのモードだけの変更です）」を出し、対象パスを列挙したうえで「Status・チェックボックス・試行ログを書き足して同じ PR に含めてください」と述べる。**検査対象を書き換えろという誘導は書かない**（5 回目のレビューで指摘された失敗パターン）。
 - `03:15` - 回帰テストを追加（純関数 7 件 ＋ CLI 2 件、計 81 件）。**mode-only ケースは実 git リポジトリで `git update-index --chmod=+x` を使って再現**し、差分に `M` が出ることと base / HEAD の blob OID が一致することを前提としてテスト内で確かめてから exit 1 を固定した（純関数だけでは配線の検証にならない）。裏面（中身も変えていればモードが変わっていても通る）、`contentChanged` 未注入の fail-closed、`rev-parse <merge-base>:` と `rev-parse HEAD:` を実際に呼ぶこと、OID が読めないときの fail-closed も固定した。既存の純関数テストには `contentChanged: anythingChanged` を注入する形へ揃えた（期待結果は変えていない。既定が fail-closed になったための注入であり、緩和ではない）。
 - `03:20` - 実測。修正前（`d628ead` の版）と修正後を同じ差分に当て、mode-only ケースが **exit 0 → exit 1** に変わることを確認（blob OID は base / head とも `de90fb2…` で同一のまま）。壊してはいけない性質も同じ実 git で確認した——正当な PR exit 0、docs のみ exit 0、`no-progress-needed` exit 0、stray の `A` / `D` / `R` exit 1、foreign exit 1、Branch 行を書き換える BYPASS exit 1、`GITHUB_ACTIONS=true` で head ref 空 exit 1、git リポジトリでない exit 1、`baseHas` / `contentChanged` / `branchOf` 未注入と merge-base 未解決はいずれも fail-closed。この作業自身のブランチ（`origin/main...HEAD`、`GITHUB_HEAD_REF=feature/progress-pr-coupling`）も exit 0 で `作業: 0024-progress-pr-coupling`。`npm run ci` は 299 tests / 0 fail。
+- `04:10` - 7 回目のレビューで **不承認**（Critical 0 / High 1）。mode-only は塞がったことがレビュアーの実測で確認された（修正前 exit 0 → 修正後 exit 1、同乗も拒否）。今回の修正が新たな裏面を作っていないことも検証された（判定順で通る入力は増えない、`works` と `unchanged` の完全二分に隙間も重複も無い、既定値 `SAME_CONTENT` は fail-closed、既存テストの緩和ゼロ）。
+  - **High（新種）: `T`（type 変更）が有効な更新として数えられる。** 追跡下の `progress.md` を symlink に置き換えると git は status `T` を出す。`headPaths()` がこれを残し、symlink の blob が base と異なるため `progressWorks()` が 1 件として数える。実測:
+
+```
+--- diff ---
+M	src/math.mjs
+T	task/0026-a/progress.md
+--- ls-tree ---
+120000 blob ac0292c0...	task/0026-a/progress.md
+--- content of progress.md at HEAD ---
+../0027-b/progress.md
+--- checker ---
+実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。
+  作業: 0026-a
+exit=0
+```
+
+  - **レビュアーの論拠**: 「中身の検証は範囲外」では片付かない。同じモジュールが `D`（削除）を stray として明示的に拒否しているのに、`T` は削除と同じ破壊（実ファイルの内容が消え、別作業へのポインタになる）を達成しながら通る。**自モジュールが既に約束した不変条件を別の status が迂回している内部矛盾**であり、1 バイト追記と同列の「受け入れた限界」ではない。
+  - `T` は `strayProgressPaths()` にも現れず、`status !== 'D'` と `status === 'A'` の網の隙間に落ちている。**この穴は今回の修正が作ったものではなく、修正前（`d628ead`）でも exit 0 だった**（先行 6 回で誰も踏んでいない既存の面）。
+  - Low: 今回足した `unchanged` は spec の「失敗時」「例」に対応行が無い（記録漏れ。既存期待値は壊していない）。
+- `04:12` - 誤検知が無いことも実測で確認された（正当な PR、docs のみ、ラベルバイパス、ローカル実行は exit 0。stray・foreign・fail-closed 各種・Branch 行の head 側書き換えは exit 1。自ブランチは exit 0）。`npm run ci` は 299 pass / 0 fail。
+- `04:14` - レビュアーは規約どおり**追加の Fix を自らの判断では指示せず**、Status を `Blocked` にして人間の判断を仰ぐことを推奨した。論点:
+
+  > `T`（type 変更）を `progressWorks()` から外し `strayProgressPaths()` で拒否するか（数える対象を status `M` に限定するホワイトリスト化）。それとも spec の「範囲外」に属するものとして受け入れて承認するか。
+
+  **人間の判断待ち。**

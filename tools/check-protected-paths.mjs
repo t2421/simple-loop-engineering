@@ -58,6 +58,9 @@ const GATE_HELPERS = [
   'tools/run-unit-tests.mjs',
   'tools/e2e-needed.mjs',
   'tools/check-progress-coupling.mjs',
+  // Stop hook が CI を回す対象ディレクトリの判定。書き換えれば変更の無い
+  // チェックアウトを指させ、セッション停止時の検証を骨抜きにできる
+  'tools/stop-hook-ci-dir.mjs',
 ];
 
 function isGateHelper(filePath) {

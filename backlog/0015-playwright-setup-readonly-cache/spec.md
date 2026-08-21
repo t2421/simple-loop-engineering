@@ -23,9 +23,17 @@
 
 このリポジトリの CI（`ubuntu-latest`、書き込み可能なランナーで `npx playwright install --with-deps chromium` を実行）では起きない。実害が出るのは、ブラウザ層を read-only でマウントするコンテナ実行に移したときである。
 
+2026-08-22 の backlog リファインメントで、**実行形態は決まった**。Cloud 環境の Claude
+（コンテナ実行）から e2e を回す想定である。したがって「直す価値が薄い」という保留理由は
+消えた。ただし昇格の前に、その環境の `PLAYWRIGHT_BROWSERS_PATH` が実際に read-only で
+中身が揃っているのかを実測すること。read-only でなければ、この作業は依然として発火しない。
+
+同じリファインメントで、**この spec の「対象」に記述のズレ**が見つかった。`npm test` の
+`pretest` と書いてあるが、実際のフックは `pretest:e2e`（`package.json`）であり、
+`npm run ci` は e2e を呼ばない。影響範囲は `npm run test:e2e` だけである。昇格時に直す。
+
 足りない判断:
 
-- 実際にその実行形態を採るのか。採らないなら直す価値は薄い
 - 判定を「headless shell の実体を直接見る」にするか、「まず launch を試す」に戻すか
 
 ## 仕様

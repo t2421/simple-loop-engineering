@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -72,3 +72,27 @@ exit=0        ← 4 回目の High が塞がっていない
   - Low も直した。`GITHUB_ACTIONS === 'true'` を `onGitHubActions()`（trim + 小文字化して比較）にし、`TRUE` でも fail-closed が効くようにした。
 - `01:45` - 回帰テストを追加。**BYPASS ケース**（実 git。`src/math.mjs` ＋ 別作業 `0027-b` の progress を触り、かつその Branch 行を head ブランチ名 `work` へ書き換える）が exit 1 になること、その裏面（自分の作業の Branch 行を書き換えても base 側が一致していれば通る）、純関数レベルで **base 側と head 側の Branch が違えば base 側が使われる**こと、`resolveCoupling` が `show <merge-base>:…` を呼び `show HEAD:` を呼ばないこと、`GITHUB_ACTIONS=TRUE` の fail-closed を固定した。既存の「Branch の行が無ければ通せない」は照合先が base 側になったため、欠落を base 側に用意する形へ直した（`makeRepo` に `baseProgress` を足した）。判定を弱める変更ではない。
 - `01:50` - 実測。修正前（`3ec3654` の版）と修正後を同じ差分に当て、BYPASS ケースが **exit 0 → exit 1**（`Branch（base 側）: feature/b` / `head: work`）に変わることを確認。誤検知が無いことも同じ実 git で確認した——正当な PR exit 0、docs のみ（progress の新規追加を含む）exit 0、`no-progress-needed` ラベル exit 0、ローカル実行（head ref なし）exit 0、stray exit 1、missing exit 1、`GITHUB_ACTIONS` で head ref 欠落 exit 1、git リポジトリでない exit 1。この作業自身のブランチ（`origin/main...HEAD`、`GITHUB_HEAD_REF=feature/progress-pr-coupling`）も exit 0 で `作業: 0024-progress-pr-coupling`。
+- `02:30` - 6 回目のレビューで **不承認**（Critical 0 / High 1 / Low 1）。5 回目の BYPASS（Branch 行の書き換え）は塞がったことがレビュアーの実測で確認された。テストの retarget も「緩和ではない」と確認された（照合先が base 側になったので欠落を base 側に置き換えただけ。同じ性質のユニットテストは無傷で残り、`show HEAD:` を呼ばないことの否定アサーションが追加されている＝強化）。
+  - **High（新種）: mode-only 変更でゲートを通せる。** `git update-index --chmod=+x task/0026-a/progress.md` だけで、**base と head の blob が同一のまま** status `M` になり、`headPaths()` が残して `progressWorks()` が 1 件として数える。実測:
+
+```
+--- git diff --name-status main...HEAD:
+M	src/math.mjs
+M	task/0026-a/progress.md
+--- blob identical?
+base: 9ae1207c9d760fca5b5989af7c3d7b23925ae9bd
+head: 9ae1207c9d760fca5b5989af7c3d7b23925ae9bd
+--- checker:
+実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。
+  作業: 0026-a
+exit=0
+```
+
+  - 進捗は 1 バイトも更新されていないのに通る。spec の「背景」が挙げた「progress 更新の抜けた実装 PR を機械的に検知できない」をそのまま素通りさせる。
+  - Low: head ブランチ名を別作業の base **Branch** に合わせれば、その作業の progress を担保に通せる。spec の帰属モデル（head ブランチ名 ↔ Branch 欄）そのものの限界で、今回の修正が作った穴ではない。
+- `02:32` - 誤検知は出ていないことも実測で確認された（正当な PR、docs のみ、ラベルバイパス、ローカル実行、fail-closed 各種）。「merge-base 読み取りにしたことで正当なのに落ちる」ケースは見つからず、理由も裏取りされた（`tools/start-task.mjs` が progress の **Branch** を読んでその名前で worktree を切るため、merge-base の Branch と実ブランチ名は構造的に一致する）。`npm run ci` は 290 pass / 0 fail。
+- `02:34` - レビュアーは往復上限を超えた領域として**追加の Fix を自らの判断では指示せず**、Status を `Blocked` にして人間の判断を仰ぐことを推奨した。論点は 1 つ:
+
+  > mode-only 変更（blob 同一）を progress 更新として数えないようにするか。それとも spec の「範囲外: progress の中身の検証」に含まれるものとして今回は受け入れて承認するか。
+
+  レビュアー自身が「**空白 1 文字の追記でも同じく通る以上、この修正で上がるハードルは小さい**」という見方も併記している。**人間の判断待ち。**

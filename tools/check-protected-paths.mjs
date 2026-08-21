@@ -45,11 +45,20 @@ const CHECKER = 'tools/check-protected-paths.mjs';
 const SPEC_FILE = 'spec.md';
 
 /**
- * `ci` / e2e ジョブが委譲する実行ファイル。scripts やワークフローを触らずに
- * ユニットを間引いたり e2e 判定を常に false にしたりできないようにする。
+ * CI のジョブが委譲する判定・実行ファイル。scripts やワークフローを触らずに
+ * ユニットを間引いたり、e2e 判定を常に false にしたり、progress 結合の検査を
+ * 骨抜きにしたりできないようにする。
  * 新規追加は導入 PR のため許可。変更・削除・移動は許さない。
+ *
+ * `tools/check-progress-coupling.mjs` も同じ性質を持つ。ガードジョブは base 版を
+ * 実行するので骨抜き PR 自体は無傷の base 版で検査されるが、それがマージされた
+ * 瞬間に以後の base が骨抜き版になる（2 PR で恒久的に無効化できる）。
  */
-const GATE_HELPERS = ['tools/run-unit-tests.mjs', 'tools/e2e-needed.mjs'];
+const GATE_HELPERS = [
+  'tools/run-unit-tests.mjs',
+  'tools/e2e-needed.mjs',
+  'tools/check-progress-coupling.mjs',
+];
 
 function isGateHelper(filePath) {
   return GATE_HELPERS.includes(filePath);

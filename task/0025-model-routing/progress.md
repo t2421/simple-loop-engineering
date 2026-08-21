@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0025-model-routing/spec.md`
 - **Branch:** `feature/model-routing`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/36
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `L`
 
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/start-task.test.mjs` への追加)
 - [x] 実装 (`task/TEMPLATE-progress.md`、`tools/start-task.mjs`、`tools/lint-docs.mjs`、`.claude/agents/spec-author.md`、CLAUDE.md)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得（Critical 0 / High 0。Medium 2 件は同 PR で修正済み）
-- [ ] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
+- [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -33,3 +33,4 @@
 - `10:52` - 指摘が塞がったことの実測。新規テスト 6 件を修正前の `tools/start-task.mjs`（HEAD）に対して実行すると 5 件が fail（残る 1 件「フェンスの外にあれば読む」は前後どちらでも pass する退行防止用）、修正後は 6 件すべて pass。
 - `10:55` - 後方互換の再確認。実在する progress 23 件（`task/`・`task/archive/`・`progress/TEMPLATE.md`）の `Status`／`Branch`／`Complexity`／`model` を修正前後で突き合わせ、**差分なし**。既存分はすべて `Complexity=null -> model=sonnet` のまま。`npm run lint:docs` は 30 件で違反 0、`node tools/start-task.mjs --next-id` は `0031`。
 - `10:58` - `npm run ci` が 255 tests / 255 pass / 0 fail で通過（追加 6 件を含む）。`node tools/check-protected-paths.mjs main` の検知は 3 件のままで増えていない。
+- `05:10` - PR #36 を `allow-protected-change` ラベル付きで作成。PR 本文に、保護パス 3 件のうち `tests/lint-docs.test.mjs` だけが spec の記載範囲を超えている旨（レビュアーの申し送り）と、Medium 修正の過程で `parseProgressMeta` も同じフェンス解釈に揃えた旨（指示より範囲がわずかに広い）を明記した。

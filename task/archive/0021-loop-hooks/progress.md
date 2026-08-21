@@ -1,9 +1,9 @@
 # Progress: `0021-loop-hooks`
 
-- **Target Spec:** `task/0021-loop-hooks/spec.md`
+- **Target Spec:** `task/archive/0021-loop-hooks/spec.md`
 - **Branch:** `feature/loop-hooks`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/34
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 
 ## タスクチェックリスト
 
@@ -15,7 +15,7 @@
 - [x] Stop hook の実セッションでの動作確認（出力を会話に貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

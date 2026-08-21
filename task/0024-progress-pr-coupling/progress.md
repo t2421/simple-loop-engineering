@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/37
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
@@ -14,8 +14,8 @@
 - [x] 実装 (`tools/check-progress-coupling.mjs`、`.github/workflows/guard.yml` へのジョブ追加)
 - [x] 新チェッカーを保護対象に追加 (`.claude/skills/add-protected-path` の手順。`GATE_HELPERS`・CLAUDE.md 一覧・`tests/gate-helpers.test.mjs`・spec の「対象」「仕様」「例」)
 - [x] 帰属の検証 (更新された progress の **Branch** と PR の head ブランチを照合する)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -138,3 +138,4 @@ exit=0
 - `05:15` - 回帰テストを追加。**`T` ケースは実 git リポジトリで再現**した（`git rm` ではなく実ファイルを消して `ln -s` し `git add`。差分に `T` が出ること・HEAD の entry が `120000`（symlink）であることをテスト内で前提として確かめてから exit 1 を固定）。単独の `T` と、有効な更新に別作業の `T` を同乗させる経路の 2 件。**ホワイトリストであることの表明**として、純関数レベルで `A`・`D`・`T`・`R`・`C` に加え**架空の `X`・`U`・`B`・空文字**まで回し、どれも数えられず、かつ黙って捨てられず拒否対象に現れることを固定した。既存テストのうち 2 件は**強める向き**に retarget した——「移動先が base に既にある作業なら数える」は `R` を数えない設計に変わったので「リネームは移動先が base にあっても数えない（移動元・移動先の両方を拒否する）」へ、`baseHas` の配線テストは `A` が status だけで拒否されて `cat-file` に届かなくなったため、配線が実際に走る `M` の形へ差し替えた。**いずれも通る入力を増やす変更ではない。**
 - `05:20` - 実測。修正前（`ff57da8` の版）と修正後を同じ差分に当て、`T` ケースが **exit 0 → exit 1** に変わることを確認。壊してはいけない性質も同じ実 git で確認した——正当な PR exit 0、docs のみ exit 0、`no-progress-needed` ラベル exit 0、ローカル実行（head ref なし）exit 0、missing / stray / foreign / mode-only / multiple / Branch 行の head 側書き換え BYPASS はいずれも exit 1、`GITHUB_ACTIONS=TRUE` で head ref 空 exit 1、git リポジトリでない exit 1。`npm run ci` は 304 tests / 0 fail。
 - `05:25` - **7 回目の Low（`unchanged` が spec の「失敗時」「例」に無い）は未対応。** 記録漏れであり既存の期待値は壊していないが、着手後の spec 変更は人間の承認が要る領域なので、エージェント判断では書き換えない。今回の指示も「spec は変更しない」である。**人間の判断待ち**として記録に留める。
+- `06:30` - 8 回目のレビューで **承認**（Critical 0 / High 0 / Low 1）。**codex の指摘は 8 回で初めてゼロ**。承認理由は「今回は穴が見つからなかった」ではなく構造が変わったこと — `rejected` が補集合として書かれ status の列挙が無いため、git が将来何を増やしても `M` 以外は定義上そこに落ちる、という評価。誤検知が無いことも 16 ケースで実測された。retarget した既存テスト 2 件はいずれも「より厳しい」方向で緩和ではないことも確認された。main（`99d1940`）を取り込み、`npm run ci` は 324 pass / 0 fail。PR #37 を `allow-protected-change` ラベル付きで作成。残る Low（`unchanged` が spec の「失敗時」「例」に対応行を持たない）は、次に spec を触る機会に人間が足すのが妥当という判断で申し送りとした。

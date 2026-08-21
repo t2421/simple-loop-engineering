@@ -1,9 +1,9 @@
 # Progress: `0013-cloudflare-preview`
 
-- **Target Spec:** `task/0013-cloudflare-preview/spec.md`
+- **Target Spec:** `task/archive/0013-cloudflare-preview/spec.md`
 - **Branch:** `feature/cloudflare-preview`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/44
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -18,7 +18,7 @@
 - [x] `git diff main -- package.json .github/workflows/ci.yml .github/workflows/guard.yml` が空であることの確認（完了条件 6）
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に URL を書く。preview ジョブの実行結果を本文に貼る）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

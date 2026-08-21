@@ -564,9 +564,13 @@ const progressText = (work, branch) =>
 
 /**
  * base に `src/math.mjs` と `task/0026-a/progress.md` を持つリポジトリを作り、
- * `work` ブランチへ切り替えて返す。progress の **Branch** は `work`。
+ * `work` ブランチへ切り替えて返す。progress の **Branch** は既定で `work`。
+ *
+ * `baseProgress` で base 側の progress.md の中身を差し替えられる。帰属の照合は
+ * **base 側**の **Branch** を読むので、「Branch の行が無い」ような性質は base 側に
+ * 用意しないと確かめられない。
  */
-function makeRepo(t) {
+function makeRepo(t, { baseProgress = progressText('0026-a', 'work') } = {}) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'coupling-repo-'));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   git(cwd, 'init', '-q', '-b', 'main');
@@ -575,7 +579,7 @@ function makeRepo(t) {
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.mkdirSync(path.join(cwd, 'task/0026-a'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
-  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), progressText('0026-a', 'work'));
+  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), baseProgress);
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'base');
   git(cwd, 'checkout', '-q', '-b', 'work');
@@ -864,7 +868,7 @@ test('docs だけの PR とラベルは帰属を見ずに通る', () => {
   assert.equal(bypassed.reason, 'bypass-label');
 });
 
-test('resolveCoupling は branchOf を渡さなければ HEAD の progress から Branch を読む', () => {
+test('resolveCoupling は branchOf を渡さなければ merge-base の progress から Branch を読む', () => {
   const calls = [];
   const execGit = (args) => {
     calls.push(args.join(' '));
@@ -884,7 +888,37 @@ test('resolveCoupling は branchOf を渡さなければ HEAD の progress か�
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
-  assert.ok(calls.includes('show HEAD:task/0026-a/progress.md'));
+  assert.ok(calls.includes('show abc123:task/0026-a/progress.md'));
+  // 候補側は読まない（読むと照合相手を同じ PR で書き換えられる）
+  assert.ok(!calls.some((c) => c.startsWith('show HEAD:')));
+});
+
+test('base 側と head 側で Branch が違うときは base 側を使う', () => {
+  // 攻撃者は同じ PR で HEAD 側の Branch 行を head ブランチ名に書き換えられる。
+  // 読む先が base に固定されていれば、書き換えは判定を変えない。
+  const execGit = (args) => {
+    if (args[0] === 'diff') {
+      return ['M', 'src/math.mjs', 'M', 'task/0027-b/progress.md', ''].join('\0');
+    }
+    if (args[0] === 'merge-base') return 'abc123\n';
+    if (args[0] === 'show') {
+      // HEAD 側は書き換え済み、base 側は着手時の値
+      return args[1].startsWith('HEAD:')
+        ? '- **Branch:** `feature/a`\n'
+        : '- **Branch:** `feature/b`\n';
+    }
+    return '';
+  };
+  const result = resolveCoupling({
+    baseRef: 'origin/main',
+    labels: [],
+    headBranch: 'feature/a',
+    execGit,
+    baseHas: anythingInBase,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'foreign');
+  assert.equal(result.branch, 'feature/b');
 });
 
 // --- CLI の帰属（実際の git リポジトリで確かめる） ---
@@ -913,15 +947,60 @@ test('CLI: 別作業の progress だけを更新した実装 PR は通せない'
   assert.match(result.stderr, /0027-b/);
 });
 
-test('CLI: 進捗に Branch の行が無ければ通せない', (t) => {
-  const cwd = makeRepo(t);
+test('CLI: base の進捗に Branch の行が無ければ通せない', (t) => {
+  // 照合は base 側を読むので、Branch の欠落も base 側に用意する
+  const cwd = makeRepo(t, { baseProgress: '# Progress: `0026-a`\n' });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
-  fs.writeFileSync(path.join(cwd, 'task/0026-a/progress.md'), '# 0026-a\n- [x] 実装\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'work');
   const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /行がありません/);
+});
+
+test('CLI/BYPASS: 別作業の progress の Branch 行を書き換えても通せない', (t) => {
+  // 5 回目のレビューで実測された経路。0027-b（base の Branch は `other`）を触り、
+  // かつ同じ PR でその Branch 行を head ブランチ名へ書き換える。HEAD 側から読むと
+  // 一致してしまうが、base 側から読むので落ちる。
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.writeFileSync(
+    path.join(cwd, 'task/0027-b/progress.md'),
+    `${progressText('0027-b', 'work')}- [x] 実装\n`,
+  );
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /この PR の作業のものではありません/);
+  assert.match(result.stderr, /Branch（base 側）: other/);
+});
+
+test('CLI: 自分の作業の Branch 行を書き換えても、base 側が一致していれば通る', (t) => {
+  // 裏面の確認。base 側だけを見るので、HEAD 側の書き換えは判定を変えない
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.writeFileSync(
+    path.join(cwd, 'task/0026-a/progress.md'),
+    `${progressText('0026-a', 'まったく別のブランチ')}- [x] 実装\n`,
+  );
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ちょうど 1 件/);
+});
+
+test('CLI: GITHUB_ACTIONS の値の大小文字は問わない（TRUE でも fail-closed）', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_ACTIONS: 'TRUE', GITHUB_HEAD_REF: '' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /GITHUB_HEAD_REF が空です/);
 });
 
 test('CLI: head ブランチ名が無いローカル実行では帰属を照合しない', (t) => {

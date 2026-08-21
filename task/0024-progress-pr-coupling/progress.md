@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -66,3 +66,9 @@ exit=0        ← 4 回目の High が塞がっていない
   - Low: `GITHUB_ACTIONS === 'true'` が大小文字を区別する（`TRUE` だと fail-closed が効かない）。ランナーは常に小文字を入れ、攻撃者は env を制御できないため実害なし。
 - `01:22` - **これで 5 回連続、修正のたびに別の面が開いている。** (1) status を捨てて削除を数える → (2) base 限定にして新規追加を数える → (3) 数えない対象を黙って捨てる → (4) 別作業の progress で通る → (5) Branch 行の書き換えで通る。spec が「対応する作業の progress」と書くとき、**何をもって対応と見なすかを操作的に定義していなかった**ことが根にある。
 - `01:24` - レビュアーが示した論点は 1 つ: **`makeBranchOf` を merge-base 読み取りに変えるか**（＝進捗の Branch は着手時点で main に確定しており、実装 PR 内での変更は認めないというモデルを機械化する）。`progressWorks()` は既に `baseHas()` で merge-base の存在を要求しているため追加コストはほぼゼロで、spec の「例」6 行は base 側読み取りでも同じ期待結果になるため spec 改訂も不要、とのこと。代案は Branch 行の変更自体を stray として拒否する形。**人間の判断待ち。**
+- `01:40` - **人間の判断により Blocked を解除し、merge-base 読み取りに変更した。** Status を `In Progress`（Phase: `Verify (外部)`）へ戻す。承認された修正はレビュアーの第 1 案 1 点だけで、spec は変更しない（「例」6 行は base 側読み取りでも同じ期待結果になる）。
+  - `makeBranchOf(mergeBase, execGit)` にし、`git show HEAD:task/<work>/progress.md` を `git show <merge-base>:task/<work>/progress.md` に変えた。配線は `resolveCoupling()` 側で、`baseHas` と同じ merge-base を使い回す（`!has || !readWorkBranch` のときだけ 1 回解決する）。既定 `branchOf` は `NO_BRANCH`（読めないと落ちる）のまま維持。モデルは「**進捗の Branch は着手時点で main に確定しており、実装 PR 内での変更は帰属の判定に影響しない**」（CLAUDE.md「コミットとマージ」——spec + progress は計画用ブランチの docs PR で先に main へ入れ、着手時にその Branch を切る）。`progressWorks()` が `baseHas()` で merge-base の存在を既に要求しているので、数えられた作業の progress は必ず merge-base に在る。
+  - **失敗メッセージの誘導を直した。** 「進捗の **Branch** は着手時に切ったブランチ名に直してください」は、緑を目指すエージェントには検査対象フィールドの書き換え手順として読める。「この PR のブランチで進めている作業の progress.md を更新してください。別の作業の progress.md を触っているなら、PR を分けてください。Branch は base（merge-base）側から読みます。着手時に main へ入れた値が正であり、この PR で書き換えても判定は変わりません。」に差し替えた。表示も `Branch（base 側）:` と、どちらを読んだか分かる形にした。
+  - Low も直した。`GITHUB_ACTIONS === 'true'` を `onGitHubActions()`（trim + 小文字化して比較）にし、`TRUE` でも fail-closed が効くようにした。
+- `01:45` - 回帰テストを追加。**BYPASS ケース**（実 git。`src/math.mjs` ＋ 別作業 `0027-b` の progress を触り、かつその Branch 行を head ブランチ名 `work` へ書き換える）が exit 1 になること、その裏面（自分の作業の Branch 行を書き換えても base 側が一致していれば通る）、純関数レベルで **base 側と head 側の Branch が違えば base 側が使われる**こと、`resolveCoupling` が `show <merge-base>:…` を呼び `show HEAD:` を呼ばないこと、`GITHUB_ACTIONS=TRUE` の fail-closed を固定した。既存の「Branch の行が無ければ通せない」は照合先が base 側になったため、欠落を base 側に用意する形へ直した（`makeRepo` に `baseProgress` を足した）。判定を弱める変更ではない。
+- `01:50` - 実測。修正前（`3ec3654` の版）と修正後を同じ差分に当て、BYPASS ケースが **exit 0 → exit 1**（`Branch（base 側）: feature/b` / `head: work`）に変わることを確認。誤検知が無いことも同じ実 git で確認した——正当な PR exit 0、docs のみ（progress の新規追加を含む）exit 0、`no-progress-needed` ラベル exit 0、ローカル実行（head ref なし）exit 0、stray exit 1、missing exit 1、`GITHUB_ACTIONS` で head ref 欠落 exit 1、git リポジトリでない exit 1。この作業自身のブランチ（`origin/main...HEAD`、`GITHUB_HEAD_REF=feature/progress-pr-coupling`）も exit 0 で `作業: 0024-progress-pr-coupling`。

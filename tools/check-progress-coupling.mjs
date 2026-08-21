@@ -14,7 +14,10 @@
  * 数が合っているだけでも足りない。更新された progress が **その PR の作業のもの**
  * であることまで見る（`checkAttribution()` の注記を見よ）。`tools/archive.mjs` の
  * `checkOwnership()` が「マージ済みであることだけでは足りない」を解いたのと同型で、
- * PR の head ブランチと進捗の **Branch** を照合する。
+ * PR の head ブランチと進捗の **Branch** を照合する。照合相手の **Branch** は
+ * **merge-base（base 側）から読む**。候補側（HEAD）から読むと、進捗ファイル自身が
+ * 保護対象外である以上、別作業の Branch 行を 1 行書き換えるだけで通せてしまう
+ * （自己申告の照合になる。`makeBranchOf()` の注記を見よ）。
  *
  * 判定ロジックは純関数として公開し、差分リストとラベルを注入してテストできる。
  * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
@@ -280,6 +283,11 @@ const NO_BRANCH = () => null;
  * 別作業の PR を貼れば通ってしまう」を解いたのと同じ問題なので、同じ形で解く。
  * 照合するものも同じ——PR の head ブランチと、進捗の **Branch** メタ情報である。
  *
+ * **`branchOf` は base 側（merge-base）の内容を読むこと。** 候補側から読むと、
+ * 照合相手を攻撃者が同じ PR で書き換えられるので、自己申告の照合にしかならない。
+ * 進捗の **Branch** は着手時点で main に確定している値であり、実装 PR 内での
+ * 変更は帰属の判定に影響しない、というモデルである（`makeBranchOf()` を見よ）。
+ *
  * head ブランチ名が得られないとき（`headBranch` が空）は照合しない。ローカルで
  * CLI を手で回す経路がこれに当たる。**抜け道にはならない。** ゲートの実体は
  * `pull_request` イベントで動く CI であり、そこでは `GITHUB_HEAD_REF` が必ず入る。
@@ -381,19 +389,32 @@ function makeBaseHas(mergeBase, execGit) {
 }
 
 /**
- * 作業の進捗の **Branch** を、候補側（HEAD）の内容から読む関数を組み立てる。
+ * 作業の進捗の **Branch** を、**base 側（merge-base）**の内容から読む関数を組み立てる。
  *
- * 差分は `base...HEAD` なので、照合する進捗も HEAD 側の内容で読む。読めなければ
- * null を返し、`checkAttribution()` が不一致として落とす（fail-closed）。
+ * **候補側（HEAD）から読んではならない。** progress.md は保護対象から除外されているので、
+ * HEAD 側を読むと、別作業の progress の Branch 行を head ブランチ名に 1 行書き換える
+ * だけで帰属の照合を通せる（照合相手を攻撃者が同じ PR で用意できる ＝ 自己申告）。
  *
+ * 読む先を merge-base に固定すると、その PR の中では偽造できない。根拠は
+ * CLAUDE.md「コミットとマージ」——spec + progress は計画用ブランチの docs PR で
+ * 先に main へ入れ、着手時にその **Branch** から実際のブランチを切る。つまり
+ * **Branch** は着手時点で main に確定しており、実装 PR 内での変更は帰属の判定に
+ * 影響しない。`progressWorks()` が `baseHas()` で merge-base の存在を既に要求して
+ * いるので、数えられた作業の progress は必ず merge-base に在る。
+ *
+ * 読めなければ null を返し、`checkAttribution()` が不一致として落とす（fail-closed）。
+ *
+ * @param {string} mergeBase
  * @param {(args: string[], options?: {quiet?: boolean}) => string} execGit
  * @returns {(work: string) => string | null}
  */
-function makeBranchOf(execGit) {
+function makeBranchOf(mergeBase, execGit) {
   return (work) => {
     try {
       // 「読めない」は判定結果として扱うので、git の fatal を画面に出さない
-      const text = execGit(['show', `HEAD:${TASK_DIR}${work}/${PROGRESS_FILE}`], { quiet: true });
+      const text = execGit(['show', `${mergeBase}:${TASK_DIR}${work}/${PROGRESS_FILE}`], {
+        quiet: true,
+      });
       return readBranch(text);
     } catch {
       return null;
@@ -413,7 +434,8 @@ function makeBranchOf(execGit) {
  * @param {(path: string) => boolean} [input.baseHas] - テストからの注入用。
  *   省略時は merge-base を解決して `git cat-file -e` で問い合わせる。
  * @param {(work: string) => string | null} [input.branchOf] - テストからの注入用。
- *   省略時は `git show HEAD:task/<work>/progress.md` から読む。
+ *   省略時は merge-base を解決して `git show <merge-base>:task/<work>/progress.md`
+ *   から読む（**候補側からは読まない**。`makeBranchOf()` の注記を見よ）。
  * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], branch: string | null, headBranch: string | null, error: 'usage'|'diff'|null}}
  */
 export function resolveCoupling({
@@ -436,19 +458,22 @@ export function resolveCoupling({
   if (!baseRef) return failed('usage');
   let changes;
   let has = baseHas;
+  let readWorkBranch = branchOf;
   try {
     const raw = execGit(['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`]);
     changes = parseNameStatus(raw);
-    if (!has) {
+    // 存在確認も **Branch** の読み取りも、差分（`base...HEAD` の三点）に合わせて
+    // 分岐点で行う。base の先端を見ると、分岐後に main 側で入った変更を混ぜてしまう。
+    if (!has || !readWorkBranch) {
       const mergeBase = execGit(['merge-base', baseRef, 'HEAD']).trim();
       if (!mergeBase) throw new Error('merge-base を解決できませんでした');
-      has = makeBaseHas(mergeBase, execGit);
+      if (!has) has = makeBaseHas(mergeBase, execGit);
+      if (!readWorkBranch) readWorkBranch = makeBranchOf(mergeBase, execGit);
     }
   } catch {
     // 差分が取れないまま素通りさせない（shallow clone・出力の破損）
     return failed('diff');
   }
-  const readWorkBranch = branchOf ?? makeBranchOf(execGit);
   return {
     ...evaluateCoupling({ changes, labels, baseHas: has, headBranch, branchOf: readWorkBranch }),
     error: null,
@@ -507,6 +532,16 @@ const MESSAGES = {
   coupled: '実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。',
 };
 
+/**
+ * GitHub Actions の上で動いているか。
+ * 値の大小文字は問わない（`TRUE` で fail-closed が効かなくならないように）。
+ *
+ * @returns {boolean}
+ */
+function onGitHubActions() {
+  return (process.env.GITHUB_ACTIONS ?? '').trim().toLowerCase() === 'true';
+}
+
 function main() {
   const baseRef = process.argv[2];
   const headBranch = readHeadBranch();
@@ -514,7 +549,7 @@ function main() {
   // CI では `pull_request` イベントで必ず入る。空なら配線の異常（他のイベントで
   // 動かしている・env を外した）なので、帰属の検査を黙って飛ばさず落とす。
   // ローカル実行で飛ばすのは、ゲートの実体が CI 側だから許される。
-  if (!headBranch && process.env.GITHUB_ACTIONS === 'true') {
+  if (!headBranch && onGitHubActions()) {
     console.error('GITHUB_HEAD_REF が空です。進捗の Branch と照合できません。');
     console.error('このチェックは pull_request イベントで動かしてください。');
     process.exit(1);
@@ -554,11 +589,13 @@ function main() {
   } else if (result.reason === 'foreign') {
     console.error(`更新された progress.md がこの PR の作業のものではありません: ${result.works[0]}`);
     console.error(
-      `  task/${result.works[0]}/progress.md の Branch: ${result.branch ?? '（行がありません）'}`,
+      `  task/${result.works[0]}/progress.md の Branch（base 側）: ${result.branch ?? '（行がありません）'}`,
     );
     console.error(`  この PR の head ブランチ: ${result.headBranch}`);
-    console.error('自分の作業の progress.md を更新してください。進捗の **Branch** は');
-    console.error('着手時に切ったブランチ名に直してください。');
+    console.error('この PR のブランチで進めている作業の progress.md を更新してください。');
+    console.error('別の作業の progress.md を触っているなら、PR を分けてください。');
+    console.error('Branch は base（merge-base）側から読みます。着手時に main へ入れた値が');
+    console.error('正であり、この PR で書き換えても判定は変わりません。');
   } else {
     console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
     for (const work of result.works) console.error(`  - ${work}`);

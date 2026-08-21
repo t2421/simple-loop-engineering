@@ -11,6 +11,13 @@
  * 捨てるだけだと、有効な progress 更新 1 件に別作業の progress の追加・削除・移動を
  * 同乗させて 1 PR に 2 作業を混ぜられる。
  *
+ * 「その場の更新」は差分の status だけでは決まらない。`git update-index --chmod=+x` の
+ * ようなモードだけの変更は、blob（中身）が base と同一のまま status `M` になる。
+ * 中身が 1 バイトも変わっていない進捗を「更新した」と数えると、実行ビットを立てるだけで
+ * この検査を通せる。そこで base と HEAD の **blob OID が異なること**まで要求する
+ * （`unchangedProgressPaths()` の注記を見よ）。**中身は読まない。** 進捗の書き方
+ * （チェックの進み方）の検証は spec の「範囲外」である。
+ *
  * 数が合っているだけでも足りない。更新された progress が **その PR の作業のもの**
  * であることまで見る（`checkAttribution()` の注記を見よ）。`tools/archive.mjs` の
  * `checkOwnership()` が「マージ済みであることだけでは足りない」を解いたのと同型で、
@@ -177,31 +184,82 @@ export function isActiveProgressPath(filePath) {
 const NOTHING_IN_BASE = () => false;
 
 /**
+ * base と HEAD で中身（blob）が変わったかを問う関数の既定値。**「変わっていない」と答える。**
+ *
+ * `NOTHING_IN_BASE` と同じ考え方で、配線を忘れたときに倒れる向きを落ちる側にしておく。
+ *
+ * @returns {boolean}
+ */
+const SAME_CONTENT = () => false;
+
+/**
  * 差分に含まれる、進行中の作業の一覧（作業ディレクトリ名）を返す純関数。
  *
  * 数えるのは **base リビジョンに既に存在する** `task/<id>-<slug>/progress.md` の、
- * その場での更新だけ。CLAUDE.md「コミットとマージ」は spec + progress の新規作成を
- * 計画用の docs PR で先に main へ入れると定めているので、実装 PR の時点でその作業の
- * progress.md は base に存在する。
+ * **中身が実際に変わった**その場での更新だけ。CLAUDE.md「コミットとマージ」は
+ * spec + progress の新規作成を計画用の docs PR で先に main へ入れると定めているので、
+ * 実装 PR の時点でその作業の progress.md は base に存在する。
  *
  * base に無いものを数えると、実装 PR に `task/9999-disposable/progress.md` を
  * 1 つ足すだけでこの検査を通せる（progress.md は保護パスからも除外されているので
  * 他のガードも止めない）。新規追加（`A`）も、作業外から作業内へのリネーム先も、
  * base に無いので数えない。削除（`D`）と移動元は `headPaths()` が落とす。
  *
+ * 中身が変わったことまで要求するのは、モードだけの変更（`git update-index --chmod=+x`）が
+ * blob 同一のまま status `M` になるため（`unchangedProgressPaths()` の注記を見よ）。
+ * 数えなかったものは黙って捨てず、`unchangedProgressPaths()` が拒否する。
+ *
  * @param {Array<{status: string, path: string, oldPath?: string}>} changes
  * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか。
  *   **CLI（`main()`）は必ず渡すこと。** 既定は「無い」なので、渡さないと 0 件になる。
+ * @param {(path: string) => boolean} [contentChanged] - base と HEAD で blob が違うか。
+ *   **CLI（`main()`）は必ず渡すこと。** 既定は「同じ」なので、渡さないと 0 件になる。
  * @returns {string[]} 名前順
  */
-export function progressWorks(changes, baseHas = NOTHING_IN_BASE) {
+export function progressWorks(changes, baseHas = NOTHING_IN_BASE, contentChanged = SAME_CONTENT) {
   const works = new Set();
   for (const p of headPaths(changes)) {
     if (!isActiveProgressPath(p)) continue;
     if (!baseHas(p)) continue;
+    if (!contentChanged(p)) continue;
     works.add(p.slice(TASK_DIR.length).split('/')[0]);
   }
   return [...works].sort();
+}
+
+/**
+ * 進行中の作業の progress.md のうち、**base にあるのに中身が変わっていない**ものを返す純関数。
+ *
+ * `git update-index --chmod=+x task/<id>-<slug>/progress.md` だけを行うと、base と HEAD の
+ * blob は同一のまま `git diff --name-status` は `M` を返す。status だけを見ていると、
+ * 進捗を 1 バイトも書かずにこの検査を通せてしまう（spec の「背景」が挙げた
+ * 「progress 更新の抜けた実装 PR を機械的に検知できない」がそのまま素通りする）。
+ *
+ * 判定は **blob OID の比較だけ**で行い、中身は読まない。進捗の書き方（チェックの
+ * 進み方）の検証は spec の「範囲外」である。
+ *
+ * `strayProgressPaths()` と同じく、数えないものを黙って捨てるのではなく拒否対象として
+ * 集める。捨てるだけだと、有効な更新 1 件に別作業のモードだけの変更を同乗させられる。
+ *
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
+ * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか
+ * @param {(path: string) => boolean} [contentChanged] - base と HEAD で blob が違うか。
+ *   既定は「同じ」なので、渡さないと base にある progress は全部ここに落ちる（fail-closed）。
+ * @returns {string[]} 名前順
+ */
+export function unchangedProgressPaths(
+  changes,
+  baseHas = NOTHING_IN_BASE,
+  contentChanged = SAME_CONTENT,
+) {
+  const unchanged = new Set();
+  for (const p of headPaths(changes)) {
+    if (!isActiveProgressPath(p)) continue;
+    if (!baseHas(p)) continue;
+    if (contentChanged(p)) continue;
+    unchanged.add(p);
+  }
+  return [...unchanged].sort();
 }
 
 /**
@@ -314,19 +372,23 @@ export function checkAttribution(work, { headBranch, branchOf = NO_BRANCH }) {
  * @param {string[] | null | undefined} input.labels - PR のラベル。読めなければ null
  * @param {(path: string) => boolean} [input.baseHas] - base にそのパスがあるか。
  *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「無い」（fail-closed）。
+ * @param {(path: string) => boolean} [input.contentChanged] - base と HEAD で blob が違うか。
+ *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「同じ」（fail-closed）。
  * @param {string | null} [input.headBranch] - PR の head ブランチ。空なら帰属を照合しない
  * @param {(work: string) => string | null} [input.branchOf] - 作業の進捗の **Branch**
- * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'stray'|'multiple'|'foreign', works: string[], strays: string[], branch: string | null, headBranch: string | null}}
+ * @returns {{ok: boolean, reason: 'bypass-label'|'docs-only'|'coupled'|'missing'|'unchanged'|'stray'|'multiple'|'foreign', works: string[], strays: string[], unchanged: string[], branch: string | null, headBranch: string | null}}
  */
 export function evaluateCoupling({
   changes,
   labels,
   baseHas = NOTHING_IN_BASE,
+  contentChanged = SAME_CONTENT,
   headBranch = null,
   branchOf = NO_BRANCH,
 }) {
-  const works = progressWorks(changes, baseHas);
+  const works = progressWorks(changes, baseHas, contentChanged);
   const strays = strayProgressPaths(changes, baseHas);
+  const unchanged = unchangedProgressPaths(changes, baseHas, contentChanged);
   const paths = pathsFromChanges(changes);
 
   const at = (reason, ok, branch = null) => ({
@@ -334,6 +396,7 @@ export function evaluateCoupling({
     reason,
     works,
     strays,
+    unchanged,
     branch,
     headBranch: headBranch ?? null,
   });
@@ -350,6 +413,10 @@ export function evaluateCoupling({
     return at('docs-only', true);
   }
 
+  // モードだけの変更（blob 同一）を「進捗を更新した」と読ませない。**`missing` より
+  // 先に判定する。** 「更新が含まれていません」ではなく「中身が変わっていません」の方が、
+  // 何をすればよいかが分かるため（どちらも失敗であることは変わらない）。
+  if (unchanged.length > 0) return at('unchanged', false);
   if (works.length === 0) return at('missing', false);
   // 数えない差分を同乗させて 2 作業を 1 PR に混ぜる経路を塞ぐ
   if (strays.length > 0) return at('stray', false);
@@ -385,6 +452,38 @@ function makeBaseHas(mergeBase, execGit) {
     } catch {
       return false;
     }
+  };
+}
+
+/**
+ * merge-base と HEAD で blob（中身）が違うかを問う関数を組み立てる。
+ *
+ * `git rev-parse <rev>:<path>` はそのリビジョンでのパスの blob OID を返す。
+ * OID が同じなら中身は 1 バイトも変わっていない。モードだけの変更
+ * （`git update-index --chmod=+x`）は OID を変えないので、これで落とせる。
+ *
+ * **中身は読まない。** 変わったかどうかだけを見る（進捗の書き方の検証は spec の
+ * 「範囲外」）。どちらかが読めなければ false を返す。この検査では false が
+ * 落ちる側（fail-closed）である。
+ *
+ * @param {string} mergeBase
+ * @param {(args: string[], options?: {quiet?: boolean}) => string} execGit
+ * @returns {(path: string) => boolean}
+ */
+function makeContentChanged(mergeBase, execGit) {
+  const blobAt = (rev, filePath) => {
+    try {
+      // 「読めない」は判定結果として扱うので、git の fatal を画面に出さない
+      return execGit(['rev-parse', `${rev}:${filePath}`], { quiet: true }).trim();
+    } catch {
+      return '';
+    }
+  };
+  return (filePath) => {
+    const base = blobAt(mergeBase, filePath);
+    const head = blobAt('HEAD', filePath);
+    if (base === '' || head === '') return false;
+    return base !== head;
   };
 }
 
@@ -433,10 +532,12 @@ function makeBranchOf(mergeBase, execGit) {
  * @param {(args: string[], options?: {quiet?: boolean}) => string} [input.execGit]
  * @param {(path: string) => boolean} [input.baseHas] - テストからの注入用。
  *   省略時は merge-base を解決して `git cat-file -e` で問い合わせる。
+ * @param {(path: string) => boolean} [input.contentChanged] - テストからの注入用。
+ *   省略時は merge-base と HEAD の blob OID を `git rev-parse` で比べる。
  * @param {(work: string) => string | null} [input.branchOf] - テストからの注入用。
  *   省略時は merge-base を解決して `git show <merge-base>:task/<work>/progress.md`
  *   から読む（**候補側からは読まない**。`makeBranchOf()` の注記を見よ）。
- * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], branch: string | null, headBranch: string | null, error: 'usage'|'diff'|null}}
+ * @returns {{ok: boolean, reason: string | null, works: string[], strays: string[], unchanged: string[], branch: string | null, headBranch: string | null, error: 'usage'|'diff'|null}}
  */
 export function resolveCoupling({
   baseRef,
@@ -444,6 +545,7 @@ export function resolveCoupling({
   headBranch = null,
   execGit = defaultExecGit,
   baseHas,
+  contentChanged,
   branchOf,
 }) {
   const failed = (error) => ({
@@ -451,6 +553,7 @@ export function resolveCoupling({
     reason: null,
     works: [],
     strays: [],
+    unchanged: [],
     branch: null,
     headBranch,
     error,
@@ -458,16 +561,18 @@ export function resolveCoupling({
   if (!baseRef) return failed('usage');
   let changes;
   let has = baseHas;
+  let changed = contentChanged;
   let readWorkBranch = branchOf;
   try {
     const raw = execGit(['diff', '--name-status', '-M', '-z', `${baseRef}...HEAD`]);
     changes = parseNameStatus(raw);
-    // 存在確認も **Branch** の読み取りも、差分（`base...HEAD` の三点）に合わせて
-    // 分岐点で行う。base の先端を見ると、分岐後に main 側で入った変更を混ぜてしまう。
-    if (!has || !readWorkBranch) {
+    // 存在確認も blob の比較も **Branch** の読み取りも、差分（`base...HEAD` の三点）に
+    // 合わせて分岐点で行う。base の先端を見ると、分岐後に main 側で入った変更を混ぜてしまう。
+    if (!has || !changed || !readWorkBranch) {
       const mergeBase = execGit(['merge-base', baseRef, 'HEAD']).trim();
       if (!mergeBase) throw new Error('merge-base を解決できませんでした');
       if (!has) has = makeBaseHas(mergeBase, execGit);
+      if (!changed) changed = makeContentChanged(mergeBase, execGit);
       if (!readWorkBranch) readWorkBranch = makeBranchOf(mergeBase, execGit);
     }
   } catch {
@@ -475,7 +580,14 @@ export function resolveCoupling({
     return failed('diff');
   }
   return {
-    ...evaluateCoupling({ changes, labels, baseHas: has, headBranch, branchOf: readWorkBranch }),
+    ...evaluateCoupling({
+      changes,
+      labels,
+      baseHas: has,
+      contentChanged: changed,
+      headBranch,
+      branchOf: readWorkBranch,
+    }),
     error: null,
   };
 }
@@ -573,7 +685,14 @@ function main() {
     return;
   }
 
-  if (result.reason === 'missing') {
+  if (result.reason === 'unchanged') {
+    console.error('進行中の作業の progress.md が差分に出ていますが、中身が変わっていません');
+    console.error('（実行ビットなど、ファイルのモードだけの変更です）:');
+    for (const p of result.unchanged) console.error(`  - ${p}`);
+    console.error('工程を進めたら、その作業の progress.md の内容——Status・チェックボックス・');
+    console.error('試行ログ——を書き足して、同じ PR に含めてください。モードを変えただけでは');
+    console.error('進捗を記録したことになりません。');
+  } else if (result.reason === 'missing') {
     console.error('実装（src/・tests/・tools/）を変更していますが、進行中の作業の');
     console.error('progress.md（task/<id>-<slug>/progress.md）の更新が含まれていません。');
     console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');

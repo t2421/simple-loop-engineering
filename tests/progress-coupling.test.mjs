@@ -19,6 +19,7 @@ import {
   readBranch,
   resolveCoupling,
   strayProgressPaths,
+  unchangedProgressPaths,
 } from '../tools/check-progress-coupling.mjs';
 import { findViolations } from '../tools/check-protected-paths.mjs';
 
@@ -36,6 +37,15 @@ const baseWith = (...paths) => (p) => paths.includes(p);
 /** base の中身を問わない検査で使う（存在する側に倒す） */
 const anythingInBase = () => true;
 
+/**
+ * base と HEAD で中身（blob）が変わった、と答えるテスト用ヘルパ。
+ *
+ * 「差分に出ている＝中身が変わった」は成り立たない（モードだけの変更は blob 同一のまま
+ * status `M` になる）。**中身が変わったかは注入で明示する。** 既定は fail-closed なので、
+ * 渡さない検査は「変わっていない」側に倒れる。
+ */
+const anythingChanged = () => true;
+
 // --- 仕様の「例」 ---
 
 test('例1: src/math.mjs と task/0026-a/progress.md を変更した PR は通過', () => {
@@ -43,6 +53,7 @@ test('例1: src/math.mjs と task/0026-a/progress.md を変更した PR は通�
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
@@ -54,6 +65,7 @@ test('例2: src/math.mjs のみ変更した PR は失敗', () => {
     changes: modified('src/math.mjs'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -64,6 +76,7 @@ test('例3: progress 更新が 2 件の PR は失敗（1 PR = 1 作業）', () =
     changes: modified('src/math.mjs', 'task/0026-a/progress.md', 'task/0027-b/progress.md'),
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'multiple');
@@ -75,6 +88,7 @@ test('例4: task/0026-a/spec.md のみ変更した docs だけの PR は通過',
     changes: modified('task/0026-a/spec.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
@@ -85,6 +99,7 @@ test('例5: tools/x.mjs のみ変更し no-progress-needed ラベルが付いた
     changes: modified('tools/x.mjs'),
     labels: [BYPASS_LABEL],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'bypass-label');
@@ -96,6 +111,7 @@ test('例6: archive の progress は progress 更新として数えない', () =
     changes: modified('src/math.mjs', 'task/archive/0001-math-add/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -112,6 +128,7 @@ test('base に無い progress.md の新規追加（A）は数えない', () => {
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -126,6 +143,7 @@ test('既存 progress.md を base に無い作業名へリネームしても数�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -140,6 +158,7 @@ test('base に存在する progress.md のその場の更新（M）は通過す�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
@@ -164,6 +183,7 @@ test('progress.md の削除は progress 更新として数えない', () => {
     ],
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -182,6 +202,7 @@ test('progress.md を archive へ移すリネームは progress 更新として�
     ],
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -192,9 +213,142 @@ test('移動先が base に既にある作業なら、その 1 作業だけを�
   const changes = [
     { status: 'R', path: 'task/0027-b/progress.md', oldPath: 'task/0026-a/progress.md' },
   ];
-  assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md')), ['0027-b']);
+  assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md'), anythingChanged), [
+    '0027-b',
+  ]);
   // 移動先が base に無ければ数えない（使い捨ての作業名への逃げ）
-  assert.deepEqual(progressWorks(changes, baseWith('task/0026-a/progress.md')), []);
+  assert.deepEqual(progressWorks(changes, baseWith('task/0026-a/progress.md'), anythingChanged), []);
+});
+
+// --- モードだけの変更（差分に出るが blob は同一） ---
+
+test('中身が変わっていない progress.md は数えない（モードだけの変更）', () => {
+  // `git update-index --chmod=+x task/0026-a/progress.md` だけで status M になる経路
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: () => false,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unchanged');
+  assert.deepEqual(result.works, []);
+  assert.deepEqual(result.unchanged, ['task/0026-a/progress.md']);
+});
+
+test('中身が変わっていない progress は黙って捨てず拒否する（同乗させても通らない）', () => {
+  // 有効な更新 1 件に、別作業のモードだけの変更を相乗りさせる経路
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    labels: [],
+    baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    contentChanged: (p) => p === 'task/0026-a/progress.md',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unchanged');
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.unchanged, ['task/0027-b/progress.md']);
+});
+
+test('contentChanged を渡し忘れたら通さない（既定は fail-closed）', () => {
+  const result = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unchanged');
+  assert.deepEqual(progressWorks(modified('task/0026-a/progress.md'), anythingInBase), []);
+  assert.deepEqual(unchangedProgressPaths(modified('task/0026-a/progress.md'), anythingInBase), [
+    'task/0026-a/progress.md',
+  ]);
+});
+
+test('unchangedProgressPaths は base に無いもの・head に残らないものを拾わない', () => {
+  const baseHas = baseWith('task/0026-a/progress.md');
+  const never = () => false;
+  // base に無い新規追加は stray の担当（ここでは拾わない）
+  assert.deepEqual(
+    unchangedProgressPaths([{ status: 'A', path: 'task/9999-x/progress.md' }], baseHas, never),
+    [],
+  );
+  // 削除は head に残らない
+  assert.deepEqual(
+    unchangedProgressPaths([{ status: 'D', path: 'task/0026-a/progress.md' }], baseHas, never),
+    [],
+  );
+  // archive の progress は対象外
+  assert.deepEqual(
+    unchangedProgressPaths(
+      modified('task/archive/0001-math-add/progress.md'),
+      anythingInBase,
+      never,
+    ),
+    [],
+  );
+});
+
+test('docs だけの PR とラベルはモードだけの変更を見ずに通る', () => {
+  const docsOnly = evaluateCoupling({
+    changes: modified('task/0026-a/progress.md'),
+    labels: [],
+    baseHas: anythingInBase,
+    contentChanged: () => false,
+  });
+  assert.equal(docsOnly.ok, true);
+  assert.equal(docsOnly.reason, 'docs-only');
+
+  const bypassed = evaluateCoupling({
+    changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
+    labels: [BYPASS_LABEL],
+    baseHas: anythingInBase,
+    contentChanged: () => false,
+  });
+  assert.equal(bypassed.ok, true);
+  assert.equal(bypassed.reason, 'bypass-label');
+});
+
+test('contentChanged を渡さないときは merge-base と HEAD の blob OID を比べる', () => {
+  const calls = [];
+  const execGit = (args) => {
+    calls.push(args.join(' '));
+    if (args[0] === 'diff') return 'M\0src/math.mjs\0M\0task/0026-a/progress.md\0';
+    if (args[0] === 'merge-base') return 'abc123\n';
+    if (args[0] === 'rev-parse') {
+      // モードだけの変更。base と head で blob が同じ
+      return 'deadbeef\n';
+    }
+    if (args[0] === 'show') return '- **Branch:** `feature/a`\n';
+    throw new Error(`想定外の git 呼び出し: ${args.join(' ')}`);
+  };
+  const result = resolveCoupling({
+    baseRef: 'origin/main',
+    labels: [],
+    execGit,
+    baseHas: anythingInBase,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unchanged');
+  assert.ok(calls.includes('rev-parse abc123:task/0026-a/progress.md'));
+  assert.ok(calls.includes('rev-parse HEAD:task/0026-a/progress.md'));
+});
+
+test('blob OID が読めないときは fail-closed（変わっていない側に倒す）', () => {
+  const execGit = (args) => {
+    if (args[0] === 'diff') return 'M\0src/math.mjs\0M\0task/0026-a/progress.md\0';
+    if (args[0] === 'merge-base') return 'abc123\n';
+    if (args[0] === 'rev-parse') throw new Error('does not exist');
+    if (args[0] === 'show') return '- **Branch:** `feature/a`\n';
+    return '';
+  };
+  const result = resolveCoupling({
+    baseRef: 'origin/main',
+    labels: [],
+    execGit,
+    baseHas: anythingInBase,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unchanged');
 });
 
 // --- 同乗（有効な progress 更新 1 件に、別作業の progress を相乗りさせる） ---
@@ -208,6 +362,7 @@ test('P1-A: 有効な更新 1 件に、別作業の progress の新規追加を�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'stray');
@@ -224,6 +379,7 @@ test('P1-D: 有効な更新 1 件に、別作業の progress の削除を同乗�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'stray');
@@ -244,6 +400,7 @@ test('P1-R: 有効な更新 1 件に、別作業の archive 移動を同乗さ�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md', 'task/0027-b/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'stray');
@@ -295,6 +452,7 @@ test('docs だけの PR は progress を新規追加していても通過する�
     ],
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
@@ -314,6 +472,7 @@ test('docs だけの PR は archive 移動を含んでいても通過する', ()
     ],
     labels: [],
     baseHas: baseWith('task/0027-b/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
@@ -328,6 +487,7 @@ test('no-progress-needed ラベルは stray があっても通す（人間の明
     ],
     labels: [BYPASS_LABEL],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'bypass-label');
@@ -338,6 +498,7 @@ test('正当な実装 PR（実装 + base にある progress のその場更新�
     changes: modified('src/math.mjs', 'tests/add.test.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
@@ -350,6 +511,7 @@ test('作業の形をしていないディレクトリの progress.md は数え�
     changes: modified('src/math.mjs', 'task/not-a-work/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -393,6 +555,7 @@ test('実装ファイルを外へ移すリネームも実装変更として数�
     changes: [{ status: 'R', path: 'docs/old.mjs', oldPath: 'src/old.mjs' }],
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -411,6 +574,7 @@ test('同じ作業の progress を 2 度数えない', () => {
   const works = progressWorks(
     modified('task/0026-a/progress.md', 'task/0026-a/progress.md'),
     anythingInBase,
+    anythingChanged,
   );
   assert.deepEqual(works, ['0026-a']);
 });
@@ -420,6 +584,7 @@ test('ワークフローだけの PR は docs 扱いで通過する', () => {
     changes: modified('.github/workflows/guard.yml'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'docs-only');
@@ -430,6 +595,7 @@ test('ラベルが読めない（null）ときは通過させない', () => {
     changes: modified('src/math.mjs'),
     labels: null,
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -460,6 +626,7 @@ test('差分から判定する（base にある progress を更新していれ�
     labels: [],
     execGit: () => raw,
     baseHas: baseWith('task/0026-a/progress.md'),
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.error, null);
@@ -472,6 +639,7 @@ test('差分から判定する（progress を消しただけなら失敗）', ()
     labels: [],
     execGit: () => raw,
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing');
@@ -636,6 +804,40 @@ test('CLI: 既存 progress を使い捨ての作業名へリネームしても�
   assert.match(result.stderr, /更新が含まれていません/);
 });
 
+test('CLI/MODE: モードだけ変えた progress.md では通せない（blob は同一）', (t) => {
+  // 6 回目のレビューで実測された経路。`git update-index --chmod=+x` は blob を変えずに
+  // status M を作るので、進捗を 1 バイトも書かずにゲートを通せていた。
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  git(cwd, 'update-index', '--chmod=+x', 'task/0026-a/progress.md');
+  git(cwd, 'add', 'src/math.mjs');
+  git(cwd, 'commit', '-q', '-m', 'work');
+
+  // 前提の確認: 差分には出るが blob は同一
+  assert.match(git(cwd, 'diff', '--name-status', 'main...HEAD'), /M\ttask\/0026-a\/progress\.md/);
+  assert.equal(
+    git(cwd, 'rev-parse', 'main:task/0026-a/progress.md').trim(),
+    git(cwd, 'rev-parse', 'HEAD:task/0026-a/progress.md').trim(),
+  );
+
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /中身が変わっていません/);
+  assert.match(result.stderr, /task\/0026-a\/progress\.md/);
+});
+
+test('CLI/MODE: 中身も変えていればモードが変わっていても通る', (t) => {
+  const cwd = makeRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'update-index', '--chmod=+x', 'task/0026-a/progress.md');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ちょうど 1 件/);
+});
+
 /**
  * base に 2 つの作業（`0026-a`・`0027-b`）の progress.md を持つリポジトリを作り、
  * `work` ブランチへ切り替えて返す。同乗（stray）の経路を実 git で確かめるのに使う。
@@ -750,6 +952,7 @@ test('進捗の Branch が head ブランチと一致すれば通過する', () 
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => 'feature/a',
   });
@@ -765,6 +968,7 @@ test('別作業の progress だけを更新した実装 PR は失敗する（for
     changes: modified('src/math.mjs', 'task/0027-b/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => 'feature/b',
   });
@@ -780,6 +984,7 @@ test('進捗に Branch の行が無ければ失敗する（foreign）', () => {
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => null,
   });
@@ -793,6 +998,7 @@ test('branchOf を渡し忘れたら通さない（既定は fail-closed）', ()
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
   });
   assert.equal(result.ok, false);
@@ -804,6 +1010,7 @@ test('head ブランチ名が無いときは帰属を照合しない（ローカ
     changes: modified('src/math.mjs', 'task/0026-a/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: null,
     branchOf: () => 'まったく別のブランチ',
   });
@@ -840,6 +1047,7 @@ test('帰属の判定は multiple / stray より後に来る', () => {
     changes: modified('src/math.mjs', 'task/0026-a/progress.md', 'task/0027-b/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => 'feature/a',
   });
@@ -851,6 +1059,7 @@ test('docs だけの PR とラベルは帰属を見ずに通る', () => {
     changes: modified('task/0026-a/progress.md'),
     labels: [],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => 'まったく別のブランチ',
   });
@@ -861,6 +1070,7 @@ test('docs だけの PR とラベルは帰属を見ずに通る', () => {
     changes: modified('src/math.mjs', 'task/0027-b/progress.md'),
     labels: [BYPASS_LABEL],
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
     headBranch: 'feature/a',
     branchOf: () => 'feature/b',
   });
@@ -885,6 +1095,7 @@ test('resolveCoupling は branchOf を渡さなければ merge-base の progress
     headBranch: 'feature/a',
     execGit,
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, true);
   assert.equal(result.reason, 'coupled');
@@ -915,6 +1126,7 @@ test('base 側と head 側で Branch が違うときは base 側を使う', () =
     headBranch: 'feature/a',
     execGit,
     baseHas: anythingInBase,
+    contentChanged: anythingChanged,
   });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'foreign');

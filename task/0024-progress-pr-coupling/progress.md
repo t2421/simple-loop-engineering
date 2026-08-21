@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -96,3 +96,10 @@ exit=0
   > mode-only 変更（blob 同一）を progress 更新として数えないようにするか。それとも spec の「範囲外: progress の中身の検証」に含まれるものとして今回は受け入れて承認するか。
 
   レビュアー自身が「**空白 1 文字の追記でも同じく通る以上、この修正で上がるハードルは小さい**」という見方も併記している。**人間の判断待ち。**
+- `03:10` - **人間の判断により Blocked を解除し、blob OID 比較を足した。** Status を `In Progress`（Phase: `Verify (外部)`）へ戻す。承認された修正は 1 点だけで、**spec は変更しない**（「範囲外: progress の中身（チェックの進み方）の検証」に踏み込まない実装として承認された）。
+  - **merge-base と HEAD の blob OID を比べ、異なることを `progressWorks()` の条件に足した。** `git update-index --chmod=+x task/0026-a/progress.md` は blob を変えないまま status `M` を作るので、status だけを見ていると進捗を 1 バイトも書かずに通せていた。判定は注入可能な純関数（`contentChanged(path)`）とし、既定 `SAME_CONTENT`（＝「変わっていない」）で渡し忘れたら数えない側へ倒した（`NOTHING_IN_BASE` / `NO_BRANCH` と同じ設計）。**中身は読まない。** OID が変わったかだけを見るので、spec の「範囲外」には踏み込まない。
+  - 配線は `resolveCoupling()` 側で `git rev-parse <merge-base>:<path>` と `git rev-parse HEAD:<path>` を比べる。**merge-base は `baseHas` / `branchOf` と同じものを使い回す**（`!has || !changed || !readWorkBranch` のときだけ 1 回解決する）。どちらかの OID が読めなければ false（fail-closed）。
+  - **数えなかったものは黙って捨てない。** `strayProgressPaths()` と同じ「陰性拒否」に揃え、`unchangedProgressPaths()` が拒否対象として集める（捨てるだけだと、有効な更新 1 件に別作業のモードだけの変更を同乗させられる）。判定順は `bypass-label` → `docs-only` → **`unchanged`** → `missing` → `stray` → `multiple` → `foreign` → `coupled`。`missing` より先に置いたのは「更新が含まれていません」より「中身が変わっていません」の方が何をすればよいか分かるため（どちらも失敗であることは変わらない）。
+  - **失敗メッセージは「進捗の内容を書け」と促す。** 「progress.md の中身が変わっていません（実行ビットなど、ファイルのモードだけの変更です）」を出し、対象パスを列挙したうえで「Status・チェックボックス・試行ログを書き足して同じ PR に含めてください」と述べる。**検査対象を書き換えろという誘導は書かない**（5 回目のレビューで指摘された失敗パターン）。
+- `03:15` - 回帰テストを追加（純関数 7 件 ＋ CLI 2 件、計 81 件）。**mode-only ケースは実 git リポジトリで `git update-index --chmod=+x` を使って再現**し、差分に `M` が出ることと base / HEAD の blob OID が一致することを前提としてテスト内で確かめてから exit 1 を固定した（純関数だけでは配線の検証にならない）。裏面（中身も変えていればモードが変わっていても通る）、`contentChanged` 未注入の fail-closed、`rev-parse <merge-base>:` と `rev-parse HEAD:` を実際に呼ぶこと、OID が読めないときの fail-closed も固定した。既存の純関数テストには `contentChanged: anythingChanged` を注入する形へ揃えた（期待結果は変えていない。既定が fail-closed になったための注入であり、緩和ではない）。
+- `03:20` - 実測。修正前（`d628ead` の版）と修正後を同じ差分に当て、mode-only ケースが **exit 0 → exit 1** に変わることを確認（blob OID は base / head とも `de90fb2…` で同一のまま）。壊してはいけない性質も同じ実 git で確認した——正当な PR exit 0、docs のみ exit 0、`no-progress-needed` exit 0、stray の `A` / `D` / `R` exit 1、foreign exit 1、Branch 行を書き換える BYPASS exit 1、`GITHUB_ACTIONS=true` で head ref 空 exit 1、git リポジトリでない exit 1、`baseHas` / `contentChanged` / `branchOf` 未注入と merge-base 未解決はいずれも fail-closed。この作業自身のブランチ（`origin/main...HEAD`、`GITHUB_HEAD_REF=feature/progress-pr-coupling`）も exit 0 で `作業: 0024-progress-pr-coupling`。`npm run ci` は 299 tests / 0 fail。

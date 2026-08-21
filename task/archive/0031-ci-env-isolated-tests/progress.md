@@ -1,9 +1,9 @@
 # Progress: `0031-ci-env-isolated-tests`
 
-- **Target Spec:** `task/0031-ci-env-isolated-tests/spec.md`
+- **Target Spec:** `task/archive/0031-ci-env-isolated-tests/spec.md`
 - **Branch:** `feature/ci-env-isolated-tests`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/40
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -16,7 +16,7 @@
 - [x] `tools/check-progress-coupling.mjs` が無変更であることの確認（`git diff main -- tools/check-progress-coupling.mjs` が空）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。凍結対象 `tests/` の改訂であることと理由を本文に明記する）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

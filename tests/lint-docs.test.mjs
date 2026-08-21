@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import {
   SPEC_HEADINGS,
   STATUS_VALUES,
+  COMPLEXITY_VALUES,
   METADATA_KEYS,
   BACKLOG_INCOMPLETE_LINE,
   LEGACY_PROGRESS_WITHOUT_PR,
@@ -76,6 +77,7 @@ function progressMarkdown({
   branch = 'feature/a',
   pr = '未作成',
   status = 'In Progress',
+  complexity,
   omit = [],
   checkbox = '[ ]',
 } = {}) {
@@ -84,6 +86,8 @@ function progressMarkdown({
     ['Branch', `\`${branch}\``],
     ['PR', `\`${pr}\``],
     ['Status', `\`${status}\` (Phase: \`Implement\`)`],
+    // 省くと **Complexity** 行の無い進捗（既存分と同じ形）になる
+    ...(complexity === undefined ? [] : [['Complexity', `\`${complexity}\``]]),
   ]
     .filter(([key]) => !omit.includes(key))
     .map(([key, value]) => `- **${key}:** ${value}`)
@@ -296,6 +300,38 @@ test('Status は 4 つの値だけを許す', (t) => {
     write(root, 'task/0030-a/progress.md', progressMarkdown({ status }));
     assert.deepEqual(lintDocs(root), [], status);
   }
+});
+
+test('Complexity は S / M / L を許す', (t) => {
+  for (const complexity of COMPLEXITY_VALUES) {
+    const root = putValidLayout(makeRoot(t));
+    write(root, 'task/0030-a/progress.md', progressMarkdown({ complexity }));
+    assert.deepEqual(lintDocs(root), [], complexity);
+  }
+});
+
+test('Complexity が無い進捗（既存分）は違反にしない', (t) => {
+  const root = putValidLayout(makeRoot(t));
+  const md = progressMarkdown();
+  assert.equal(/Complexity/.test(md), false);
+  write(root, 'task/0030-a/progress.md', md);
+  assert.deepEqual(lintDocs(root), []);
+});
+
+test('Complexity が S / M / L 以外なら違反', (t) => {
+  const root = putValidLayout(makeRoot(t));
+  write(root, 'task/0030-a/progress.md', progressMarkdown({ complexity: 'XL' }));
+
+  const violations = lintDocs(root);
+  const target = 'task/0030-a/progress.md';
+  assert.ok(
+    reasonsFor(violations, target).some((r) => r.includes('Complexity が不正')),
+    JSON.stringify(violations),
+  );
+
+  const cli = runCli(root);
+  assert.notEqual(cli.status, 0);
+  assert.match(cli.stderr, /Complexity が不正/);
 });
 
 test('Status はバッククォート無しでも Phase 無しでも読める', (t) => {

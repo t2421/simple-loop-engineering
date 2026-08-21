@@ -6,6 +6,8 @@
  * 作成が飛ばされる事故が繰り返された）。選択と採番を計算に置き換え、開始を
  * このコマンドに畳む。
  *
+ * 選んだ作業の **Complexity** から、実装に使うモデルも併せて出力する（`COMPLEXITY_MODELS`）。
+ *
  * 使い方:
  *   node tools/start-task.mjs            次の作業を選び、worktree を用意する
  *   node tools/start-task.mjs --next-id  新規作業に使う次の ID を出す
@@ -15,27 +17,107 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// フェンスの解釈は lint と 1 つにする。複製すると「lint は未記載と見るのに
+// start-task は貼った出力の中の値を読む」という解釈の割れが起きる
+import { linesOutsideFences } from './lint-docs.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
 
+/**
+ * 作業の等級（**Complexity**）から、実装に使うモデルを引く対応表。
+ *
+ * 等級付けは spec 起草時に 1 回だけ行い（`spec-author` が付与し docs PR で人間が
+ * 直せる）、以後のルーティングはこの表引きにする。確率論的な判断を 1 点に隔離し、
+ * 表そのものの変更はコード変更として PR レビューを通す。
+ *
+ * 実装をサブエージェントへ委任するときは、ここで引いたモデル名を
+ * Agent 呼び出しの model に渡す。
+ */
+export const COMPLEXITY_MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fable' });
+
+/**
+ * **Complexity** を持たない progress（この項目より前に書かれた既存分）の既定の等級。
+ * 落とすと既存の作業がすべて選択不能になるので、無いことは違反にしない。
+ */
+export const DEFAULT_COMPLEXITY = 'M';
+
 const WORK_DIR_RE = /^(\d{4})-(.+)$/;
+
+/**
+ * `- **キー:** 値` の生の値を、**コードフェンスの外の行から**探す純関数。最初の一致を採る。
+ *
+ * progress には CLAUDE.md「報告の作法」に従ってコマンド出力をフェンスで貼る。
+ * 貼った出力の中の `- **Complexity:** \`L\`` はこの文書のメタ情報ではない。
+ * フェンスの解釈は `tools/lint-docs.mjs` の `linesOutsideFences` に委ね、
+ * lint と読み取りで同じ行集合を見る。
+ *
+ * @param {string} markdown
+ * @param {string} label
+ * @returns {string | null}
+ */
+function findMetaValue(markdown, label) {
+  const pattern = new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`);
+  for (const { text } of linesOutsideFences(markdown)) {
+    const m = pattern.exec(text);
+    if (m) return m[1];
+  }
+  return null;
+}
 
 /**
  * progress.md から **Branch** と **Status** を読む純関数。
  * バッククォートの有無と Status の `(Phase: ...)` 接尾辞を許容する。
+ * コードフェンスの中は読まない（`parseComplexity` と同じ解釈）。
  *
  * @param {string} markdown
  * @returns {{branch: string | null, status: string | null}}
  */
 export function parseProgressMeta(markdown) {
   const pick = (label) => {
-    const m = new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`, 'm').exec(markdown);
-    if (!m) return null;
-    const value = m[1].replace(/\(.*$/, '').replaceAll('`', '').trim();
+    const raw = findMetaValue(markdown, label);
+    if (raw === null) return null;
+    const value = raw.replace(/\(.*$/, '').replaceAll('`', '').trim();
     return value === '' ? null : value;
   };
   return { branch: pick('Branch'), status: pick('Status') };
+}
+
+/**
+ * progress.md から **Complexity** を読む純関数。
+ * バッククォートの有無を許容する。行が無ければ null（既存の進捗）。
+ * コードフェンスの中は読まない。
+ *
+ * `parseProgressMeta` に足さないのは、あの戻り値の形が既存テストの期待値だからである。
+ *
+ * @param {string} markdown
+ * @returns {string | null}
+ */
+export function parseComplexity(markdown) {
+  const raw = findMetaValue(markdown, 'Complexity');
+  if (raw === null) return null;
+  const value = raw.replaceAll('`', '').trim();
+  return value === '' ? null : value;
+}
+
+/**
+ * 等級から実装に使うモデル名を引く純関数。
+ * null（未記載）は `DEFAULT_COMPLEXITY` とみなす。表に無い等級は失敗させる。
+ *
+ * 表引きは `Object.hasOwn` で行う。素の `COMPLEXITY_MODELS[grade]` だと
+ * `constructor`・`toString`・`valueOf`・`__proto__` などの `Object.prototype`
+ * 継承プロパティが「表にある」と判定され、worktree を作ったうえでモデル名として
+ * 関数を渡してしまう。**自分で書いた 3 つの鍵だけ**を表とみなす。
+ *
+ * @param {string | null | undefined} complexity
+ * @returns {string}
+ */
+export function modelForComplexity(complexity) {
+  const grade = complexity ?? DEFAULT_COMPLEXITY;
+  if (!Object.hasOwn(COMPLEXITY_MODELS, grade)) {
+    throw new Error(`Complexity が不正: ${grade}（${Object.keys(COMPLEXITY_MODELS).join(' | ')}）`);
+  }
+  return COMPLEXITY_MODELS[grade];
 }
 
 /**
@@ -98,11 +180,19 @@ function readTaskEntries(rootDir) {
     if (!fs.existsSync(progressPath)) {
       throw new Error(`task/${dirent.name}/progress.md がありません`);
     }
-    const meta = parseProgressMeta(fs.readFileSync(progressPath, 'utf8'));
+    const markdown = fs.readFileSync(progressPath, 'utf8');
+    const meta = parseProgressMeta(markdown);
     if (meta.status === null) {
       throw new Error(`task/${dirent.name}/progress.md から Status を読めません`);
     }
-    entries.push({ id: m[1], dirName: dirent.name, status: meta.status, branch: meta.branch });
+    entries.push({
+      id: m[1],
+      dirName: dirent.name,
+      status: meta.status,
+      branch: meta.branch,
+      // 等級の妥当性は選択後に見る。選ばれなかった作業の不正で開始を止めない
+      complexity: parseComplexity(markdown),
+    });
   }
   return entries;
 }
@@ -128,7 +218,7 @@ function defaultExec(cmd, args, opts = {}) {
  * @param {object} input
  * @param {string} input.rootDir - リポジトリのルート
  * @param {(cmd: string, args: string[], opts?: {cwd?: string}) => unknown} [input.exec]
- * @returns {{id: string, dirName: string, branch: string, worktreePath: string, created: boolean}}
+ * @returns {{id: string, dirName: string, branch: string, worktreePath: string, complexity: string, model: string, created: boolean}}
  */
 export function startTask({ rootDir, exec = defaultExec }) {
   const picked = selectNextTask(readTaskEntries(rootDir));
@@ -142,8 +232,23 @@ export function startTask({ rootDir, exec = defaultExec }) {
     throw new Error(`task/${picked.dirName}/progress.md の **Branch** がブランチ名として不正: ${picked.branch}`);
   }
 
+  // 等級の確認は worktree に触る前に済ませる（不正なら何も作らずに終わる）
+  let model;
+  try {
+    model = modelForComplexity(picked.complexity);
+  } catch (err) {
+    throw new Error(`task/${picked.dirName}/progress.md の ${err.message}`, { cause: err });
+  }
+
   const worktreePath = path.join(rootDir, '.worktrees', picked.branch);
-  const base = { id: picked.id, dirName: picked.dirName, branch: picked.branch, worktreePath };
+  const base = {
+    id: picked.id,
+    dirName: picked.dirName,
+    branch: picked.branch,
+    worktreePath,
+    complexity: picked.complexity ?? DEFAULT_COMPLEXITY,
+    model,
+  };
 
   if (fs.existsSync(worktreePath)) {
     return { ...base, created: false };
@@ -162,6 +267,23 @@ export function startTask({ rootDir, exec = defaultExec }) {
   }
 
   return { ...base, created: true };
+}
+
+/**
+ * `startTask` の結果を出力の文字列にする純関数。
+ * 表示の期待（モデル名が出ること）をテストできるよう、書式を main から分けてある。
+ *
+ * @param {{id: string, dirName: string, branch: string, worktreePath: string, complexity: string, model: string, created: boolean}} result
+ * @returns {string}
+ */
+export function formatStartTask(result) {
+  return [
+    `作業: ${result.dirName}`,
+    `ブランチ: ${result.branch}`,
+    `worktree: ${result.worktreePath}${result.created ? '（新規作成）' : '（既存に再入）'}`,
+    `複雑度: ${result.complexity}`,
+    `モデル: ${result.model}`,
+  ].join('\n');
 }
 
 /**
@@ -202,9 +324,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`作業: ${result.dirName}`);
-  console.log(`ブランチ: ${result.branch}`);
-  console.log(`worktree: ${result.worktreePath}${result.created ? '（新規作成）' : '（既存に再入）'}`);
+  console.log(formatStartTask(result));
 }
 
 // CLI として起動されたときだけ実行する（テストからの import では走らせない）

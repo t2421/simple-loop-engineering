@@ -35,7 +35,10 @@ model: fable
 
 1. テンプレートと記入例を読む。
 2. `task/<id>-<slug>/spec.md` を書く。`task/TEMPLATE-spec.md` の `---` より下の**見出し名・順番をそのまま使う**。該当が無い節も見出しを残し、本文に「なし」と書く。
-3. `task/<id>-<slug>/progress.md` を書く。`task/TEMPLATE-progress.md` の `---` より下の見出し名・順番をそのまま使う。見出しは `` # Progress: `<id>-<slug>` `` の形（バッククォート付き）にする。メタ情報（Target Spec / Branch / PR / Status）を欠かさない。Status は `Not Started`、Phase は `Plan`、PR は `未作成`。
+3. `task/<id>-<slug>/progress.md` を書く。`task/TEMPLATE-progress.md` の `---` より下の見出し名・順番をそのまま使う。見出しは `` # Progress: `<id>-<slug>` `` の形（バッククォート付き）にする。メタ情報（Target Spec / Branch / PR / Status / Complexity）を欠かさない。Status は `Not Started`、Phase は `Plan`、PR は `未作成`。**Complexity** は起草時に付与する。判断基準は次のとおり。
+   - `S`: 単一ファイルの小変更・定型作業
+   - `M`: 複数ファイルにまたがる通常の機能追加・修正
+   - `L`: 設計判断・凍結改訂・横断的変更を含む作業
 4. チェックリストはこの作業固有の項目だけにする。構文チェック・テスト実行など全作業共通の検証は書かない。
 5. 何を起草したかと、完了条件の要点を報告する。
 

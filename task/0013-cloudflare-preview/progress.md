@@ -36,3 +36,20 @@
 - `12:40` - 独立検証（別エージェント）で **指摘ゼロ**。11 項目を実測で確認した: YAML 妥当性、`${{ }}` の `run:` 直接展開が 0 件、Secrets がログに出ないこと、fork 除外の比較対象、Secrets 未登録時に黙って緑にならないこと、preview が非必須であること、sticky コメントの jq が `body: null` でも壊れないこと、`--project-name` の妥当性、`wrangler@4 pages deploy` のフラグが実在すること、権限が最小十分であること、保護パス違反ゼロ。
 - `12:42` - **正直な未達 1 件（検証エージェントの報告）**: fork PR の除外経路は、実 CI での発火証跡が無い。PR #44 は同一リポジトリ発なのでその分岐を通らない。コード検査とローカルのシェル再現でのみ確認しており、**実際の fork PR で確かめたわけではない**。
 - `12:44` - **完了条件 5 は未達のまま。** Cloudflare の Secrets が未登録のため、実 URL の発行と `/calc.html` の 200・内容一致を確認できていない。PR #44 の preview ジョブが「未登録のため発行できない」と赤で落ちた実ログが、設計どおり動いていることの証拠にはなるが、URL の実測ではない。**登録後に空コミットを push して実測する必要がある。**
+- `22:00` - **`codex-reviewer` 不承認（1 回目）。** Critical 0 / High 1 / Medium 4 / Low 2。
+  - **High（対応した）**: wrangler が exit 0 で URL を印字しさえすればジョブが緑になり、その URL が実際に何を返すか（`/calc.html` が 200 か、`src/calc.html` と同一内容か）を一度も検査していなかった。`0028`（変更の無いチェックアウトを検査していた）と同型の「緑が検証の証拠になっていない」パターン。
+  - **Low（同じ箇所なので一緒に対応した）**: `URL="$(grep -oE ... | tail -1)"` は、マッチが無いと `grep` が exit 1 を返し、`pipefail` + `set -e` 下でその場で落ちるため、直後の「URL を取り出せませんでした」という診断が到達不能だった。
+  - **Medium 4 件（人間の判断待ちとして未対応）**: sticky コメント検索が `.user.login` を見ない／コメントの SHA が実デプロイ内容（merge commit）と一致しない可能性／URL 抽出が `tail -1` のヒューリスティック／fork 経路が `exit 1` で恒久的に赤くなる点（spec の「失敗時」は fork の行に「失敗する」と書いておらず「デプロイを実行しない。理由を出力する」だけなので仕様解釈の問題として人間が決める）。
+- `22:10` - **High の修正**: `Deploy to Cloudflare Pages` ステップの直後に `Verify deployed content` ステップを新設。`curl -fsS --retry 5 --retry-all-errors --retry-delay 2` で `"$URL/calc.html"` を取得し、`diff -u src/calc.html downloaded-calc.html` で内容一致を確認する。どちらかが失敗したら診断メッセージを出して `exit 1`（ジョブを赤くする）。`Comment the preview URL` より前に置いたので、内容検証に失敗した URL はコメントされない。
+- `22:12` - **Low の修正**: `grep -oE ... | tail -1` の末尾に `|| true` を足した。マッチ無しのとき `pipefail` でパイプライン全体が非 0 になっても `|| true` で 0 に丸め、直後の `if [ -z "$URL" ]` の診断が確実に実行されるようにした。
+- `22:20` - **ローカルでシェル意味論を再現して実測**（`/tmp/preview-sim`。Secrets が無いため実 Cloudflare は使えない）。
+  - 旧コード（`|| true` 無し）を単体で再現 → `exit 1` になるが診断行が 1 行も出ないことを確認（レビューの Low 指摘どおりのバグを再現）。
+  - 新コード（`|| true` あり）を単体で再現 → `exit 1` になり、かつ診断 2 行が出力されることを確認。
+  - `Verify deployed content` のロジックをローカル HTTP サーバー（`python3 -m http.server`）で模擬:
+    - 200 + 同一内容 → 成功メッセージを出して `exit 0`
+    - 200 だが内容不一致 → `diff -u` の差分を出して `exit 1`
+    - 到達不能 URL（未待受ポート）→ curl のリトライ後に診断を出して `exit 1`
+    - 404（存在しないパス）→ curl のリトライ後に診断を出して `exit 1`
+  - 4 ケースすべてで「診断が出た上で exit 1」または「exit 0」を確認済み。出力は会話に貼った。
+- `22:25` - `npm run ci` は 360 tests / 360 pass / 0 fail。`node tools/check-protected-paths.mjs main` は「保護パスの変更はありません」。`git diff main -- package.json .github/workflows/ci.yml .github/workflows/guard.yml` は空のまま。
+- `22:26` - **完了条件 5 は依然未達（正直な報告）。** Cloudflare Secrets が未登録のため、新設した `Verify deployed content` ステップが実 Cloudflare 上で動くところ自体は確認できていない。ローカルでのシェル意味論・curl リトライ・diff 比較の模擬実測（上記）で「意図どおりの失敗パターンで赤くなる」ことは確認したが、実 URL に対する実測ではない。**Secrets 登録後に空コミットを push して実測する必要がある点は変わらない。**

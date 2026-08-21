@@ -72,7 +72,11 @@ jobs:
             --commit-dirty=true 2>&1 | tee deploy.log
 
           # wrangler はデプロイ先 URL を標準出力に出す。最後に現れたものを採る。
-          URL="$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | tail -1)"
+          # grep はマッチが無いと exit 1 を返す。pipefail 下でそのまま tail に渡すと
+          # 代入全体が非 0 になり、set -e で直後の空判定（診断メッセージ）に届かず
+          # 落ちてしまう（レビューで指摘された Low。実測で確認済み）。
+          # `|| true` でマッチ無しを「空文字列」として素通りさせ、判定は次の [ -z ] に委ねる。
+          URL="$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | tail -1 || true)"
           if [ -z "$URL" ]; then
             echo "デプロイ出力から URL を取り出せませんでした。"
             echo "URL が分からなければプレビューを発行した意味がないので、失敗として扱います。"
@@ -80,6 +84,32 @@ jobs:
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "preview: $URL"
+
+      - name: Verify deployed content
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+
+          # wrangler の成功報告や URL の印字だけでは、配信物が空でも
+          # Pages プロジェクトのルート設定が src/ 以外でも気づけない
+          # （0028 と同型の「緑が検証の証拠になっていない」パターン）。
+          # ここで実際に /calc.html を取得し、src/calc.html と一致することまで確かめる。
+          # Pages の伝播待ちがあるのでリトライは必須。
+          if ! curl -fsS --retry 5 --retry-all-errors --retry-delay 2 \
+              -o downloaded-calc.html "$URL/calc.html"; then
+            echo "デプロイ先 $URL/calc.html の取得に失敗しました（リトライ後も失敗）。"
+            echo "配信物が存在しない、応答が無い、または HTTP エラーの可能性があります。"
+            exit 1
+          fi
+
+          if ! diff -u src/calc.html downloaded-calc.html; then
+            echo "デプロイ先の /calc.html の内容が src/calc.html と一致しません（上の diff を参照）。"
+            echo "配信物が空、または Pages プロジェクトのルート設定が src/ ではない可能性があります。"
+            exit 1
+          fi
+
+          echo "検証 OK: $URL/calc.html は 200 を返し、src/calc.html と同一内容です。"
 
       - name: Comment the preview URL
         env:

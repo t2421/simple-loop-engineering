@@ -1,9 +1,9 @@
 # Progress: `0024-progress-pr-coupling`
 
-- **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
+- **Target Spec:** `task/archive/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/37
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 
 ## タスクチェックリスト
 
@@ -16,7 +16,7 @@
 - [x] 帰属の検証 (更新された progress の **Branch** と PR の head ブランチを照合する)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

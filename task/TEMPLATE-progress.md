@@ -1,7 +1,9 @@
 # 進捗テンプレート
 
 新しい進捗はこのファイルをコピーして `<...>` を埋める。  
-**見出し名・順番は変えない。** メタ情報（Target Spec / Branch / PR / Status）も欠かさない。
+**見出し名・順番は変えない。** メタ情報（Target Spec / Branch / PR / Status / Complexity）も欠かさない。
+
+Complexity は作業の等級。`tools/start-task.mjs` が実装に使うモデルを引く（S: 単一ファイルの小変更・定型作業 / M: 複数ファイルにまたがる通常の機能追加・修正 / L: 設計判断・凍結改訂・横断的変更を含む作業）。
 
 チェックボックスの意味:
 
@@ -19,6 +21,7 @@
 - **Branch:** `<ブランチ名>`
 - **PR:** `<未作成 | PR の URL>`
 - **Status:** `<Not Started | In Progress | Blocked | Done>` (Phase: `<現在の工程>`)
+- **Complexity:** `<S | M | L>`
 
 ## タスクチェックリスト
 

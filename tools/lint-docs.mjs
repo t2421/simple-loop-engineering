@@ -40,6 +40,15 @@ export const METADATA_KEYS = Object.freeze(['Target Spec', 'Branch', 'PR', 'Stat
 /** progress.md の Status が取りうる値 */
 export const STATUS_VALUES = Object.freeze(['Not Started', 'In Progress', 'Blocked', 'Done']);
 
+/**
+ * progress.md の Complexity が取りうる値（作業の等級）。
+ *
+ * **METADATA_KEYS には入れない。** この項目が入る前に書かれた進捗は 1 つも
+ * 持っておらず、必須にすると既存の全作業が違反になる。`tools/start-task.mjs` は
+ * 無いものを `M` とみなす。ここで見るのは「書いてあるなら 3 値のどれか」だけである。
+ */
+export const COMPLEXITY_VALUES = Object.freeze(['S', 'M', 'L']);
+
 /** backlog の「完了条件」節はこの 1 行で始まる（仕様ではなく候補である印） */
 export const BACKLOG_INCOMPLETE_LINE = '未確定（incomplete）。昇格時に埋める。';
 
@@ -318,6 +327,11 @@ export function checkProgress({ relPath, markdown, specExists }) {
   const status = metadata.get('Status');
   if (status !== undefined && !STATUS_VALUES.includes(normalizeStatus(status))) {
     reasons.push(`Status が不正: \`${normalizeStatus(status)}\`（${STATUS_VALUES.join(' | ')}）`);
+  }
+
+  const complexity = metadata.get('Complexity');
+  if (complexity !== undefined && !COMPLEXITY_VALUES.includes(stripCode(complexity))) {
+    reasons.push(`Complexity が不正: \`${stripCode(complexity)}\`（${COMPLEXITY_VALUES.join(' | ')}）`);
   }
 
   const targetSpec = metadata.get('Target Spec');

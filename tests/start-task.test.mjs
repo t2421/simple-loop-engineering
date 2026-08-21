@@ -6,6 +6,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   parseProgressMeta,
+  parseComplexity,
+  modelForComplexity,
+  formatStartTask,
   selectNextTask,
   nextIdFrom,
   startTask,
@@ -23,7 +26,8 @@ function makeLayout(dirs) {
   return root;
 }
 
-function progressMd({ branch = 'feature/x', status = 'Not Started' } = {}) {
+/** `complexity` を省くと **Complexity** 行の無い進捗（既存分と同じ形）になる */
+function progressMd({ branch = 'feature/x', status = 'Not Started', complexity } = {}) {
   return [
     '# Progress: `x`',
     '',
@@ -31,6 +35,7 @@ function progressMd({ branch = 'feature/x', status = 'Not Started' } = {}) {
     `- **Branch:** \`${branch}\``,
     '- **PR:** `未作成`',
     `- **Status:** \`${status}\` (Phase: \`Plan\`)`,
+    ...(complexity === undefined ? [] : [`- **Complexity:** \`${complexity}\``]),
     '',
     '## タスクチェックリスト',
   ].join('\n');
@@ -223,6 +228,71 @@ test('npm ci が失敗したら worktree は残したまま失敗する（再実
   // 再実行は既存 worktree に再入して成功する
   const retry = startTask({ rootDir: root, exec: recordingExec([]) });
   assert.equal(retry.created, false);
+});
+
+// --- parseComplexity / modelForComplexity ---
+
+test('parseComplexity: バッククォート付きの等級を読む', () => {
+  assert.equal(parseComplexity(progressMd({ complexity: 'L' })), 'L');
+});
+
+test('parseComplexity: バッククォート無しでも読む', () => {
+  assert.equal(parseComplexity('- **Complexity:** S\n'), 'S');
+});
+
+test('parseComplexity: **Complexity** が無ければ null（既存の進捗）', () => {
+  assert.equal(parseComplexity(progressMd()), null);
+});
+
+test('modelForComplexity: 対応表どおりに引く', () => {
+  assert.equal(modelForComplexity('S'), 'haiku');
+  assert.equal(modelForComplexity('M'), 'sonnet');
+  assert.equal(modelForComplexity('L'), 'fable');
+});
+
+test('modelForComplexity: 未記載（null）は M とみなす', () => {
+  assert.equal(modelForComplexity(null), 'sonnet');
+});
+
+test('modelForComplexity: 表に無い等級は失敗する', () => {
+  assert.throws(() => modelForComplexity('XL'), /Complexity/);
+});
+
+// --- spec「例」の 4 行 ---
+
+/** 一時レイアウトの作業を選び、CLI と同じ書式に整えた出力を返す */
+function startAndFormat(complexity) {
+  const root = makeLayout({
+    'task/0020-a': progressMd({ branch: 'feature/a', complexity }),
+  });
+  // worktree を先に置き、git も npm も呼ばずに選択と出力だけを見る
+  fs.mkdirSync(path.join(root, '.worktrees', 'feature/a'), { recursive: true });
+  return formatStartTask(startTask({ rootDir: root, exec: recordingExec([]) }));
+}
+
+test('例: Complexity `S` の作業を選ぶと出力に haiku が含まれる', () => {
+  assert.match(startAndFormat('S'), /haiku/);
+});
+
+test('例: Complexity `L` の作業を選ぶと出力に fable が含まれる', () => {
+  assert.match(startAndFormat('L'), /fable/);
+});
+
+test('例: Complexity 未記載の作業を選ぶと出力に sonnet が含まれる（M 扱い）', () => {
+  assert.match(startAndFormat(undefined), /sonnet/);
+});
+
+test('例: Complexity が `XL` の作業を選ぶと何も作成せず失敗する', () => {
+  const root = makeLayout({
+    'task/0020-a': progressMd({ branch: 'feature/a', complexity: 'XL' }),
+  });
+  const calls = [];
+  assert.throws(
+    () => startTask({ rootDir: root, exec: recordingExec(calls) }),
+    /Complexity/,
+  );
+  assert.deepEqual(calls, [], '何も実行しない');
+  assert.equal(fs.existsSync(path.join(root, '.worktrees')), false);
 });
 
 test('task/ の archive と TEMPLATE は選択対象にしない', () => {

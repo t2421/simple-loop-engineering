@@ -1,9 +1,9 @@
 # Progress: `0028-stop-hook-worktree-cwd`
 
-- **Target Spec:** `task/0028-stop-hook-worktree-cwd/spec.md`
+- **Target Spec:** `task/archive/0028-stop-hook-worktree-cwd/spec.md`
 - **Branch:** `feature/stop-hook-worktree-cwd`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/42
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -18,7 +18,7 @@
 - [x] 新スクリプトを保護対象に追加 (`.claude/skills/add-protected-path` の手順 2〜4。CLAUDE.md 一覧・`GATE_HELPERS`・`tests/gate-helpers.test.mjs`)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

@@ -53,3 +53,10 @@
   - 4 ケースすべてで「診断が出た上で exit 1」または「exit 0」を確認済み。出力は会話に貼った。
 - `22:25` - `npm run ci` は 360 tests / 360 pass / 0 fail。`node tools/check-protected-paths.mjs main` は「保護パスの変更はありません」。`git diff main -- package.json .github/workflows/ci.yml .github/workflows/guard.yml` は空のまま。
 - `22:26` - **完了条件 5 は依然未達（正直な報告）。** Cloudflare Secrets が未登録のため、新設した `Verify deployed content` ステップが実 Cloudflare 上で動くところ自体は確認できていない。ローカルでのシェル意味論・curl リトライ・diff 比較の模擬実測（上記）で「意図どおりの失敗パターンで赤くなる」ことは確認したが、実 URL に対する実測ではない。**Secrets 登録後に空コミットを push して実測する必要がある点は変わらない。**
+- `06:55` - **（アーカイブ後の追記）完了条件 5 を実測した。結果は「環境は動くが CI は緑にならない」。**
+  - 未達の直接原因は **Cloudflare Pages のプロジェクトが存在しなかったこと**。Secrets は登録済みだったが、デプロイ先そのものを誰も作っていなかった。PR #45 の preview ジョブが `The Pages project "simple-loop-engineering" does not exist.` で落ちて発覚した。ダッシュボードの direct upload で `simple-loop-engineering`（`No Git connection`）を作成し、デプロイは成功するようになった（`URL: https://pr-45.simple-loop-engineering.pages.dev`）。
+  - **プレビュー環境自体は仕様どおり動いている。** 手元からの実測: `curl -sSL` で取得した `/calc.html` は `diff -u src/calc.html` が差分なし。配信物はリポジトリの `src/calc.html` と同一である。
+  - **ただし `Verify deployed content` ステップにバグがある。** Cloudflare Pages は `/calc.html` を `/calc` へ **308 リダイレクト**する（`location: /calc`）。実測: `/calc.html` が `http=308`、`/calc` が `http=200`。ステップの `curl -fsS`（`-L` 無し）は 308 を追わず、`-f` は 3xx をエラーとしないため **exit 0 で空ファイルを書く**。続く `diff` が必ず落ちる。CI で再現済み（diff が `-` 行だけで `+` 行が 0）。
+  - **spec の「例」の期待値も、この挙動と両立しない。** 「そのコメントの URL + `/calc.html` を `curl -sSI` → HTTP 200 が返る」は、Pages の既定では 308 になるため満たせない。実装だけでなく期待値の側も直す必要がある。
+  - 初回は TLS ハンドシェイク失敗（`curl: (35) ... sslv3 alert handshake failure`）も出たが、これは新規 Pages プロジェクトのワイルドカード証明書が発行されるまでの過渡状態で、数分後には解消した（`CN=simple-loop-engineering.pages.dev` を確認）。恒久的な問題ではない。
+  - **したがって完了条件 5 は未達のままである。** 修正は `.github/workflows/preview.yml`（既存ファイル）と `task/archive/0013-cloudflare-preview/spec.md`（凍結対象）の両方に及ぶため、この進捗の追記では閉じない。別の作業として起こす。

@@ -84,6 +84,22 @@ test('parseProgressMeta: 無い項目は null', () => {
   assert.deepEqual(parseProgressMeta('# なにもない\n'), { branch: null, status: null });
 });
 
+test('parseProgressMeta: コードフェンスの中のメタ情報は読まない', () => {
+  const md = [
+    '# Progress: `x`',
+    '',
+    '## 試行ログ',
+    '',
+    '```',
+    '$ cat progress.md',
+    '- **Branch:** `feature/貼った出力`',
+    '- **Status:** `Done`',
+    '```',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseProgressMeta(md), { branch: null, status: null });
+});
+
 // --- selectNextTask ---
 
 test('Blocked と Done を除く最小 ID を選ぶ', () => {
@@ -254,8 +270,50 @@ test('modelForComplexity: 未記載（null）は M とみなす', () => {
   assert.equal(modelForComplexity(null), 'sonnet');
 });
 
+test('parseComplexity: コードフェンスの中の Complexity 行は読まない', () => {
+  const md = [
+    '# Progress: `x`',
+    '',
+    '- **Target Spec:** `task/0020-a/spec.md`',
+    '- **Branch:** `feature/a`',
+    '- **PR:** `未作成`',
+    '- **Status:** `Not Started`',
+    '',
+    '## 試行ログ',
+    '',
+    '```',
+    '$ node tools/start-task.mjs',
+    '- **Complexity:** `L`',
+    '```',
+    '',
+  ].join('\n');
+  assert.equal(parseComplexity(md), null, '貼った出力の中の値をメタ情報にしない');
+});
+
+test('parseComplexity: フェンスの外にあれば読む（フェンスの後でも）', () => {
+  const md = [
+    '- **Complexity:** `S`',
+    '',
+    '```',
+    '- **Complexity:** `L`',
+    '```',
+    '',
+  ].join('\n');
+  assert.equal(parseComplexity(md), 'S');
+});
+
 test('modelForComplexity: 表に無い等級は失敗する', () => {
   assert.throws(() => modelForComplexity('XL'), /Complexity/);
+});
+
+test('modelForComplexity: Object.prototype の継承プロパティは表に無い等級として失敗する', () => {
+  for (const grade of ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    assert.throws(
+      () => modelForComplexity(grade),
+      /Complexity/,
+      `${grade} が表引きを素通りしている`,
+    );
+  }
 });
 
 // --- spec「例」の 4 行 ---
@@ -293,6 +351,39 @@ test('例: Complexity が `XL` の作業を選ぶと何も作成せず失敗す�
   );
   assert.deepEqual(calls, [], '何も実行しない');
   assert.equal(fs.existsSync(path.join(root, '.worktrees')), false);
+});
+
+test('Complexity が `constructor` の作業を選ぶと何も作成せず失敗する', () => {
+  const root = makeLayout({
+    'task/0020-a': progressMd({ branch: 'feature/a', complexity: 'constructor' }),
+  });
+  const calls = [];
+  assert.throws(
+    () => startTask({ rootDir: root, exec: recordingExec(calls) }),
+    /Complexity/,
+  );
+  assert.deepEqual(calls, [], '何も実行しない');
+  assert.equal(fs.existsSync(path.join(root, '.worktrees')), false);
+});
+
+test('試行ログのフェンスに Complexity を貼っただけの作業は M 扱い（sonnet）', () => {
+  const root = makeLayout({
+    'task/0020-a': [
+      progressMd({ branch: 'feature/a' }),
+      '',
+      '## 試行ログ',
+      '',
+      '```',
+      '$ node tools/start-task.mjs',
+      '- **Complexity:** `L`',
+      '```',
+      '',
+    ].join('\n'),
+  });
+  fs.mkdirSync(path.join(root, '.worktrees', 'feature/a'), { recursive: true });
+  const out = startTask({ rootDir: root, exec: recordingExec([]) });
+  assert.equal(out.complexity, 'M');
+  assert.equal(out.model, 'sonnet');
 });
 
 test('task/ の archive と TEMPLATE は選択対象にしない', () => {

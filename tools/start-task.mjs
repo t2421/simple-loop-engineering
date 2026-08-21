@@ -17,6 +17,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// フェンスの解釈は lint と 1 つにする。複製すると「lint は未記載と見るのに
+// start-task は貼った出力の中の値を読む」という解釈の割れが起きる
+import { linesOutsideFences } from './lint-docs.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
@@ -42,17 +45,39 @@ export const DEFAULT_COMPLEXITY = 'M';
 const WORK_DIR_RE = /^(\d{4})-(.+)$/;
 
 /**
+ * `- **キー:** 値` の生の値を、**コードフェンスの外の行から**探す純関数。最初の一致を採る。
+ *
+ * progress には CLAUDE.md「報告の作法」に従ってコマンド出力をフェンスで貼る。
+ * 貼った出力の中の `- **Complexity:** \`L\`` はこの文書のメタ情報ではない。
+ * フェンスの解釈は `tools/lint-docs.mjs` の `linesOutsideFences` に委ね、
+ * lint と読み取りで同じ行集合を見る。
+ *
+ * @param {string} markdown
+ * @param {string} label
+ * @returns {string | null}
+ */
+function findMetaValue(markdown, label) {
+  const pattern = new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`);
+  for (const { text } of linesOutsideFences(markdown)) {
+    const m = pattern.exec(text);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
  * progress.md から **Branch** と **Status** を読む純関数。
  * バッククォートの有無と Status の `(Phase: ...)` 接尾辞を許容する。
+ * コードフェンスの中は読まない（`parseComplexity` と同じ解釈）。
  *
  * @param {string} markdown
  * @returns {{branch: string | null, status: string | null}}
  */
 export function parseProgressMeta(markdown) {
   const pick = (label) => {
-    const m = new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`, 'm').exec(markdown);
-    if (!m) return null;
-    const value = m[1].replace(/\(.*$/, '').replaceAll('`', '').trim();
+    const raw = findMetaValue(markdown, label);
+    if (raw === null) return null;
+    const value = raw.replace(/\(.*$/, '').replaceAll('`', '').trim();
     return value === '' ? null : value;
   };
   return { branch: pick('Branch'), status: pick('Status') };
@@ -61,6 +86,7 @@ export function parseProgressMeta(markdown) {
 /**
  * progress.md から **Complexity** を読む純関数。
  * バッククォートの有無を許容する。行が無ければ null（既存の進捗）。
+ * コードフェンスの中は読まない。
  *
  * `parseProgressMeta` に足さないのは、あの戻り値の形が既存テストの期待値だからである。
  *
@@ -68,9 +94,9 @@ export function parseProgressMeta(markdown) {
  * @returns {string | null}
  */
 export function parseComplexity(markdown) {
-  const m = /^- \*\*Complexity:\*\*\s*(.+)$/m.exec(markdown);
-  if (!m) return null;
-  const value = m[1].replaceAll('`', '').trim();
+  const raw = findMetaValue(markdown, 'Complexity');
+  if (raw === null) return null;
+  const value = raw.replaceAll('`', '').trim();
   return value === '' ? null : value;
 }
 
@@ -78,16 +104,20 @@ export function parseComplexity(markdown) {
  * 等級から実装に使うモデル名を引く純関数。
  * null（未記載）は `DEFAULT_COMPLEXITY` とみなす。表に無い等級は失敗させる。
  *
+ * 表引きは `Object.hasOwn` で行う。素の `COMPLEXITY_MODELS[grade]` だと
+ * `constructor`・`toString`・`valueOf`・`__proto__` などの `Object.prototype`
+ * 継承プロパティが「表にある」と判定され、worktree を作ったうえでモデル名として
+ * 関数を渡してしまう。**自分で書いた 3 つの鍵だけ**を表とみなす。
+ *
  * @param {string | null | undefined} complexity
  * @returns {string}
  */
 export function modelForComplexity(complexity) {
   const grade = complexity ?? DEFAULT_COMPLEXITY;
-  const model = COMPLEXITY_MODELS[grade];
-  if (model === undefined) {
+  if (!Object.hasOwn(COMPLEXITY_MODELS, grade)) {
     throw new Error(`Complexity が不正: ${grade}（${Object.keys(COMPLEXITY_MODELS).join(' | ')}）`);
   }
-  return model;
+  return COMPLEXITY_MODELS[grade];
 }
 
 /**

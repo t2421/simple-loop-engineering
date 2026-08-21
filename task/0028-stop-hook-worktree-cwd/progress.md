@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0028-stop-hook-worktree-cwd/spec.md`
 - **Branch:** `feature/stop-hook-worktree-cwd`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/42
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `L`
 
@@ -16,8 +16,8 @@
 - [x] 実 git リポジトリ + worktree での配線の実測（完了条件 6）
 - [x] スクリプト失敗時に `npm run ci` を回さず hook が失敗することの再現（完了条件 7）
 - [x] 新スクリプトを保護対象に追加 (`.claude/skills/add-protected-path` の手順 2〜4。CLAUDE.md 一覧・`GATE_HELPERS`・`tests/gate-helpers.test.mjs`)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -30,3 +30,4 @@
 - `19:00` - `tests/stop-hook-ci-dir.test.mjs` を作成。「例」の各行を stdin と `CLAUDE_PROJECT_DIR` の注入で網羅（ガードの 2 行は `findViolations` を直接呼んで固定）。加えて実 git リポジトリに `git worktree add` した配線の実測（完了条件 6）、`.claude/settings.json` から読んだ hook コマンド全体の実行で「壊れた worktree の CI が走り hook が失敗する」「スクリプト失敗時は CI を回さず hook が失敗する」を再現（完了条件 7・例の最終行）。15 件すべて pass。
 - `19:05` - 保護対象に追加（`add-protected-path` 手順 2〜4）。CLAUDE.md「変えてはいけないもの」に 1 行、`GATE_HELPERS` に `tools/stop-hook-ci-dir.mjs`、`tests/gate-helpers.test.mjs` に違反側（M / D / R）と許可側（A）のケースを追加。
 - `19:11` - Verify (自己)。`npm run ci` 全緑（lint・lint:docs・ユニット 360 件 pass）。ガードは base 版で評価されるため本 PR では新保護は効かない（`add-protected-path` の「効き始めるのはマージ後から」どおり）。`tools/check-protected-paths.mjs` と既存 `tests/` の変更が違反として検知される想定なので、PR には `allow-protected-change` ラベルが要る。
+- `10:30` - `codex-reviewer` 1 回目で **承認**（Critical 0 / High 0 / Medium 2 / Low 3）。完了条件 6 の実測（`ok 11`・`ok 14`）が主張どおり配線を検証していることも確認された。保護対象化がマージ後に効くこともレビュアーが実測（`tools/stop-hook-ci-dir.mjs` の書き換えを検知）。Medium 2 件は別作業への申し送りとした: (1) `npm run ci` の失敗（exit 1）は Stop hook では `hook_non_blocking_error` になり停止をブロックしない — ただし 0021 由来の既存挙動で本作業の差分は `cd` 先だけ、(2) 「プライマリに居たまま worktree のファイルを絶対パスで編集する」形では hook の `cwd` がプライマリのままでこの修正が発火しない — spec が `cwd` を情報源と定めた設計上の残差。PR #42 を `allow-protected-change` ラベル付きで作成。

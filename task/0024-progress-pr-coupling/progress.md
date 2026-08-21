@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0024-progress-pr-coupling/spec.md`
 - **Branch:** `feature/progress-pr-coupling`
 - **PR:** `未作成`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Verify (外部)`)
 
 ## タスクチェックリスト
 
@@ -129,3 +129,12 @@ exit=0
   > `T`（type 変更）を `progressWorks()` から外し `strayProgressPaths()` で拒否するか（数える対象を status `M` に限定するホワイトリスト化）。それとも spec の「範囲外」に属するものとして受け入れて承認するか。
 
   **人間の判断待ち。**
+- `05:10` - **人間の判断により Blocked を解除し、`M` のみを数えるホワイトリスト化に変更した。** Status を `In Progress`（Phase: `Verify (外部)`）へ戻す。承認された修正は 1 点だけで、**spec は変更しない**。
+  - **なぜ列挙方式をやめたのか。** この検査は 7 回のレビューで毎回**別の git status の見落とし**を指摘されてきた——(1) `D`（削除）を数えていた → (2) base に無い `A`（新規追加）を数えていた → (3) 数えない対象を黙って捨てて同乗を許していた → (4) 別作業の progress で通せた → (5) **Branch** 行の書き換えで通せた → (6) mode-only（blob 同一の `M`）で通せた → (7) `T`（type 変更＝symlink 置換）で通せた。いずれも「見つかった穴を個別に塞ぐ」形で対処したため、**列挙から漏れた status が毎回残った**。`T` は `status !== 'D'` と `status === 'A'` の網の隙間に落ちており、`headPaths()` が残し、symlink の blob が base と異なるので `progressWorks()` が 1 件として数えていた。**列挙は必ず漏れる**——git が将来 status を増やせば同じことがまた起きる。だから「数えない側を列挙する」設計そのものをやめた。
+  - **数える形をホワイトリストにした。** `task/<id>-<slug>/progress.md`（archive 以外・作業名の形が正しい）に当たる差分のうち、**status が `M` であり、merge-base に存在し、merge-base と HEAD の blob OID が異なるもの**だけを数える（`COUNTED_STATUS = 'M'`）。`T` だけでなく `A`・`D`・`R`/`C`・**未知の status** も、最初から数えられる側に入らない。
+  - **「どちらにも入らない隙間」を構造的に作らない。** 仕分けを 1 つの純関数 `classifyProgressChanges()` に集約し、進行中の progress に当たる変更が必ず `works` / `unchanged` / `rejected` のどれか **1 つだけ**に入るようにした。`rejected` は列挙ではなく**数える形の補集合**（`status !== 'M' || !baseHas(path)`）である。リネーム・複製の移動元が作業の progress ならそれも `rejected` に入れる。`progressWorks()` / `unchangedProgressPaths()` / `strayProgressPaths()` はこの 1 つの仕分けの薄いラッパにし、`evaluateCoupling()` も 3 回別々に呼ぶのをやめて 1 回の仕分け結果を分解して使う（別々に呼ぶ形は隙間が生まれる余地を残す）。テストでは、差分に現れる進行中 progress パスの集合と、3 つの仕分け結果の合併が**一致し重複も無い**ことを表明した（7 回目のレビュアーが確認した「完全二分」の性質を、3 分割に拡張して維持した）。
+  - 理由コード（`stray` / `unchanged` / `missing` / `multiple` / `foreign`）と判定順（`bypass-label` → `docs-only` → `unchanged` → `missing` → `stray` → `multiple` → `foreign` → `coupled`）は維持した。`T` は `stray` に落ちる（単独なら `works` が 0 件になるので、先に来る `missing` で落ちる）。**メッセージは検査対象の書き換えを誘導しない。** `missing` に「数えるのは、base に既にある progress.md の内容を書き足した更新だけです」と、数えなかった変更のパス一覧を足し、`stray` には「種別の変更（symlink への置き換えなど）」を明記した。既定値の fail-closed（`NOTHING_IN_BASE` / `NO_BRANCH` / `SAME_CONTENT`）はそのまま。
+  - **`headPaths()` は削除した。** 仕分けが status を直接見るようになり、経路として使われなくなったため（残すと「使われていないのに正しそうな helper」が次の改修で復活する）。それが担保していた性質（`D` と移動元を数えない）は `classifyProgressChanges()` のテストが上位互換で固定している。
+- `05:15` - 回帰テストを追加。**`T` ケースは実 git リポジトリで再現**した（`git rm` ではなく実ファイルを消して `ln -s` し `git add`。差分に `T` が出ること・HEAD の entry が `120000`（symlink）であることをテスト内で前提として確かめてから exit 1 を固定）。単独の `T` と、有効な更新に別作業の `T` を同乗させる経路の 2 件。**ホワイトリストであることの表明**として、純関数レベルで `A`・`D`・`T`・`R`・`C` に加え**架空の `X`・`U`・`B`・空文字**まで回し、どれも数えられず、かつ黙って捨てられず拒否対象に現れることを固定した。既存テストのうち 2 件は**強める向き**に retarget した——「移動先が base に既にある作業なら数える」は `R` を数えない設計に変わったので「リネームは移動先が base にあっても数えない（移動元・移動先の両方を拒否する）」へ、`baseHas` の配線テストは `A` が status だけで拒否されて `cat-file` に届かなくなったため、配線が実際に走る `M` の形へ差し替えた。**いずれも通る入力を増やす変更ではない。**
+- `05:20` - 実測。修正前（`ff57da8` の版）と修正後を同じ差分に当て、`T` ケースが **exit 0 → exit 1** に変わることを確認。壊してはいけない性質も同じ実 git で確認した——正当な PR exit 0、docs のみ exit 0、`no-progress-needed` ラベル exit 0、ローカル実行（head ref なし）exit 0、missing / stray / foreign / mode-only / multiple / Branch 行の head 側書き換え BYPASS はいずれも exit 1、`GITHUB_ACTIONS=TRUE` で head ref 空 exit 1、git リポジトリでない exit 1。`npm run ci` は 304 tests / 0 fail。
+- `05:25` - **7 回目の Low（`unchanged` が spec の「失敗時」「例」に無い）は未対応。** 記録漏れであり既存の期待値は壊していないが、着手後の spec 変更は人間の承認が要る領域なので、エージェント判断では書き換えない。今回の指示も「spec は変更しない」である。**人間の判断待ち**として記録に留める。

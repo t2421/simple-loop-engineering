@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import {
   BYPASS_LABEL,
   checkAttribution,
+  classifyProgressChanges,
   evaluateCoupling,
-  headPaths,
   isActiveProgressPath,
   isImplementationPath,
   isWorkName,
@@ -209,15 +209,19 @@ test('progress.md を archive へ移すリネームは progress 更新として�
   assert.deepEqual(result.works, []);
 });
 
-test('移動先が base に既にある作業なら、その 1 作業だけを数える', () => {
+test('リネームは移動先が base にあっても数えない（数えるのは M だけ）', () => {
   const changes = [
     { status: 'R', path: 'task/0027-b/progress.md', oldPath: 'task/0026-a/progress.md' },
   ];
-  assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md'), anythingChanged), [
-    '0027-b',
-  ]);
-  // 移動先が base に無ければ数えない（使い捨ての作業名への逃げ）
+  // 移動先が base にある（＝別作業の progress を自作業の progress で上書きする）経路も、
+  // 移動先が base に無い（使い捨ての作業名へ逃がす）経路も、どちらも数えない
+  assert.deepEqual(progressWorks(changes, baseWith('task/0027-b/progress.md'), anythingChanged), []);
   assert.deepEqual(progressWorks(changes, baseWith('task/0026-a/progress.md'), anythingChanged), []);
+  // 黙って捨てず、移動元・移動先の両方を拒否対象として拾う
+  assert.deepEqual(strayProgressPaths(changes, baseWith('task/0027-b/progress.md')), [
+    'task/0026-a/progress.md',
+    'task/0027-b/progress.md',
+  ]);
 });
 
 // --- モードだけの変更（差分に出るが blob は同一） ---
@@ -526,13 +530,101 @@ test('slug の文字種は絞らない（正当な作業を誤って弾かない
   assert.equal(isActiveProgressPath('task/0026-api_v2/progress.md'), true);
 });
 
-test('headPaths は削除と移動元を落とす', () => {
+test('仕分けは進行中の progress に当たる差分を過不足なく 3 つに分ける', () => {
+  // 隙間（黙って捨てられるもの）も重複も無いことを表明する。
+  // `works` に入るのは `M` かつ base にあり blob が変わったものだけ。
   const changes = [
-    { status: 'M', path: 'src/a.mjs' },
-    { status: 'D', path: 'src/b.mjs' },
-    { status: 'R', path: 'src/d.mjs', oldPath: 'src/c.mjs' },
+    { status: 'M', path: 'src/a.mjs' }, // 進捗ではない
+    { status: 'M', path: 'task/0026-a/progress.md' }, // works
+    { status: 'M', path: 'task/0027-b/progress.md' }, // unchanged（blob 同一）
+    { status: 'T', path: 'task/0028-c/progress.md' }, // rejected（種別の変更）
+    { status: 'A', path: 'task/0029-d/progress.md' }, // rejected
+    { status: 'R', path: 'task/archive/0030-e/progress.md', oldPath: 'task/0030-e/progress.md' },
   ];
-  assert.deepEqual(headPaths(changes), ['src/a.mjs', 'src/d.mjs']);
+  const baseHas = baseWith(
+    'task/0026-a/progress.md',
+    'task/0027-b/progress.md',
+    'task/0028-c/progress.md',
+  );
+  const result = classifyProgressChanges(
+    changes,
+    baseHas,
+    (p) => p === 'task/0026-a/progress.md',
+  );
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.unchanged, ['task/0027-b/progress.md']);
+  assert.deepEqual(result.rejected, ['task/0028-c/progress.md', 'task/0029-d/progress.md', 'task/0030-e/progress.md']);
+
+  // 進行中の progress に当たるパスは、必ずどれか 1 つに入る（隙間も重複も無い）
+  const active = new Set();
+  for (const c of changes) {
+    if (isActiveProgressPath(c.path)) active.add(c.path);
+    if (c.oldPath && isActiveProgressPath(c.oldPath)) active.add(c.oldPath);
+  }
+  const sorted = (xs) => [...xs].sort();
+  const worksPaths = result.works.map((w) => `task/${w}/progress.md`);
+  const classified = [...worksPaths, ...result.unchanged, ...result.rejected];
+  assert.deepEqual(sorted(classified), sorted(active));
+  assert.equal(new Set(classified).size, classified.length);
+});
+
+test('数えるのは status M だけ（ホワイトリスト。未知の status も数えない）', () => {
+  // 7 回のレビューで毎回「別の status」が抜け道になった。列挙で塞ぐのをやめ、
+  // `M` 以外はすべて数えない設計であることをここで固定する。
+  const baseHas = anythingInBase;
+  for (const status of ['A', 'D', 'T', 'R', 'C', 'X', 'U', 'B', '']) {
+    const changes = [{ status, path: 'task/0026-a/progress.md', oldPath: undefined }];
+    assert.deepEqual(
+      progressWorks(changes, baseHas, anythingChanged),
+      [],
+      `status ${status} を数えてはならない`,
+    );
+    // 黙って捨てない。必ず拒否対象として現れる
+    assert.deepEqual(
+      strayProgressPaths(changes, baseHas),
+      ['task/0026-a/progress.md'],
+      `status ${status} は拒否対象に入らなければならない`,
+    );
+  }
+  // `M` だけが数えられる
+  assert.deepEqual(
+    progressWorks([{ status: 'M', path: 'task/0026-a/progress.md' }], baseHas, anythingChanged),
+    ['0026-a'],
+  );
+});
+
+test('T（種別の変更＝symlink 置換）は実装 PR を通せない', () => {
+  // 7 回目のレビューで実測された経路。progress.md を symlink に置き換えると、
+  // 中身が消えて別作業へのポインタになるのに status は `D` ではなく `T` が出る。
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'T', path: 'task/0026-a/progress.md' },
+    ],
+    labels: [],
+    baseHas: anythingInBase,
+    contentChanged: anythingChanged,
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.works, []);
+  assert.deepEqual(result.strays, ['task/0026-a/progress.md']);
+});
+
+test('T を有効な更新に同乗させても通せない', () => {
+  const result = evaluateCoupling({
+    changes: [
+      { status: 'M', path: 'src/math.mjs' },
+      { status: 'M', path: 'task/0026-a/progress.md' },
+      { status: 'T', path: 'task/0027-b/progress.md' },
+    ],
+    labels: [],
+    baseHas: anythingInBase,
+    contentChanged: anythingChanged,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'stray');
+  assert.deepEqual(result.works, ['0026-a']);
+  assert.deepEqual(result.strays, ['task/0027-b/progress.md']);
 });
 
 // --- 対象パスの判定 ---
@@ -647,7 +739,9 @@ test('差分から判定する（progress を消しただけなら失敗）', ()
 
 test('baseHas を渡さないときは merge-base と cat-file で base の存在を問う', () => {
   const calls = [];
-  const raw = 'M\0src/math.mjs\0A\0task/9999-disposable/progress.md\0';
+  // base の存在確認が実際に走る形（`M`）で問う。`A` は status だけで拒否されるので、
+  // 配線の検証にならない（数えるのは `M` だけというホワイトリスト）。
+  const raw = 'M\0src/math.mjs\0M\0task/9999-disposable/progress.md\0';
   const execGit = (args) => {
     calls.push(args);
     if (args[0] === 'diff') return raw;
@@ -836,6 +930,45 @@ test('CLI/MODE: 中身も変えていればモードが変わっていても通�
   const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /ちょうど 1 件/);
+});
+
+test('CLI/T: progress.md を symlink に置き換えても通せない（種別の変更）', (t) => {
+  // 7 回目のレビューで実測された経路。追跡下の progress.md を symlink に差し替えると、
+  // 実体の中身は消えて別作業へのポインタになるのに、git の status は `D` ではなく `T`。
+  // 数える status を `M` だけに絞る（ホワイトリスト）ことで塞ぐ。
+  const cwd = makeRepo(t);
+  fs.mkdirSync(path.join(cwd, 'task/0027-b'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'task/0027-b/notes.md'), '# notes\n');
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'notes');
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.rmSync(path.join(cwd, 'task/0026-a/progress.md'));
+  fs.symlinkSync('../0027-b/notes.md', path.join(cwd, 'task/0026-a/progress.md'));
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+
+  // 前提の確認: git は `T`（種別の変更）を出し、HEAD の entry は symlink（120000）
+  assert.match(git(cwd, 'diff', '--name-status', 'main...HEAD'), /T\ttask\/0026-a\/progress\.md/);
+  assert.match(git(cwd, 'ls-tree', 'HEAD', 'task/0026-a/progress.md'), /^120000 blob /);
+
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /task\/0026-a\/progress\.md/);
+});
+
+test('CLI/T: 有効な更新に別作業の symlink 置換を同乗させても通せない', (t) => {
+  const cwd = makeTwoWorkRepo(t);
+  fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 2;\n');
+  fs.appendFileSync(path.join(cwd, 'task/0026-a/progress.md'), '- [x] 実装\n');
+  fs.rmSync(path.join(cwd, 'task/0027-b/progress.md'));
+  fs.symlinkSync('../0026-a/progress.md', path.join(cwd, 'task/0027-b/progress.md'));
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'work');
+  assert.match(git(cwd, 'diff', '--name-status', 'main...HEAD'), /T\ttask\/0027-b\/progress\.md/);
+  const result = runCli(cwd, { GITHUB_HEAD_REF: 'work' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /その場の更新でない変更/);
+  assert.match(result.stderr, /task\/0027-b\/progress\.md/);
 });
 
 /**

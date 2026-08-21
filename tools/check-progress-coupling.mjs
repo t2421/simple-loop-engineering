@@ -5,11 +5,18 @@
  * 「工程を進めるたびに progress を更新し、実装と同じ PR に含める」「1 PR = 1 作業」は
  * 規約だが強制されていなかった。progress 更新の抜けと、複数作業の混載を検知する。
  *
- * 数えるのは **base に既に存在する** progress.md の、その場の更新だけである。使い捨ての
- * progress.md を PR 内で新規に足して通すのを塞ぐ（`progressWorks()` の注記を見よ）。
- * 数えないものは **黙って捨てず、拒否する**（`strayProgressPaths()` の注記を見よ）。
- * 捨てるだけだと、有効な progress 更新 1 件に別作業の progress の追加・削除・移動を
- * 同乗させて 1 PR に 2 作業を混ぜられる。
+ * 数える形は **ホワイトリスト**である。`task/<id>-<slug>/progress.md` に当たる差分のうち、
+ * **status が `M` で、base（merge-base）に存在し、blob（中身）が変わったもの**だけを
+ * 「進捗を更新した」と数える。**それ以外はすべて拒否する**
+ * （`classifyProgressChanges()` の注記を見よ）。
+ *
+ * ここを「数えない status を列挙して塞ぐ」形にしてはならない。列挙は必ず漏れる。
+ * 実際、この検査は列挙を足す形で 7 回直され、そのたびに別の面が開いた——
+ * 削除（`D`）→ 新規追加（`A`）→ 数えない対象を黙って捨てての同乗 → 別作業の progress →
+ * **Branch** 行の書き換え → モードだけの変更（blob 同一の `M`）→ 種別の変更（`T`。
+ * 追跡下の progress.md を symlink へ置き換えると、中身が消えて別作業へのポインタに
+ * なるのに `D` ではなく `T` が出る）。ホワイトリストなら、`T` も、将来 git が増やす
+ * 未知の status も、最初から数えられる側に入らない。
  *
  * 「その場の更新」は差分の status だけでは決まらない。`git update-index --chmod=+x` の
  * ようなモードだけの変更は、blob（中身）が base と同一のまま status `M` になる。
@@ -17,6 +24,10 @@
  * この検査を通せる。そこで base と HEAD の **blob OID が異なること**まで要求する
  * （`unchangedProgressPaths()` の注記を見よ）。**中身は読まない。** 進捗の書き方
  * （チェックの進み方）の検証は spec の「範囲外」である。
+ *
+ * 数えないものは **黙って捨てず、拒否する**（`strayProgressPaths()` の注記を見よ）。
+ * 捨てるだけだと、有効な progress 更新 1 件に別作業の progress の追加・削除・移動を
+ * 同乗させて 1 PR に 2 作業を混ぜられる。
  *
  * 数が合っているだけでも足りない。更新された progress が **その PR の作業のもの**
  * であることまで見る（`checkAttribution()` の注記を見よ）。`tools/archive.mjs` の
@@ -124,21 +135,6 @@ export function pathsFromChanges(changes) {
 }
 
 /**
- * 候補側（head）に実在し続けるパスだけを返す純関数。
- * **progress の更新を数えるのに使う。**
- *
- * - `D`（削除）は head に残らないので数えない
- * - `R` / `C` は移動先だけを数える。移動元（`task/<id>-<slug>/` から
- *   `task/archive/` へ出ていくアーカイブ移動など）は head に残らない
- *
- * @param {Array<{status: string, path: string, oldPath?: string}>} changes
- * @returns {string[]}
- */
-export function headPaths(changes) {
-  return changes.filter((c) => c.status !== 'D').map((c) => c.path);
-}
-
-/**
  * そのパスが実装の変更かを判定する純関数。
  *
  * @param {string} filePath - git のパス（スラッシュ区切り）
@@ -193,21 +189,97 @@ const NOTHING_IN_BASE = () => false;
 const SAME_CONTENT = () => false;
 
 /**
+ * 「進捗を更新した」と数える唯一の status。**ホワイトリストである。**
+ *
+ * `M`（既存ファイルの内容変更）だけを数え、他は一切数えない。`A`（新規追加）・
+ * `D`（削除）・`T`（種別の変更。symlink 化など）・`R`/`C`（移動・複製）はもちろん、
+ * 将来 git が増やす未知の status もここに入らない。
+ *
+ * 「数えない status を列挙して弾く」形にしないこと。列挙は必ず漏れ、漏れた status が
+ * そのままゲートの抜け道になる（このファイル冒頭の 7 回の履歴を見よ）。
+ */
+const COUNTED_STATUS = 'M';
+
+/**
+ * 進行中の作業の progress.md に当たる差分を、**過不足なく 3 つに仕分ける**純関数。
+ *
+ * この関数がこのモジュールの中心である。`task/<id>-<slug>/progress.md` に当たる変更は、
+ * 必ず次のいずれか **1 つだけ**に入る。隙間（黙って捨てられるもの）も重複も無い。
+ *
+ * | 仕分け先 | 条件 | 意味 |
+ * |---|---|---|
+ * | `works` | status が `M` かつ base にあり、blob が変わった | 数える唯一の形 |
+ * | `unchanged` | status が `M` かつ base にあるが、blob が同一 | モードだけの変更 |
+ * | `rejected` | 上のどちらでもない | 拒否する（`stray`） |
+ *
+ * **`rejected` は「それ以外すべて」である。** 個別の status を列挙して弾いてはならない。
+ * `A`・`D`・`T`・`R`・`C` も、git が将来増やす未知の status も、`M` でない時点で
+ * ここに落ちる。base に無いパスの `M`（`baseHas` の未注入を含む）も同じ。
+ *
+ * リネーム・複製の**移動元**が作業の progress なら、それも `rejected` に入れる
+ * （`task/archive/` へのアーカイブ移動を含む。アーカイブは main へ直接コミットする
+ * 手順なので、実装 PR に混ざるのは逸脱である）。
+ *
+ * 数えないものを黙って捨てると裏面ができる。有効な progress 更新 1 件に、別作業の
+ * progress の追加・削除・種別変更・移動を同乗させれば `works` は 1 件のままで、
+ * 1 PR に 2 作業を混ぜられてしまう（spec の「失敗時」に反する）。だから捨てずに集め、
+ * 呼び出し側が **1 件でもあれば落とす**。
+ *
+ * docs だけの PR（`src/`・`tests/`・`tools/` に変更が無い）は対象外なので、
+ * 呼び出し側（`evaluateCoupling()`）は docs-only の判定を先に行う。計画用ブランチの
+ * docs PR（新しい spec + progress を足す PR）をここで落とさないためである。
+ *
+ * @param {Array<{status: string, path: string, oldPath?: string}>} changes
+ * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか。
+ *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「無い」（fail-closed）。
+ * @param {(path: string) => boolean} [contentChanged] - base と HEAD で blob が違うか。
+ *   **CLI 経路（`resolveCoupling()`）は必ず渡すこと。** 既定は「同じ」（fail-closed）。
+ * @returns {{works: string[], unchanged: string[], rejected: string[]}} いずれも名前順
+ */
+export function classifyProgressChanges(
+  changes,
+  baseHas = NOTHING_IN_BASE,
+  contentChanged = SAME_CONTENT,
+) {
+  const works = new Set();
+  const unchanged = new Set();
+  const rejected = new Set();
+  for (const change of changes) {
+    // 作業ディレクトリから出ていく移動元（archive への移動を含む）
+    if (change.oldPath && isActiveProgressPath(change.oldPath)) rejected.add(change.oldPath);
+    if (!isActiveProgressPath(change.path)) continue;
+    // --- ここから下は「進行中の作業の progress.md に当たる変更」の完全な仕分け ---
+    if (change.status !== COUNTED_STATUS || !baseHas(change.path)) {
+      // ホワイトリストに入らないものはすべてここ（A / D / T / R / C / 未知 / base に無い）
+      rejected.add(change.path);
+    } else if (contentChanged(change.path)) {
+      works.add(change.path.slice(TASK_DIR.length).split('/')[0]);
+    } else {
+      unchanged.add(change.path);
+    }
+  }
+  return {
+    works: [...works].sort(),
+    unchanged: [...unchanged].sort(),
+    rejected: [...rejected].sort(),
+  };
+}
+
+/**
  * 差分に含まれる、進行中の作業の一覧（作業ディレクトリ名）を返す純関数。
  *
  * 数えるのは **base リビジョンに既に存在する** `task/<id>-<slug>/progress.md` の、
- * **中身が実際に変わった**その場での更新だけ。CLAUDE.md「コミットとマージ」は
- * spec + progress の新規作成を計画用の docs PR で先に main へ入れると定めているので、
- * 実装 PR の時点でその作業の progress.md は base に存在する。
+ * status が `M` で **中身が実際に変わった**その場での更新だけ（`COUNTED_STATUS`）。
+ * CLAUDE.md「コミットとマージ」は spec + progress の新規作成を計画用の docs PR で
+ * 先に main へ入れると定めているので、実装 PR の時点でその作業の progress.md は
+ * base に存在する。
  *
  * base に無いものを数えると、実装 PR に `task/9999-disposable/progress.md` を
  * 1 つ足すだけでこの検査を通せる（progress.md は保護パスからも除外されているので
- * 他のガードも止めない）。新規追加（`A`）も、作業外から作業内へのリネーム先も、
- * base に無いので数えない。削除（`D`）と移動元は `headPaths()` が落とす。
+ * 他のガードも止めない）。
  *
- * 中身が変わったことまで要求するのは、モードだけの変更（`git update-index --chmod=+x`）が
- * blob 同一のまま status `M` になるため（`unchangedProgressPaths()` の注記を見よ）。
- * 数えなかったものは黙って捨てず、`unchangedProgressPaths()` が拒否する。
+ * 仕分けは `classifyProgressChanges()` が行う。**数えなかったものは黙って捨てず、
+ * `unchangedProgressPaths()` か `strayProgressPaths()` が拒否対象として拾う。**
  *
  * @param {Array<{status: string, path: string, oldPath?: string}>} changes
  * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか。
@@ -217,14 +289,7 @@ const SAME_CONTENT = () => false;
  * @returns {string[]} 名前順
  */
 export function progressWorks(changes, baseHas = NOTHING_IN_BASE, contentChanged = SAME_CONTENT) {
-  const works = new Set();
-  for (const p of headPaths(changes)) {
-    if (!isActiveProgressPath(p)) continue;
-    if (!baseHas(p)) continue;
-    if (!contentChanged(p)) continue;
-    works.add(p.slice(TASK_DIR.length).split('/')[0]);
-  }
-  return [...works].sort();
+  return classifyProgressChanges(changes, baseHas, contentChanged).works;
 }
 
 /**
@@ -252,55 +317,28 @@ export function unchangedProgressPaths(
   baseHas = NOTHING_IN_BASE,
   contentChanged = SAME_CONTENT,
 ) {
-  const unchanged = new Set();
-  for (const p of headPaths(changes)) {
-    if (!isActiveProgressPath(p)) continue;
-    if (!baseHas(p)) continue;
-    if (contentChanged(p)) continue;
-    unchanged.add(p);
-  }
-  return [...unchanged].sort();
+  return classifyProgressChanges(changes, baseHas, contentChanged).unchanged;
 }
 
 /**
- * 進行中の作業の progress.md に当たる差分のうち、**その場の更新でないもの**を返す純関数。
+ * 進行中の作業の progress.md に当たる差分のうち、**数える形でないもの**を返す純関数。
  *
- * `progressWorks()` が数えないものを黙って捨てると裏面ができる。有効な progress 更新
- * 1 件に、別作業の progress の新規追加・削除・移動を同乗させれば works は 1 件のままで、
- * 1 PR に 2 作業を混ぜられてしまう（spec の「失敗時」に反する）。数えないものは
- * 捨てるのではなく、**1 件でもあれば落とす**。
+ * ホワイトリスト（`COUNTED_STATUS` の `M` かつ base にある）に入らなかったものが
+ * すべてここに来る。新規追加（`A`）・削除（`D`）・種別の変更（`T`。symlink への
+ * 置き換え）・移動（`R`/`C`）の両側・未知の status・base に無いパスがすべて含まれる。
+ * **列挙で弾いているのではなく、数える形の補集合である。**
  *
- * 拒否するのは次のすべて。
- *
- * - 新規追加（`A`）— base に無い作業の progress を足す経路
- * - 削除（`D`）— 進行中の作業の progress を消す経路
- * - リネーム先が base に無い（使い捨ての作業名へ逃がす経路）
- * - リネーム元が作業ディレクトリの progress（`task/archive/` へのアーカイブ移動を含む。
- *   アーカイブは main へ直接コミットする手順なので、実装 PR に混ざるのは逸脱である）
- * - base に無いパスのその場の更新（`baseHas` が未注入のときもここに倒れる）
- *
- * docs だけの PR（`src/`・`tests/`・`tools/` に変更が無い）は対象外なので、
- * 呼び出し側（`evaluateCoupling()`）は docs-only の判定を先に行う。計画用ブランチの
- * docs PR（新しい spec + progress を足す PR）をここで落とさないためである。
+ * モードだけの変更（blob 同一の `M`）だけは `unchangedProgressPaths()` が別に拾う。
+ * 「何をすればよいか」の案内が変わるので理由コードを分けてあるだけで、どちらも
+ * 失敗させる点は同じ。
  *
  * @param {Array<{status: string, path: string, oldPath?: string}>} changes
  * @param {(path: string) => boolean} [baseHas] - base にそのパスがあるか
  * @returns {string[]} 名前順
  */
 export function strayProgressPaths(changes, baseHas = NOTHING_IN_BASE) {
-  const strays = new Set();
-  for (const change of changes) {
-    // 作業ディレクトリから出ていく移動元（archive への移動を含む）
-    if (change.oldPath && isActiveProgressPath(change.oldPath)) strays.add(change.oldPath);
-    if (!isActiveProgressPath(change.path)) continue;
-    if (change.status === 'D') {
-      strays.add(change.path);
-      continue;
-    }
-    // その場の更新以外（新規追加、base に無い作業名へのリネーム先）
-    if (change.status === 'A' || !baseHas(change.path)) strays.add(change.path);
-  }
-  return [...strays].sort();
+  // 拒否対象は blob が変わったかに依らない（`M` かどうかと base の有無だけで決まる）
+  return classifyProgressChanges(changes, baseHas, SAME_CONTENT).rejected;
 }
 
 /**
@@ -386,9 +424,13 @@ export function evaluateCoupling({
   headBranch = null,
   branchOf = NO_BRANCH,
 }) {
-  const works = progressWorks(changes, baseHas, contentChanged);
-  const strays = strayProgressPaths(changes, baseHas);
-  const unchanged = unchangedProgressPaths(changes, baseHas, contentChanged);
+  // 1 回の仕分けで works / unchanged / rejected をまとめて得る。3 回に分けて呼ぶと
+  // 「どれにも入らない隙間」が生まれる余地ができる（`classifyProgressChanges()`）。
+  const { works, unchanged, rejected: strays } = classifyProgressChanges(
+    changes,
+    baseHas,
+    contentChanged,
+  );
   const paths = pathsFromChanges(changes);
 
   const at = (reason, ok, branch = null) => ({
@@ -696,13 +738,21 @@ function main() {
     console.error('実装（src/・tests/・tools/）を変更していますが、進行中の作業の');
     console.error('progress.md（task/<id>-<slug>/progress.md）の更新が含まれていません。');
     console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');
+    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
+    if (result.strays.length > 0) {
+      console.error('次の変更は、その形でないため数えていません:');
+      for (const stray of result.strays) console.error(`  - ${stray}`);
+      console.error('（新規追加・削除・種別の変更（symlink への置き換えなど）・移動）');
+    }
     console.error('この PR で新しく作った progress.md は数えません。spec + progress は');
     console.error('先に計画用ブランチの docs PR で main へ入れてください。');
   } else if (result.reason === 'stray') {
     console.error('進行中の作業の progress.md に、その場の更新でない変更が含まれています:');
     for (const stray of result.strays) console.error(`  - ${stray}`);
-    console.error('新規追加・削除・作業ディレクトリをまたぐ移動（アーカイブを含む）は、');
-    console.error('実装 PR に混ぜないでください。1 PR = 1 作業です。');
+    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
+    console.error('新規追加・削除・種別の変更（symlink への置き換えなど）・作業ディレクトリを');
+    console.error('またぐ移動（アーカイブを含む）は、実装 PR に混ぜないでください。');
+    console.error('1 PR = 1 作業です。');
     console.error('spec + progress の新規作成は計画用ブランチの docs PR へ、');
     console.error('アーカイブは main への直接コミットへ分けてください。');
   } else if (result.reason === 'foreign') {

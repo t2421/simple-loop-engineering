@@ -25,6 +25,37 @@ import { findViolations } from '../tools/check-protected-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+const CLI = path.join(rootDir, 'tools/check-progress-coupling.mjs');
+
+/** 実行環境にたまたま入っていると判定が変わる、CI 由来の環境変数 */
+const CI_ENV_KEYS = ['GITHUB_HEAD_REF', 'GITHUB_ACTIONS'];
+
+/**
+ * CLI に渡す環境を組み立てる唯一の場所。
+ *
+ * `CI_ENV_KEYS` は**既定で落とす**。GitHub Actions の `push` イベントでは
+ * `GITHUB_ACTIONS=true` が入る一方 `GITHUB_HEAD_REF` は空なので、落とさずに
+ * 起動するとチェッカーの fail-closed に先に当たり、テストが意図した経路
+ * （usage エラーや diff 失敗）へ到達しない。必要なテストだけが `extra` で
+ * 明示的に足す。
+ */
+const cliEnv = (extra = {}) => {
+  const env = { ...process.env, PR_LABELS: '[]', ...extra };
+  for (const key of CI_ENV_KEYS) {
+    if (!(key in extra)) delete env[key];
+  }
+  return env;
+};
+
+/**
+ * CLI を起動する唯一の経路。環境の組み立ては必ず `cliEnv` を通る。
+ *
+ * 生の `spawnSync` で CLI を起動しないこと。作法（CI 由来の環境変数を落とす）を
+ * 各テストの規律に任せると漏れる。
+ */
+const spawnCli = (args = [], { cwd, env: extra = {} } = {}) =>
+  spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', env: cliEnv(extra) });
+
 /** その場で内容が変わった差分（M）に揃えるテスト用ヘルパ */
 const modified = (...paths) => paths.map((p) => ({ status: 'M', path: p }));
 
@@ -800,18 +831,12 @@ test('base ref が無いときは usage エラー', () => {
 });
 
 test('CLI に base ref が無いと終了コード非 0 で使い方を出す', () => {
-  const result = spawnSync(
-    process.execPath,
-    [path.join(rootDir, 'tools/check-progress-coupling.mjs')],
-    { encoding: 'utf8' },
-  );
+  const result = spawnCli([]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /使い方:/);
 });
 
 // --- CLI の配線（実際の git リポジトリで確かめる） ---
-
-const CLI = path.join(rootDir, 'tools/check-progress-coupling.mjs');
 
 /** 一時 git リポジトリで git を叩く */
 const git = (cwd, ...args) => {
@@ -849,19 +874,12 @@ function makeRepo(t, { baseProgress = progressText('0026-a', 'work') } = {}) {
 }
 
 /**
- * CLI を走らせる。
+ * 一時 git リポジトリで、base ref に `main` を渡して CLI を走らせる。
  *
- * CI 由来の環境変数（`GITHUB_HEAD_REF`・`GITHUB_ACTIONS`）は**既定で落とす**。
- * 実行環境にたまたま入っていると判定が変わってしまうため、必要なテストだけが
- * `extra` で明示的に足す。
+ * 環境の組み立ては `spawnCli` 経由で `cliEnv` に集約されている。CI 由来の
+ * 環境変数は既定で落ち、必要なテストだけが `extra` で明示的に足す。
  */
-const runCli = (cwd, extra = {}) => {
-  const env = { ...process.env, PR_LABELS: '[]', ...extra };
-  for (const key of ['GITHUB_HEAD_REF', 'GITHUB_ACTIONS']) {
-    if (!(key in extra)) delete env[key];
-  }
-  return spawnSync(process.execPath, [CLI, 'main'], { cwd, encoding: 'utf8', env });
-};
+const runCli = (cwd, extra = {}) => spawnCli(['main'], { cwd, env: extra });
 
 test('CLI: base にある progress を更新した実装 PR は通過する', (t) => {
   const cwd = makeRepo(t);
@@ -1069,11 +1087,7 @@ test('CLI は base との差分が取れないと終了コード非 0 で終わ�
   // 環境によっては解決の待ちが入って遅い。ローカルで即座に失敗する形にする。
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'coupling-cli-'));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
-  const result = spawnSync(
-    process.execPath,
-    [path.join(rootDir, 'tools/check-progress-coupling.mjs'), 'origin/main'],
-    { encoding: 'utf8', cwd },
-  );
+  const result = spawnCli(['origin/main'], { cwd });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /差分を取得できませんでした/);
 });

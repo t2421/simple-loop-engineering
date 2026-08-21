@@ -96,9 +96,16 @@ jobs:
           # （0028 と同型の「緑が検証の証拠になっていない」パターン）。
           # ここで実際に /calc.html を取得し、src/calc.html と一致することまで確かめる。
           # Pages の伝播待ちがあるのでリトライは必須。
-          if ! curl -fsS --retry 5 --retry-all-errors --retry-delay 2 \
-              -o downloaded-calc.html "$URL/calc.html"; then
+          #
+          # `-L` でリダイレクトを追う。Pages は既定で /calc.html を /calc へ 308 で
+          # 導く（0032 で実測）。`-f` は 3xx をエラーにしないため、`-L` が無いと
+          # exit 0 のまま空ファイルを書き、後段の diff が必ず落ちる。
+          # 追った先が 200 でないことを見逃さないよう、HTTP コードも明示的に検査する。
+          HTTP_CODE="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+              -o downloaded-calc.html -w '%{http_code}' "$URL/calc.html" || true)"
+          if [ "$HTTP_CODE" != "200" ]; then
             echo "デプロイ先 $URL/calc.html の取得に失敗しました（リトライ後も失敗）。"
+            echo "リダイレクト追従後の HTTP コード: ${HTTP_CODE:-取得できず}"
             echo "配信物が存在しない、応答が無い、または HTTP エラーの可能性があります。"
             exit 1
           fi
@@ -109,7 +116,7 @@ jobs:
             exit 1
           fi
 
-          echo "検証 OK: $URL/calc.html は 200 を返し、src/calc.html と同一内容です。"
+          echo "検証 OK: $URL/calc.html はリダイレクト追従後に 200 を返し、src/calc.html と同一内容です。"
 
       - name: Comment the preview URL
         env:

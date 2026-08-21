@@ -60,7 +60,7 @@ Secrets（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）は人間が GitHub
 | 操作または入力 | 期待結果 |
 |---|---|
 | Secrets 登録済みで PR を開く | preview ジョブが成功し、PR に URL のコメントが 1 件付く |
-| そのコメントの URL + `/calc.html` を `curl -sSI` | HTTP 200 が返る |
+| そのコメントの URL + `/calc.html` を `curl -sSI`（リダイレクトを追わない） | Pages の既定で `HTTP/2 308` と `location: /calc` が返る。`curl -fsSL` で追うと 200 が返り、本文が `src/calc.html` と同一である（0032 で実挙動に合わせた） |
 | その URL の `/calc.html` の本文を取得し、リポジトリの `src/calc.html` と比較 | 同一の内容が返る |
 | 同じ PR にもう一度 push する | コメントは増えず、既存の 1 件が新しい URL に更新される |
 | `gh pr view <n> --comments` を実行 | URL を機械的に取り出せる |

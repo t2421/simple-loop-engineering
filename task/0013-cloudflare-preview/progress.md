@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0013-cloudflare-preview/spec.md`
 - **Branch:** `feature/cloudflare-preview`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/44
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
@@ -33,3 +33,6 @@
 - `20:44` - **規約への追随と injection 対策。** `${{ }}` は `run:` へ直接展開せず `env:` 経由にした（`ci.yml` と同じ作法）。Secrets は**有無だけ**を式で真偽にして渡し、値はログにも比較にも出さない。信頼できない自由入力（PR タイトル・本文・`head_ref` などのブランチ名）は一切参照していない。`--branch` にはブランチ名ではなく `pr-<番号>` を使い、ブランチ名が wrangler の引数へ流れる経路自体を作っていない。機械的に検査して「違反ステップ: なし」「参照なし（安全）」を確認した。
 - `20:46` - sticky コメントは第三者アクションを使わず `gh api` で実装。本文先頭の目印 `<!-- cloudflare-preview -->` で自分のコメントを引き当て、あれば PATCH、無ければ POST する。push のたびに増えない。URL は wrangler の出力から `https://…pages.dev` を拾い、**取り出せなければ失敗させる**（URL が分からなければ発行した意味がないため）。`concurrency` で同一 PR の連続 push の競合も止めた。
 - `20:48` - `npm run ci` は 360 tests / 360 pass / 0 fail。`protected-paths` はラベル無しで「保護パスの変更はありません」。**新規ワークフローの追加は append-only として許される**という昇格時の読みどおりで、この作業に `allow-protected-change` は要らない。
+- `12:40` - 独立検証（別エージェント）で **指摘ゼロ**。11 項目を実測で確認した: YAML 妥当性、`${{ }}` の `run:` 直接展開が 0 件、Secrets がログに出ないこと、fork 除外の比較対象、Secrets 未登録時に黙って緑にならないこと、preview が非必須であること、sticky コメントの jq が `body: null` でも壊れないこと、`--project-name` の妥当性、`wrangler@4 pages deploy` のフラグが実在すること、権限が最小十分であること、保護パス違反ゼロ。
+- `12:42` - **正直な未達 1 件（検証エージェントの報告）**: fork PR の除外経路は、実 CI での発火証跡が無い。PR #44 は同一リポジトリ発なのでその分岐を通らない。コード検査とローカルのシェル再現でのみ確認しており、**実際の fork PR で確かめたわけではない**。
+- `12:44` - **完了条件 5 は未達のまま。** Cloudflare の Secrets が未登録のため、実 URL の発行と `/calc.html` の 200・内容一致を確認できていない。PR #44 の preview ジョブが「未登録のため発行できない」と赤で落ちた実ログが、設計どおり動いていることの証拠にはなるが、URL の実測ではない。**登録後に空コミットを push して実測する必要がある。**

@@ -1,9 +1,9 @@
 # Progress: `0025-model-routing`
 
-- **Target Spec:** `task/0025-model-routing/spec.md`
+- **Target Spec:** `task/archive/0025-model-routing/spec.md`
 - **Branch:** `feature/model-routing`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/36
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`task/TEMPLATE-progress.md`、`tools/start-task.mjs`、`tools/lint-docs.mjs`、`.claude/agents/spec-author.md`、CLAUDE.md)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得（Critical 0 / High 0。Medium 2 件は同 PR で修正済み）
 - [x] PR作成（`allow-protected-change` ラベルを付ける。進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

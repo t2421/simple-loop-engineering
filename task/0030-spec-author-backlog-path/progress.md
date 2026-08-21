@@ -2,8 +2,8 @@
 
 - **Target Spec:** `task/0030-spec-author-backlog-path/spec.md`
 - **Branch:** `feature/spec-author-backlog-path`
-- **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/46
+- **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`.claude/agents/spec-author.md`「完了条件の書き方」節に、種別 `backlog` では適用しないことを明記する)
 - [x] 完了条件 5〜8 の確認（`grep` と `git diff` の出力を会話に貼る。既定 `task` の記述が無変更であることを含む）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更は無いのでスクリーンキャプチャは不要）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更は無いのでスクリーンキャプチャは不要）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -30,3 +30,4 @@
 - `08:22` - **Verify (外部) 1 回目: `codex-reviewer` が承認。Critical 0 件・High 0 件。** `codex review --uncommitted`（gpt-5.6-sol）は構造化された指摘を 1 件も出していない。レビュー側で完了条件 5・6・8・10 を独立に再実行し、いずれも期待どおりだった。なお codex のサンドボックスは read-only のため `mkdtempSync` を使うテストが 90 件落ちるが、サンドボックス外では 360 件全通過（環境要因）。
 - `08:22` - **Medium 1 件を記録する（実装は変えない）。** 「テンプレートの 1〜4 も書かない」は、`CLAUDE.md`「仕様」節の backlog 規則の言い回し（未確定行を「節の先頭に**足す**」）と、既存 backlog 4 件（`0015`・`0026`・`0027`・`0029`）の実物（未確定行のあとにテンプレ 1〜4 とプレースホルダ 5 が残っている）と食い違う。今後起草される backlog だけ形が変わり 2 形式が混在する。ただしこの挙動は対象 spec の「例」2 行目が明示的に期待値としており、着手後の spec 変更は人間の承認が要る。`tools/lint-docs.mjs` の判定は「未確定行で始まるか」だけなので両形式とも通る。どちらを正とするかは PR 本文に書いて人間の判断に委ね、後続の docs 作業で扱う。
 - `08:22` - Low 2 件は対応しない。(1) `CLAUDE.md:109` の後半（失敗モードの説明）は冗長だが、まさにこの不備を防ぐための動機付けなので残す。(2) codex サンドボックス下のテスト失敗はノイズであり欠陥ではない。
+- `08:25` - PR #46 を作成した。Medium 1 件（backlog の 2 形式混在。どちらを正とするか）は本文の末尾に判断依頼として書いた。Status は Done にしない。マージされてからアーカイブする。

@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0033-actions-result-gate/spec.md`
 - **Branch:** `feat/0033-actions-result-gate`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/49
 - **Status:** In Progress (Phase: Verify (外部))
 - **Complexity:** M
 
@@ -18,7 +18,7 @@
 - [x] 実環境での再現確認（赤 run でブロック・緑で通過・fail-open の stderr。出力を会話に貼る）
 - [x] 停止ループ対策の確認（`stop_hook_active` が真ならブロックしないこと、前段と後段の両方が stdin を読めること）
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -43,3 +43,5 @@
 - 11:20 - **H1' 修正。判定を件数からチェック名の集合に変えた。** `checkNameSet()` で名前をソートして 1 本の文字列にし、その集合が**静穏期間（既定 30 秒・`CHECK_ACTIONS_QUIET_SEC`）変わらないこと**を緑の条件にする。集合が変われば計測をやり直す。上限（`CHECK_ACTIONS_TIMEOUT_SEC`）を過ぎたらそれ以上は待たない。レビューが挙げた 3 案のうち 1・2 を採った。3 案目（`check-suites` で期待ワークフローを先に把握する）は仕様の判定表に無い概念を持ち込むので採らない（spec 変更の手続きが要る）。
 - 11:22 - 回帰テストを 4 件足した。件数が同じまま `verify` → `guard` と入れ替わり `guard` が失敗する列（件数比較なら素通りする）で exit 2 になること、静穏期間の途中で新しいチェックが現れたら通さないこと、`quietSec` で静穏期間を変えられること、`checkNameSet` が並び順に依存しないこと。`npm run ci` は 388 pass・0 fail（テストは 24 → 28 件）。
 - 11:24 - **M4（緑のときの停止が静穏期間ぶん遅くなる）は受け入れる。** 緑で終わる通常の停止に約 30 秒が加わり、`npm run ci`（約 50 秒）と合わせて 80 秒ほどになる。`timeout: 900` の範囲内であり、これは「赤いまま終わらせない」ための対価である。短くしたい場合は `CHECK_ACTIONS_QUIET_SEC` を下げられる（取りこぼしの確率は上がる）。
+- 11:35 - PR #49 を作成。CI は 5 チェックすべて pass（`verify`・`e2e`・`preview`・`protected-paths`・`progress-coupling`）。
+- 11:40 - **完了条件 6 の緑側（例 8・M2）を実測。** 全ジョブが緑のコミット `fa8711d` 上で `node tools/check-actions.mjs` が `check-actions: HEAD のチェックはすべて成功しています。` を出して exit 0。実測 34.6 秒で、静穏期間 30 秒ぶんの待機が実際に入っていることも確認できた（M4 の見積もりどおり）。これで完了条件 6 は赤・緑の両方が揃った。

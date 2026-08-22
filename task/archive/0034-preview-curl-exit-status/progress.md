@@ -1,9 +1,9 @@
 # Progress: `0034-preview-curl-exit-status`
 
-- **Target Spec:** `task/0034-preview-curl-exit-status/spec.md`
+- **Target Spec:** `task/archive/0034-preview-curl-exit-status/spec.md`
 - **Branch:** `feat/0034-preview-curl-exit-status`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/55
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** L
 
 ## タスクチェックリスト
@@ -17,7 +17,7 @@
 - [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付け、人間のマージを待つ）
 - [x] preview ジョブの成功と `検証 OK:` の実測確認（完了条件 7）
 - [x] `protected-paths` ジョブがラベル無しで失敗し、ラベル付きで成功することの確認（完了条件 8）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

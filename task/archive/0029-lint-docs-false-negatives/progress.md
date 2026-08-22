@@ -1,9 +1,9 @@
 # Progress: `0029-lint-docs-false-negatives`
 
-- **Target Spec:** `task/0029-lint-docs-false-negatives/spec.md`
+- **Target Spec:** `task/archive/0029-lint-docs-false-negatives/spec.md`
 - **Branch:** `feat/0029-lint-docs-false-negatives`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/54
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -17,7 +17,7 @@
 - [x] 保護パス非接触の確認（`node tools/check-protected-paths.mjs main` が通る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

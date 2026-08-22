@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0029-lint-docs-false-negatives/spec.md`
 - **Branch:** `feat/0029-lint-docs-false-negatives`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/54
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
@@ -16,7 +16,7 @@
 - [x] 既存文書の再検証（リポジトリのルートで `node tools/lint-docs.mjs` が終了コード 0）
 - [x] 保護パス非接触の確認（`node tools/check-protected-paths.mjs main` が通る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -29,3 +29,5 @@
 - `04:52` - **JSDoc に `*/` を含む正規表現を書いてブロックコメントが閉じ、`SyntaxError` になった**（`/^- \*\*PR:\*\*/` の末尾）。テストが即座に検知した。文言から正規表現リテラルを外して解消。
 - `04:55` - 完了条件 6・8・9 を実測。`node tools/lint-docs.mjs` は `docs の形式違反はありません（35 件の作業ディレクトリを確認）` で exit 0。`npm run ci` は fail 0。`node tools/check-protected-paths.mjs main` は `保護パスの変更はありません`。差分は `tools/lint-docs.mjs` の変更と `tests/lint-docs-false-negatives.test.mjs` の新規追加だけで、既存 `tests/lint-docs.test.mjs` は無変更。
 - `05:05` - **Verify (外部) 1 回目: `codex-reviewer` が承認。Critical 0 件・High 0 件・Medium 0 件。** codex の指摘もゼロ。レビュー側が 3 者（lint / start-task / archive）の正規表現に同じ入力を通して整合を独立に確認し、フェンス性質の保存と off-by-one も 8 パターンで検証している。Low 1 件（値が空の `- **PR:**` を lint はキーありと数えるが後段は読めない）は**変更前からある残差**で、spec 仕様 1 が揃えると宣言した範囲（行頭 `- ` のみ）の外。今回の対象外として妥当と判定された。将来 backlog に起こす候補として記録する。
+- `07:10` - PR #54 を作成。CI は 5 チェックすべて pass。ラベルは不要（`tools/lint-docs.mjs` は保護パス一覧の外、テストは新規ファイル）。マージ済み。
+- `07:10` - **PR URL の記入がまた遅れた。** 0032・0027・0034 と同じで、PR 作成直後ではなくマージ後に書いている。`tools/archive.mjs` が PR 欄を見るため、このままではアーカイブできない。次からは PR 作成コマンドの直後に書く。

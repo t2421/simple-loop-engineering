@@ -1,9 +1,9 @@
 # Progress: `0030-spec-author-backlog-path`
 
-- **Target Spec:** `task/0030-spec-author-backlog-path/spec.md`
+- **Target Spec:** `task/archive/0030-spec-author-backlog-path/spec.md`
 - **Branch:** `feature/spec-author-backlog-path`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/46
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -16,7 +16,7 @@
 - [x] 完了条件 5〜8 の確認（`grep` と `git diff` の出力を会話に貼る。既定 `task` の記述が無変更であることを含む）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更は無いのでスクリーンキャプチャは不要）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

@@ -19,6 +19,12 @@
 2. **見出しの一致判定。** `checkSpecHeadings` は `sections.join(' ') !== SPEC_HEADINGS.join(' ')` と、区切りに空白を使った文字列同士の比較で判定する。見出し名自体に空白が入りうるため、`## 種別 対象` という 1 見出しが `## 種別` + `## 対象` の 2 見出しと同じ文字列になり素通りする。
 3. **backlog「完了条件」節の直後のフェンス。** `checkBacklogCompletion` は `linesOutsideFences` の結果から「見出しの次の非空行」を探す。節の直後にコードフェンスがあるとその塊ごと落ちるため、フェンスの**後**にある行を節の先頭と誤認する。実際にはフェンス塊で始まる壊れた節が通る。
 
+2026-08-22 の 2 回目の backlog リファインメントで、3 件とも現存を実測確認し、人間が着手を決めた。
+
+1. `parseMetadata`（`tools/lint-docs.mjs:180`）の正規表現は `/^\s*[-*]\s+\*\*(.+?):\*\*\s*(.*)$/` のまま。実挙動を確認した: `"* **Status:** \`In Progress\`\n  - **PR:** 未作成"` を与えると lint は `[['Status','\`In Progress\`'], ['PR','未作成']]` と**読めてしまう**。一方 `tools/archive.mjs:56` は `/^- \*\*PR:\*\*\s*(.+?)\s*$/m`、同 71 行は `/^- \*\*Branch:\*\*\s*(.+?)\s*$/m`、`tools/start-task.mjs:60` は `` new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`) `` で、いずれも**行頭の `- ` しか読まない**。lint を通った文書で選択・アーカイブが失敗する
+2. `checkSpecHeadings` の `sections.join(' ') !== SPEC_HEADINGS.join(' ')` は `tools/lint-docs.mjs:164` に現存
+3. `checkBacklogCompletion` は `tools/lint-docs.mjs:237` に現存
+
 ## 仕様
 
 変更後、次が成り立つ。3 件とも「例」の表の壊れた文書に対して違反を報告する。正しく書かれた既存の文書（現リポジトリの `task/`・`task/archive/`・`backlog/`）に新しい違反は出ない。
@@ -27,17 +33,12 @@
 2. spec.md の `##` 見出しの一致判定は、join した文字列比較ではなく要素ごとの配列比較で行う。見出しの個数と各名前が `SPEC_HEADINGS` と 1 対 1 で一致しない限り違反になる
 3. backlog の「完了条件」節の判定は、節の直後（見出しと未確定行のあいだ）にコードフェンスがある場合、フェンス塊を節の先頭コンテンツとみなして違反にする。フェンスの後の行を節の先頭と誤認しない
 
-2026-08-22 の backlog リファインメントで、3 件とも現存を確認した
-（`tools/lint-docs.mjs:181` の `/^\s*[-*]\s+/`、`:164` の `sections.join(' ')` 比較、
-`:237` の `checkBacklogCompletion`）。
-
-同時に、**spec に無い実装上の制約**が見つかった。`tests/` は append-only（既存ファイルの
-内容変更・削除を禁じ、新規追加のみ許す）であり、`tests/lint-docs.test.mjs` は既存である。
-つまり **この作業のテストは既存ファイルに足せない**。新しいテストファイルを追加するか、
-`allow-protected-change` ラベルの手続きを踏むかの二択になる。前者を採るなら、範囲外に
-「既存 `tests/lint-docs.test.mjs` の変更」を足すこと。昇格時に決める。
-
-なお `tools/lint-docs.mjs` 自体は保護パス一覧の外なので、実装側にラベルは要らない。
+テストの置き場所は昇格時に次のとおり決めた。`tests/` は append-only（既存ファイルの
+内容変更・削除を禁じ、新規追加のみ許す）であり、`tests/lint-docs.test.mjs` は既存のため
+足せない。**この作業のテストは新規ファイル `tests/lint-docs-false-negatives.test.mjs` に置く。**
+`tests/*.test.mjs` は `tools/run-unit-tests.mjs` が自動列挙するので、置くだけで
+`npm run test:unit` が拾う。`tools/lint-docs.mjs` 自体は保護パス一覧の外であり、
+この方針なら `allow-protected-change` ラベルは不要である。
 
 ## 範囲外
 
@@ -45,6 +46,7 @@
 - 旧レイアウト（`specs/`・`progress/`）と型（`task/TEMPLATE-*.md`）の検証。0023 と同じ
 - `tools/start-task.mjs`・`tools/archive.mjs` の読み取りを**広げる**変更（`*` 印を許すなど）。整合は lint を狭める側で取る
 - 新しい検証項目の追加。既存 3 関数の偽陰性の修正だけ
+- 既存 `tests/lint-docs.test.mjs` の変更（`tests/` は append-only。この作業のテストは新規ファイル `tests/lint-docs-false-negatives.test.mjs` に置く）
 
 ## 失敗時
 
@@ -64,4 +66,14 @@
 
 ## 完了条件
 
-未確定（incomplete）。昇格時に埋める。
+次をすべて満たしたとき、この仕様は完了とする。検証はこれらの条件に対して行い、テスト実行結果などのコマンド出力を根拠にする。
+
+1. 「対象」が仕様どおりに公開または修正されている。
+2. 「例」がすべて、テストまたは再現手順で同じ結果になる。
+3. 「失敗時」に書いた入力・操作で、仕様どおり失敗する。該当がなければこの項は「なし」。
+4. 「範囲外」を実装していない。
+5. 新規テストファイル `tests/lint-docs-false-negatives.test.mjs` が、「例」の壊れた文書 4 行（`*` 印 + 字下げのメタ情報、1 行だけ字下げしたメタ情報、結合された `## 種別 対象` 見出し、「完了条件」直後のフェンス塊）それぞれについて違反が報告されることを検証し、通る。既存 `tests/lint-docs.test.mjs` は変更しない。
+6. リポジトリのルートで `node tools/lint-docs.mjs` が終了コード 0 で終わる。現リポジトリの既存文書（`task/`・`task/archive/`・`backlog/`）に新しい違反が出ない。
+7. progress.md のメタ情報の判定は行頭 `- ` の行だけを有効とみなす。`tools/archive.mjs`（`/^- \*\*PR:\*\*/`・`/^- \*\*Branch:\*\*/`）と `tools/start-task.mjs`（`` ^- \*\*キー:\*\* ``）が読めない行を lint が有効と数えない。この整合は 5 のテスト（`*` 印・字下げの違反検出）で検証する。
+8. `npm run ci` が通る。
+9. 差分が保護パスを含まない。`node tools/check-protected-paths.mjs main` が通る。

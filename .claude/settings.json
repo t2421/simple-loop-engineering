@@ -17,7 +17,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "CI_DIR=\"$(node \"$CLAUDE_PROJECT_DIR/tools/stop-hook-ci-dir.mjs\")\" && cd \"$CI_DIR\" && npm run ci 1>&2"
+            "command": "INPUT=\"$(cat)\" && CI_DIR=\"$(printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/stop-hook-ci-dir.mjs\")\" && cd \"$CI_DIR\" && npm run ci 1>&2 && printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\" --on-bash-post"
           }
         ]
       }

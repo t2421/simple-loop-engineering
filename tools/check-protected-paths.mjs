@@ -487,6 +487,11 @@ function readBaseArchivedIds(mergeBase) {
     try {
       out = execFileSync('git', ['ls-tree', '--name-only', `${mergeBase}:${dir.prefix}archive`], {
         encoding: 'utf8',
+        // base に archive/ が無いのは想定内で、下の catch が空集合として続行する。
+        // 既定では git の stderr が親へ素通しになり `fatal: Not a valid object name`
+        // が CI ログに出る。判定は正しいのに失敗と誤読されるので、ここだけ捨てる。
+        // 他の git 呼び出しの stderr は fail-closed の説明として意図的に残している。
+        stdio: ['ignore', 'pipe', 'ignore'],
       });
     } catch {
       // base に archive/ 自体が無い（＝アーカイブ済みの作業が無い）

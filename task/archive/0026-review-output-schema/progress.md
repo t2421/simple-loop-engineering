@@ -1,9 +1,9 @@
 # Progress: `0026-review-output-schema`
 
-- **Target Spec:** `task/0026-review-output-schema/spec.md`
+- **Target Spec:** `task/archive/0026-review-output-schema/spec.md`
 - **Branch:** `feat/0026-review-output-schema`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/57
-- **Status:** In Progress (Phase: Verify (外部))
+- **Status:** `Done`
 - **Complexity:** M
 
 ## タスクチェックリスト
@@ -16,7 +16,7 @@
 - [x] 完了条件 5〜8 の `grep` 検証（出力を会話に貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

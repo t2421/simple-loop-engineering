@@ -1,9 +1,9 @@
 # Progress: `0033-actions-result-gate`
 
-- **Target Spec:** `task/0033-actions-result-gate/spec.md`
+- **Target Spec:** `task/archive/0033-actions-result-gate/spec.md`
 - **Branch:** `feat/0033-actions-result-gate`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/49
-- **Status:** In Progress (Phase: Record)
+- **Status:** `Done`
 - **Complexity:** M
 
 ## タスクチェックリスト
@@ -19,7 +19,7 @@
 - [x] 停止ループ対策の確認（`stop_hook_active` が真ならブロックしないこと、前段と後段の両方が stdin を読めること）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

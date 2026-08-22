@@ -161,7 +161,11 @@ export function checkSpecHeadings(markdown) {
 
   const sections = headings.filter((h) => h.level === 2).map((h) => h.text);
   const expected = SPEC_HEADINGS.join(' / ');
-  if (sections.join(' ') !== SPEC_HEADINGS.join(' ')) {
+  // 要素ごとに比べる。join した文字列で比べると、見出し名自体に空白が入りうるため
+  // `## 種別 対象` の 1 見出しが `## 種別` + `## 対象` の 2 見出しと同じ文字列になる
+  const sameSections = sections.length === SPEC_HEADINGS.length
+    && sections.every((text, i) => text === SPEC_HEADINGS[i]);
+  if (!sameSections) {
     reasons.push(`見出し不一致: \`##\` は ${expected} の順。実際は ${sections.join(' / ') || '（なし）'}`);
   }
 
@@ -172,13 +176,17 @@ export function checkSpecHeadings(markdown) {
  * `- **キー:** 値` のメタ情報を読む純関数。同じキーが複数あれば最初を採る。
  * コードフェンスの中は読まない（貼ったログの中の同じ形をメタ情報にしない）。
  *
+ * **行頭の `- ` だけを有効とする。** `*` 印や字下げを許すと、lint は通るのに
+ * `tools/start-task.mjs` と `tools/archive.mjs` が読めない文書ができる。
+ * どちらも行頭の `- ` で始まる行しか拾わない。判定の広さを、実際に読む側へ揃える。
+ *
  * @param {string} markdown
  * @returns {Map<string, string>}
  */
 export function parseMetadata(markdown) {
   const metadata = new Map();
   for (const { text } of linesOutsideFences(markdown)) {
-    const entry = /^\s*[-*]\s+\*\*(.+?):\*\*\s*(.*)$/.exec(text);
+    const entry = /^- \*\*(.+?):\*\*\s*(.*)$/.exec(text);
     if (entry && !metadata.has(entry[1])) metadata.set(entry[1], entry[2].trim());
   }
   return metadata;
@@ -235,10 +243,15 @@ export function findBadCheckboxes(markdown) {
  * @returns {string[]} 違反の理由。空なら通過
  */
 export function checkBacklogCompletion(markdown) {
-  const lines = linesOutsideFences(markdown).map((line) => line.text);
-  const start = lines.findIndex((line) => /^##\s+完了条件\s*$/.test(line));
-  if (start === -1) return []; // 見出し自体の欠落は checkSpecHeadings が報告する
-  const first = lines.slice(start + 1).find((line) => line.trim() !== '');
+  const outside = linesOutsideFences(markdown);
+  const heading = outside.find((line) => /^##\s+完了条件\s*$/.test(line.text));
+  if (heading === undefined) return []; // 見出し自体の欠落は checkSpecHeadings が報告する
+
+  // 節の先頭は「元の行」で探す。フェンスの中を落とした列だけを見ると、
+  // 見出しの直後にフェンス塊があるときにその塊ごと消え、**フェンスの後**の行を
+  // 節の先頭と誤認する。フェンスで始まる節は未確定行で始まっていない。
+  const raw = markdown.split('\n');
+  const first = raw.slice(heading.number).find((line) => line.trim() !== '');
   if (first?.trim() === BACKLOG_INCOMPLETE_LINE) return [];
   return [`backlog の「完了条件」は \`${BACKLOG_INCOMPLETE_LINE}\` の 1 行で始める`];
 }

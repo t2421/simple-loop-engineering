@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0035-protect-check-actions/spec.md`
 - **Branch:** `feat/0035-protect-check-actions`
-- **PR:** 未作成
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/51
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** L
 
@@ -13,8 +13,8 @@
 - [x] Specの要件・受け入れ条件の確認（`.claude/skills/add-protected-path` を読んでから着手する）
 - [x] テストの作成 (`tests/gate-helpers.test.mjs` — 違反側 3 ケースと許可側 1 ケース。spec「例」の表に対応させる)
 - [x] 実装 (`tools/check-protected-paths.mjs` の `GATE_HELPERS` に 1 行 + コメント、`CLAUDE.md`「変えてはいけないもの」の一覧に 1 行)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。ラベル無しで `protected-paths` ジョブが失敗することを確認してから `allow-protected-change` ラベルを付け、成功に変わることを確認する — spec 完了条件 7）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [/] PR作成（進捗の **PR** に URL を書く。ラベル無しで `protected-paths` ジョブが失敗することを確認してから `allow-protected-change` ラベルを付け、成功に変わることを確認する — spec 完了条件 7）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -25,3 +25,6 @@
 - 12:38 - 「例」の 4 行を `findViolations` に直接与えて確認。M / D / R はいずれも違反 1 件で理由は `検証の委譲先は変更も移動もできない`、A は違反 0 件（許可）。R は `path=tools/check-actions.mjs -> lib/x.mjs` と移動元・先の両方が出る。出力は会話に貼った。
 - 12:40 - `npm run ci` は 390 pass・0 fail（新規 2 件ぶん増）。
 - 12:42 - **ローカルでガードの両方向を確認。** skill が予告したとおり、この作業は**独立に 2 件**引っかかる（`tools/check-protected-paths.mjs` の判定変更と `tests/gate-helpers.test.mjs` の既存テスト変更）。ラベル無しで exit 1、`PR_LABELS='["allow-protected-change"]'` で exit 0。これは正しい動作である。完了条件 7 は PR の Actions 実行結果で示す。
+- 12:55 - **Verify (外部) 1 回目: `codex-reviewer` が承認。Critical 0 件・High 0 件・Medium 0 件。** codex 自体の指摘もゼロ。レビュー側は `status: 'A'` の許可が抜け穴でないことまで独立に確認している（許可条件が `kind === 'appeared' && from === undefined` なので、`from` を持つ appeared＝別ファイルからのリネームで上書きするケースは違反のまま。ファイルが既に存在する状態では `A` は発生しない）。
+- 13:05 - **完了条件 7 の前半を CI 上で実測。** PR #51 を意図的にラベル無しで出し、`protected-paths` が `PR_LABELS: []` で失敗した。base 版チェッカーが `tests/gate-helpers.test.mjs`（既存のテストの内容が変わっている）と `tools/check-protected-paths.mjs`（ガードの判定ロジック自体は変更も移動もできない）の 2 件を検知している。他の 4 チェック（`verify`・`e2e`・`preview`・`progress-coupling`）は pass。後半（ラベル付きで成功）は人間のラベル付与を待つ。
+- 13:06 - **副次的な観測: 意図的に赤い PR は Stop hook にブロックされる。** 0033 で入れたゲートが `protected-paths: failure` を検知して停止を止めた。ゲートとしては正しい動作で、`stop_hook_active` により 2 度目は通るので詰まりはしない。ただし「赤いのが正しい状態」の作業では 1 回余分に往復が要ることが分かった。運用上の実害は小さいので、この作業では扱わない。

@@ -10,9 +10,14 @@
  * | 状態 | 挙動 |
  * |---|---|
  * | HEAD がリモート追跡ブランチに無い（未 push） | 通す。理由を stderr に 1 行 |
- * | 全チェックが success / skipped / neutral | 通す |
+ * | 全チェックが success / skipped | 通す |
  * | 1 つでも failure / cancelled / timed_out など非成功で完了 | **ブロック**（終了コード 2） |
  * | 未完了が残る | 上限まで待つ（既定 8 分・CHECK_ACTIONS_TIMEOUT_SEC）。超過は「未確定」でブロック |
+ *
+ * 「全部成功」に見えても即座には通さない。ワークフローは別々に起動するので、
+ * 先に登録された check-run だけが成功で返り、`guard` や `preview` の check-run が
+ * まだ作られていない瞬間がある。その一瞬を緑と読むとゲートの意味が無い。
+ * **同じ件数の成功を 2 回続けて観測するまで待つ**（落ち着くまで見る）。
  * | チェック 0 件 | 短いリトライ後も 0 件なら通す。理由を stderr に 1 行 |
  * | gh 不在・未認証・API エラー | fail-open で通す。**理由を stderr に必ず 1 行** |
  *
@@ -54,7 +59,7 @@ export const POLL_INTERVAL_SEC = 15;
 export const EMPTY_RETRIES = 2;
 
 /** 成功と見なす結論。これ以外で完了したものは失敗として扱う */
-export const PASSING_CONCLUSIONS = ['success', 'skipped', 'neutral'];
+export const PASSING_CONCLUSIONS = ['success', 'skipped'];
 
 /**
  * チェックの一覧を 4 通りに分類する純関数。
@@ -123,6 +128,9 @@ function readHookField(raw, pick) {
   }
 }
 
+const PASS_LINE = 'check-actions: HEAD のチェックはすべて成功しています。';
+const EMPTY_LINE = 'check-actions: HEAD に対するチェックが 0 件です。対象のワークフローが無いものとして通します。';
+
 /** 失敗したチェックの説明行を組み立てる */
 function describeFailures(failed) {
   const lines = [`check-actions: 失敗しているチェックが ${failed.length} 件あります。`];
@@ -154,21 +162,37 @@ export async function decide({
   timeoutSec = DEFAULT_TIMEOUT_SEC,
   pollIntervalSec = POLL_INTERVAL_SEC,
   stopHookActive = false,
+  isPushed = () => true,
 }) {
+  if (!isPushed()) {
+    return { exit: 0, lines: ['check-actions: HEAD がリモートに無いため（未 push）、判定しません。'] };
+  }
+
   const deadline = now() + timeoutSec * 1000;
 
-  /** ブロックしたい状況。停止ループ中なら通すが、状態は必ず述べる */
-  const halt = (lines) => (stopHookActive
-    ? {
-      exit: 0,
-      lines: [
-        ...lines,
-        'check-actions: stop_hook_active のため、これ以上は停止をブロックしません（停止ループを作らない）。',
-      ],
-    }
-    : { exit: 2, lines: [...lines, 'check-actions: 結果を確認するまで完了と報告しないでください。'] });
+  /** ブロックする。待つのは呼び出し側の判断で、ここは結論だけ返す */
+  const halt = (lines) => ({
+    exit: 2,
+    lines: [...lines, 'check-actions: 結果を確認するまで完了と報告しないでください。'],
+  });
+
+  /** 停止ループ中。ブロックせずに通すが、状態は必ず述べる */
+  const noteOnly = (lines) => ({
+    exit: 0,
+    lines: [
+      ...lines,
+      'check-actions: stop_hook_active のため、これ以上は停止をブロックしません（停止ループを作らない）。',
+    ],
+  });
+
+  const describePending = (pending) => [
+    `check-actions: 未確定のチェックが残っています（${pending.map((c) => c.name).join(', ')}）。`,
+  ];
 
   let emptyTries = 0;
+  /** 直前に「全部成功」と見えたときの件数。同じ件数を 2 回続けて見るまで通さない */
+  let settledCount = -1;
+
   for (;;) {
     let checks;
     try {
@@ -182,18 +206,33 @@ export async function decide({
 
     const result = classify(checks);
 
-    if (result.verdict === 'pass') {
-      return { exit: 0, lines: ['check-actions: HEAD のチェックはすべて成功しています。'] };
+    // 2 度目以降の停止。待たずに、いまの状態を述べて通す。
+    // ここで待つと「未確定のまま 8 分固まる」を停止のたびに繰り返してしまう。
+    if (stopHookActive) {
+      if (result.verdict === 'block') return noteOnly(describeFailures(result.failed));
+      if (result.verdict === 'pending') return noteOnly(describePending(result.pending));
+      if (result.verdict === 'empty') return { exit: 0, lines: [EMPTY_LINE] };
+      return { exit: 0, lines: [PASS_LINE] };
     }
+
     if (result.verdict === 'block') {
       return halt(describeFailures(result.failed));
     }
+
+    if (result.verdict === 'pass') {
+      // 別のワークフローの check-run が遅れて現れることがある。同じ件数の成功を
+      // 2 回続けて観測するまでは通さない（上限を過ぎたらそれ以上は待たない）。
+      if (settledCount === checks.length || now() >= deadline) {
+        return { exit: 0, lines: [PASS_LINE] };
+      }
+      settledCount = checks.length;
+      await sleep(pollIntervalSec * 1000);
+      continue;
+    }
+
     if (result.verdict === 'empty') {
       if (emptyTries >= EMPTY_RETRIES) {
-        return {
-          exit: 0,
-          lines: ['check-actions: HEAD に対するチェックが 0 件です。対象のワークフローが無いものとして通します。'],
-        };
+        return { exit: 0, lines: [EMPTY_LINE] };
       }
       emptyTries += 1;
       await sleep(pollIntervalSec * 1000);
@@ -253,6 +292,8 @@ function timeoutSecFromEnv() {
 }
 
 function readStdin() {
+  // 対話端末から手で叩いたとき、EOF を待って固まらないようにする
+  if (process.stdin.isTTY) return undefined;
   try {
     return fs.readFileSync(0, 'utf8');
   } catch {
@@ -275,12 +316,8 @@ async function main() {
     process.exit(2);
   }
 
-  if (!isPushed()) {
-    console.error('check-actions: HEAD がリモートに無いため（未 push）、判定しません。');
-    process.exit(0);
-  }
-
   const result = await decide({
+    isPushed,
     fetchChecks: fetchChecksFromGh,
     now: () => Date.now(),
     sleep: sleepReal,

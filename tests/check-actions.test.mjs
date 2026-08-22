@@ -35,11 +35,14 @@ function fetcher(sequence) {
 /** 呼ばれた回数ぶん時計を進める now と、実時間を待たない sleep */
 function clock({ startMs = 0, stepMs = 0 } = {}) {
   let t = startMs;
+  const calls = { sleeps: 0 };
   return {
     now: () => t,
     sleep: async (ms) => {
+      calls.sleeps += 1;
       t += stepMs === 0 ? ms : stepMs;
     },
+    calls,
   };
 }
 
@@ -61,8 +64,10 @@ test('classify: cancelled / timed_out も block', () => {
   assert.equal(classify([ng('a', 'timed_out')]).verdict, 'block');
 });
 
-test('classify: 成功と見なせない結論（action_required など）も block。黙って緑にしない', () => {
+test('classify: 成功と見なせない結論（action_required・neutral など）も block。黙って緑にしない', () => {
   assert.equal(classify([ng('a', 'action_required')]).verdict, 'block');
+  // 仕様の判定表が通すのは success / skipped だけ。通す集合を実装だけで広げない
+  assert.equal(classify([ng('a', 'neutral')]).verdict, 'block');
 });
 
 test('classify: 未完了が残れば pending', () => {
@@ -77,10 +82,45 @@ test('classify: 0 件は empty', () => {
 
 // --- 「例」1〜7 と 13 ---
 
+test('例 1: HEAD がリモートに無い（未 push）なら、取得すらせず通す。理由を出す', async () => {
+  const { now, sleep } = clock();
+  let fetched = false;
+  const r = await decide({
+    ...base,
+    isPushed: () => false,
+    fetchChecks: async () => { fetched = true; return []; },
+    now,
+    sleep,
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(fetched, false, '未 push なら gh を呼ばない');
+  assert.match(r.lines.join('\n'), /未 push/);
+});
+
 test('例 2: 全ジョブ success / skipped を注入すると通す', async () => {
   const { now, sleep } = clock();
   const r = await decide({ ...base, fetchChecks: fetcher([[ok('verify'), ok('e2e')]]), now, sleep });
   assert.equal(r.exit, 0);
+});
+
+test('H1 回帰: 先に登録されたチェックだけが緑でも即座には通さない。遅れて現れた失敗を捕まえる', async () => {
+  const { now, sleep } = clock({ stepMs: 1000 });
+  // 1 回目は verify だけ成功で返る（guard / preview の check-run はまだ作られていない）
+  const r = await decide({
+    ...base,
+    fetchChecks: fetcher([[ok('verify')], [ok('verify'), ng('preview', 'failure', 7)]]),
+    now,
+    sleep,
+  });
+  assert.equal(r.exit, 2, '遅れて現れた failure を見逃さない');
+  assert.match(r.lines.join('\n'), /preview/);
+});
+
+test('H1: 同じ件数の成功を 2 回続けて観測したら通す', async () => {
+  const { now, sleep, calls } = clock({ stepMs: 1000 });
+  const r = await decide({ ...base, fetchChecks: fetcher([[ok('verify'), ok('e2e')]]), now, sleep });
+  assert.equal(r.exit, 0);
+  assert.equal(calls.sleeps, 1, '落ち着くまでの再取得は 1 回');
 });
 
 test('例 3: 1 ジョブ failure を注入するとブロックし、ジョブ名・URL・調査コマンドを出す', async () => {
@@ -148,10 +188,19 @@ test('例 13: stop_hook_active が真なら、赤くてもブロックしない�
   assert.match(text, /停止/);
 });
 
-test('例 13b: stop_hook_active が真なら、未確定でもブロックしない', async () => {
-  const { now, sleep } = clock({ stepMs: (DEFAULT_TIMEOUT_SEC + 1) * 1000 });
+test('例 13b: stop_hook_active が真なら、未確定でも待たずに即通す（H2 回帰）', async () => {
+  const { now, sleep, calls } = clock({ stepMs: 1000 });
   const r = await decide({ ...base, fetchChecks: fetcher([[running('e2e')]]), now, sleep, stopHookActive: true });
   assert.equal(r.exit, 0);
+  assert.equal(calls.sleeps, 0, '停止ループ中は 1 度も待たない');
+  assert.match(r.lines.join('\n'), /未確定/);
+});
+
+test('例 13c: stop_hook_active が真なら、緑判定でも落ち着き待ちをしない', async () => {
+  const { now, sleep, calls } = clock({ stepMs: 1000 });
+  const r = await decide({ ...base, fetchChecks: fetcher([[ok('verify')]]), now, sleep, stopHookActive: true });
+  assert.equal(r.exit, 0);
+  assert.equal(calls.sleeps, 0);
 });
 
 test('timeoutSec を変えられる（CHECK_ACTIONS_TIMEOUT_SEC 相当）', async () => {

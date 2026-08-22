@@ -32,3 +32,10 @@
 - 10:00 - **完了条件 6（赤）を実測。** 赤い run を持つコミットを新たに作る代わりに、PR #47 の 1 回目のコミット `58b1ce9`（`protected-paths` が failure。main の祖先として残っている）を detached worktree でチェックアウトして実行した。exit 2 で、ジョブ名 `protected-paths: failure`・ジョブ URL・`gh run view --log-failed --job 96941495991` が出た。故意に失敗する commit を push せずに済むので、CI を無駄に回さない。
 - 10:01 - **完了条件 7 を実測。** `gh` を PATH から外して実行し、`check-actions: Actions の状態を取得できないため判定を飛ばします（spawnSync gh ENOENT）。` を stderr に出して exit 0。fail-open だが黙っては通していない。
 - 10:05 - 完了条件 8 を実測。`npm run ci` が 380 pass・0 fail（新規 20 件ぶん増）。`git diff main -- package.json .github/workflows/` は空。`node tools/check-protected-paths.mjs main` は `保護パスの変更はありません`。
+- 10:20 - **Verify (外部) 1 回目: `codex-reviewer` が不承認。Critical 0 件・High 4 件。** 指摘はいずれも妥当なので直した。
+- 10:35 - **H1 修正（機構の中核が素通りする経路）。** ワークフローは別々に起動するので、push 直後は `verify` の check-run だけが成功で返り `guard`・`preview` が未作成、という瞬間がある。旧実装はそれを緑と読んで即 exit 0 していた。**同じ件数の成功を 2 回続けて観測するまで通さない**（落ち着くまで見る）形に変えた。回帰テストを追加（1 回目は verify のみ成功 → 2 回目に preview の failure が現れる → exit 2）。
+- 10:38 - **H2 修正（停止ループの再発）。** 旧実装の `halt()` は exit を 0 に変えるだけで、そこへ到達するのは上限到達後だった。つまり 2 度目以降の停止でも 480 秒待たされ、停止のたびに 8 分固まる。`stop_hook_active` が真なら **1 度も待たずに** 現在の状態を述べて通す形に変えた。回帰テストで `sleep` の呼び出し回数が 0 であることを検証している。
+- 10:42 - **H3 修正（上限がハーネス上成立しない）。** Claude Code の hook は既定 60 秒でタイムアウトする。`npm run ci`（約 50 秒）と待機（既定 480 秒）が直列に走るので、明示しないと待機の途中で hook ごと kill される。`.claude/settings.json` の Stop hook に `"timeout": 900` を足した。
+- 10:45 - **H4 修正（完了条件 5 の未達）。** `isPushed()` が `execFileSync` を直接呼んでいて注入できず、例 1（未 push → 通す）がテストできていなかった。`decide()` の注入引数にし、未 push なら `gh` を呼ばずに通すことをテストで検証した。
+- 10:47 - **M1 修正。** 仕様の判定表が通すのは `success` / `skipped` だけなのに、実装は `neutral` を足して**通す集合を広げていた**。仕様に戻し、`neutral` も block になることをテストで固定した。M3（TTY で stdin 待ちになりうる）は `process.stdin.isTTY` のガードで対処。L1（ページング）・L2（Bash ごとの node 起動）は現状の規模では実害が無いので対応しない。
+- 10:50 - 修正後の `npm run ci` は 384 pass・0 fail（テストは 20 → 24 件）。

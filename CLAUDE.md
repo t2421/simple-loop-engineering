@@ -209,6 +209,7 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `tools/e2e-needed.mjs`（e2e を回すかの判定。CI は base リビジョンを実行する）
 - `tools/check-progress-coupling.mjs`（実装 PR と progress 更新の結合の判定。CI は base リビジョンを実行する）
 - `tools/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
+- `tools/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
 
 この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
 

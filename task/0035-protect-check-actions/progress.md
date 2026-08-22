@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/gate-helpers.test.mjs` — 違反側 3 ケースと許可側 1 ケース。spec「例」の表に対応させる)
 - [x] 実装 (`tools/check-protected-paths.mjs` の `GATE_HELPERS` に 1 行 + コメント、`CLAUDE.md`「変えてはいけないもの」の一覧に 1 行)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [/] PR作成（進捗の **PR** に URL を書く。ラベル無しで `protected-paths` ジョブが失敗することを確認してから `allow-protected-change` ラベルを付け、成功に変わることを確認する — spec 完了条件 7）
+- [x] PR作成（進捗の **PR** に URL を書く。ラベル無しで `protected-paths` ジョブが失敗することを確認してから `allow-protected-change` ラベルを付け、成功に変わることを確認する — spec 完了条件 7）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -28,3 +28,5 @@
 - 12:55 - **Verify (外部) 1 回目: `codex-reviewer` が承認。Critical 0 件・High 0 件・Medium 0 件。** codex 自体の指摘もゼロ。レビュー側は `status: 'A'` の許可が抜け穴でないことまで独立に確認している（許可条件が `kind === 'appeared' && from === undefined` なので、`from` を持つ appeared＝別ファイルからのリネームで上書きするケースは違反のまま。ファイルが既に存在する状態では `A` は発生しない）。
 - 13:05 - **完了条件 7 の前半を CI 上で実測。** PR #51 を意図的にラベル無しで出し、`protected-paths` が `PR_LABELS: []` で失敗した。base 版チェッカーが `tests/gate-helpers.test.mjs`（既存のテストの内容が変わっている）と `tools/check-protected-paths.mjs`（ガードの判定ロジック自体は変更も移動もできない）の 2 件を検知している。他の 4 チェック（`verify`・`e2e`・`preview`・`progress-coupling`）は pass。後半（ラベル付きで成功）は人間のラベル付与を待つ。
 - 13:06 - **副次的な観測: 意図的に赤い PR は Stop hook にブロックされる。** 0033 で入れたゲートが `protected-paths: failure` を検知して停止を止めた。ゲートとしては正しい動作で、`stop_hook_active` により 2 度目は通るので詰まりはしない。ただし「赤いのが正しい状態」の作業では 1 回余分に往復が要ることが分かった。運用上の実害は小さいので、この作業では扱わない。
+- `15:15` - **完了条件 7 の後半を CI 上で実測。同一 SHA `0140a38` で赤 → 緑を確認した。** ラベル無し（`04:48:21`）は failure、`allow-protected-change` を付けた再判定（`06:10:08`）は success。後者のログは同じ 2 件（`tests/gate-helpers.test.mjs`・`tools/check-protected-paths.mjs`）を検知したうえで `ラベル allow-protected-change があるため通過させます（人間による明示承認）。` に変わっている。**検知を止めたのではなく、人間の承認で通している**ことがログから読み取れる。これで完了条件 1〜7 がすべて揃った。
+- `15:16` - PR #51 がマージされた（`06:10:53`）。0032 のときはラベル無しのままマージされて通過側の実測が残らなかったが、今回は赤・緑の両方が Actions のログに残っている。

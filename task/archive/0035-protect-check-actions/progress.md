@@ -1,9 +1,9 @@
 # Progress: `0035-protect-check-actions`
 
-- **Target Spec:** `task/0035-protect-check-actions/spec.md`
+- **Target Spec:** `task/archive/0035-protect-check-actions/spec.md`
 - **Branch:** `feat/0035-protect-check-actions`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/51
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** L
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`tools/check-protected-paths.mjs` の `GATE_HELPERS` に 1 行 + コメント、`CLAUDE.md`「変えてはいけないもの」の一覧に 1 行)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。ラベル無しで `protected-paths` ジョブが失敗することを確認してから `allow-protected-change` ラベルを付け、成功に変わることを確認する — spec 完了条件 7）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

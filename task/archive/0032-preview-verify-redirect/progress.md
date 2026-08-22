@@ -1,9 +1,9 @@
 # Progress: `0032-preview-verify-redirect`
 
-- **Target Spec:** `task/0032-preview-verify-redirect/spec.md`
+- **Target Spec:** `task/archive/0032-preview-verify-redirect/spec.md`
 - **Branch:** `feature/preview-verify-redirect`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/47
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -17,7 +17,7 @@
 - [x] preview ジョブが実 URL に対して成功し `検証 OK:` が出ることの確認（完了条件 5。ログを会話に貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。**`allow-protected-change` ラベルを付ける。** 凍結対象 2 件の改訂であることと、検証を弱めない理由を本文に明記する）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

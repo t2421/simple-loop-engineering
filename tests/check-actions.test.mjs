@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  checkNameSet,
   classify,
   decide,
   detectGitPush,
   readStopHookActive,
+  DEFAULT_QUIET_SEC,
   DEFAULT_TIMEOUT_SEC,
 } from '../tools/check-actions.mjs';
 
@@ -46,7 +48,7 @@ function clock({ startMs = 0, stepMs = 0 } = {}) {
   };
 }
 
-const base = { timeoutSec: DEFAULT_TIMEOUT_SEC, pollIntervalSec: 15 };
+const base = { timeoutSec: DEFAULT_TIMEOUT_SEC, pollIntervalSec: 15, quietSec: DEFAULT_QUIET_SEC };
 
 test('classify: 全部 success / skipped なら pass', () => {
   const r = classify([ok('verify'), { ...ok('e2e'), conclusion: 'skipped' }]);
@@ -98,13 +100,13 @@ test('例 1: HEAD がリモートに無い（未 push）なら、取得すらせ
 });
 
 test('例 2: 全ジョブ success / skipped を注入すると通す', async () => {
-  const { now, sleep } = clock();
+  const { now, sleep } = clock({ stepMs: DEFAULT_QUIET_SEC * 1000 });
   const r = await decide({ ...base, fetchChecks: fetcher([[ok('verify'), ok('e2e')]]), now, sleep });
   assert.equal(r.exit, 0);
 });
 
 test('H1 回帰: 先に登録されたチェックだけが緑でも即座には通さない。遅れて現れた失敗を捕まえる', async () => {
-  const { now, sleep } = clock({ stepMs: 1000 });
+  const { now, sleep } = clock({ stepMs: 15 * 1000 });
   // 1 回目は verify だけ成功で返る（guard / preview の check-run はまだ作られていない）
   const r = await decide({
     ...base,
@@ -116,11 +118,46 @@ test('H1 回帰: 先に登録されたチェックだけが緑でも即座には
   assert.match(r.lines.join('\n'), /preview/);
 });
 
-test('H1: 同じ件数の成功を 2 回続けて観測したら通す', async () => {
-  const { now, sleep, calls } = clock({ stepMs: 1000 });
+test('H1: チェック名の集合が静穏期間ぶん変わらなければ通す', async () => {
+  const { now, sleep } = clock({ stepMs: 15 * 1000 });
   const r = await decide({ ...base, fetchChecks: fetcher([[ok('verify'), ok('e2e')]]), now, sleep });
   assert.equal(r.exit, 0);
-  assert.equal(calls.sleeps, 1, '落ち着くまでの再取得は 1 回');
+});
+
+test("H1': 件数が同じでも中身が入れ替わったら静穏を数え直す（遅れて現れた失敗を捕まえる）", async () => {
+  const { now, sleep } = clock({ stepMs: 15 * 1000 });
+  const r = await decide({
+    ...base,
+    // 件数はずっと 1 のまま。verify → guard と入れ替わり、その後 guard が失敗する
+    fetchChecks: fetcher([[ok('verify')], [ok('guard')], [ng('guard', 'failure', 5)]]),
+    now,
+    sleep,
+  });
+  assert.equal(r.exit, 2, '件数だけを見ていると素通りする列');
+  assert.match(r.lines.join('\n'), /guard/);
+});
+
+test('H1: 静穏期間の途中で新しいチェックが現れたら、まだ通さない', async () => {
+  const { now, sleep } = clock({ stepMs: 15 * 1000 });
+  const r = await decide({
+    ...base,
+    fetchChecks: fetcher([[ok('verify')], [ok('verify'), ok('guard')], [ok('verify'), ng('guard', 'failure', 6)]]),
+    now,
+    sleep,
+  });
+  assert.equal(r.exit, 2);
+});
+
+test('H1: 静穏期間は quietSec で変えられる（CHECK_ACTIONS_QUIET_SEC 相当）', async () => {
+  const { now, sleep, calls } = clock({ stepMs: 15 * 1000 });
+  const r = await decide({ ...base, quietSec: 1, fetchChecks: fetcher([[ok('verify')]]), now, sleep });
+  assert.equal(r.exit, 0);
+  assert.equal(calls.sleeps, 1, '静穏 1 秒なら 1 回の再取得で足りる');
+});
+
+test('checkNameSet: 並び順が違っても同じ集合とみなす', () => {
+  assert.equal(checkNameSet([ok('b'), ok('a')]), checkNameSet([ok('a'), ok('b')]));
+  assert.notEqual(checkNameSet([ok('a')]), checkNameSet([ok('b')]));
 });
 
 test('例 3: 1 ジョブ failure を注入するとブロックし、ジョブ名・URL・調査コマンドを出す', async () => {
@@ -142,7 +179,7 @@ test('例 4: in_progress のまま上限を超えたら「未確定」として�
 });
 
 test('例 5: in_progress が上限内に success へ遷移したら通す', async () => {
-  const { now, sleep } = clock({ stepMs: 1000 });
+  const { now, sleep } = clock({ stepMs: DEFAULT_QUIET_SEC * 1000 });
   const r = await decide({
     ...base,
     fetchChecks: fetcher([[running('e2e')], [running('e2e')], [ok('e2e')]]),

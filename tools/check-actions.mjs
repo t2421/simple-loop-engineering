@@ -17,7 +17,9 @@
  * 「全部成功」に見えても即座には通さない。ワークフローは別々に起動するので、
  * 先に登録された check-run だけが成功で返り、`guard` や `preview` の check-run が
  * まだ作られていない瞬間がある。その一瞬を緑と読むとゲートの意味が無い。
- * **同じ件数の成功を 2 回続けて観測するまで待つ**（落ち着くまで見る）。
+ * **チェック名の集合が静穏期間（既定 30 秒・CHECK_ACTIONS_QUIET_SEC）変わらないこと**を
+ * 緑の条件にする。件数だけを見ると、同数のまま中身が入れ替わった場合に
+ * 「落ち着いた」と誤読する。
  * | チェック 0 件 | 短いリトライ後も 0 件なら通す。理由を stderr に 1 行 |
  * | gh 不在・未認証・API エラー | fail-open で通す。**理由を stderr に必ず 1 行** |
  *
@@ -58,6 +60,14 @@ export const POLL_INTERVAL_SEC = 15;
 /** 0 件のときに諦めるまでの再取得回数 */
 export const EMPTY_RETRIES = 2;
 
+/**
+ * 「全部成功」を信じるまでに、チェック名の集合が変わらないことを求める秒数。
+ * 環境変数 CHECK_ACTIONS_QUIET_SEC で変えられる。
+ * 短くすると遅れて登録されるワークフローを取りこぼし、長くすると緑のときの
+ * 停止が毎回そのぶん遅くなる。
+ */
+export const DEFAULT_QUIET_SEC = 30;
+
 /** 成功と見なす結論。これ以外で完了したものは失敗として扱う */
 export const PASSING_CONCLUSIONS = ['success', 'skipped'];
 
@@ -76,6 +86,17 @@ export function classify(checks) {
   const pending = checks.filter((c) => c.status !== 'completed');
   if (pending.length > 0) return { verdict: 'pending', pending };
   return { verdict: 'pass' };
+}
+
+/**
+ * チェック名の集合を、比較できる 1 つの文字列にする純関数。
+ * 件数ではなく集合で比べる（同数のまま中身が入れ替わる場合を取りこぼさない）。
+ *
+ * @param {Array<{name:string}>} checks
+ * @returns {string}
+ */
+export function checkNameSet(checks) {
+  return checks.map((c) => c.name).sort().join('\u0000');
 }
 
 /**
@@ -161,6 +182,7 @@ export async function decide({
   sleep,
   timeoutSec = DEFAULT_TIMEOUT_SEC,
   pollIntervalSec = POLL_INTERVAL_SEC,
+  quietSec = DEFAULT_QUIET_SEC,
   stopHookActive = false,
   isPushed = () => true,
 }) {
@@ -190,8 +212,9 @@ export async function decide({
   ];
 
   let emptyTries = 0;
-  /** 直前に「全部成功」と見えたときの件数。同じ件数を 2 回続けて見るまで通さない */
-  let settledCount = -1;
+  /** 直前に観測したチェック名の集合と、それが現れた時刻。静穏期間の計測に使う */
+  let settledNames = null;
+  let settledSince = 0;
 
   for (;;) {
     let checks;
@@ -220,12 +243,17 @@ export async function decide({
     }
 
     if (result.verdict === 'pass') {
-      // 別のワークフローの check-run が遅れて現れることがある。同じ件数の成功を
-      // 2 回続けて観測するまでは通さない（上限を過ぎたらそれ以上は待たない）。
-      if (settledCount === checks.length || now() >= deadline) {
+      // 別のワークフローの check-run が遅れて現れることがある。チェック名の集合が
+      // 静穏期間ぶん変わらないことを確かめるまでは通さない。集合が変われば
+      // 計測をやり直す（上限を過ぎたらそれ以上は待たない）。
+      const names = checkNameSet(checks);
+      if (names !== settledNames) {
+        settledNames = names;
+        settledSince = now();
+      }
+      if (now() - settledSince >= quietSec * 1000 || now() >= deadline) {
         return { exit: 0, lines: [PASS_LINE] };
       }
-      settledCount = checks.length;
       await sleep(pollIntervalSec * 1000);
       continue;
     }
@@ -285,10 +313,9 @@ async function fetchChecksFromGh() {
 
 const sleepReal = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
-function timeoutSecFromEnv() {
-  const raw = process.env.CHECK_ACTIONS_TIMEOUT_SEC;
-  const parsed = Number.parseInt(raw ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_SEC;
+function positiveIntFromEnv(name, fallback) {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function readStdin() {
@@ -321,7 +348,8 @@ async function main() {
     fetchChecks: fetchChecksFromGh,
     now: () => Date.now(),
     sleep: sleepReal,
-    timeoutSec: timeoutSecFromEnv(),
+    timeoutSec: positiveIntFromEnv('CHECK_ACTIONS_TIMEOUT_SEC', DEFAULT_TIMEOUT_SEC),
+    quietSec: positiveIntFromEnv('CHECK_ACTIONS_QUIET_SEC', DEFAULT_QUIET_SEC),
     stopHookActive: readStopHookActive(raw),
   });
 

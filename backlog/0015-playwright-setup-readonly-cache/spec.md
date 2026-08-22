@@ -32,6 +32,18 @@
 `pretest` と書いてあるが、実際のフックは `pretest:e2e`（`package.json`）であり、
 `npm run ci` は e2e を呼ばない。影響範囲は `npm run test:e2e` だけである。昇格時に直す。
 
+2026-08-22 の 2 回目のリファインメントで、**現存を再確認したうえで据え置きと決めた**（人間の判断）。
+`tools/setup-playwright.mjs` は今も `npx playwright install chromium` を無条件に実行している。
+`package.json` の `pretest:e2e` から呼ばれ、`ci` は `lint && lint:docs && test:unit` なので
+e2e を呼ばない。したがって影響範囲は `npm run test:e2e` だけである（前回指摘した「対象」の
+記述ズレはこのとき確認した内容と一致する。昇格時に直す）。
+
+**据え置きの理由は 1 つだけである。** この作業が発火するかは、e2e を回す環境の
+`PLAYWRIGHT_BROWSERS_PATH` が read-only かつ中身が揃っているかに完全に依存する。
+そこがまだ測れていない。read-only でなければ直す対象が存在しない。
+**昇格の前に、その環境で `PLAYWRIGHT_BROWSERS_PATH` の値と書き込み可否を実測すること。**
+他の 4 件（`0026`・`0027`・`0029`・`0034`）は同じリファインメントで現存を実測できたため昇格した。
+
 足りない判断:
 
 - 判定を「headless shell の実体を直接見る」にするか、「まず launch を試す」に戻すか

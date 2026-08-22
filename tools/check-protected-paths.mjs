@@ -61,6 +61,9 @@ const GATE_HELPERS = [
   // Stop hook が CI を回す対象ディレクトリの判定。書き換えれば変更の無い
   // チェックアウトを指させ、セッション停止時の検証を骨抜きにできる
   'tools/stop-hook-ci-dir.mjs',
+  // push した HEAD の GitHub Actions の結果の判定。Stop hook が委譲する。
+  // 書き換えれば、赤い・未確定の Actions のまま会話を終えられる
+  'tools/check-actions.mjs',
 ];
 
 function isGateHelper(filePath) {

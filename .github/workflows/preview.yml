@@ -101,12 +101,26 @@ jobs:
           # 導く（0032 で実測）。`-f` は 3xx をエラーにしないため、`-L` が無いと
           # exit 0 のまま空ファイルを書き、後段の diff が必ず落ちる。
           # 追った先が 200 でないことを見逃さないよう、HTTP コードも明示的に検査する。
+          #
+          # curl 自身の終了ステータスも要求する（0032 のレビューで出た指摘）。
+          # `|| true` で握り潰すと、HTTP 200 が返り本文も完全なのに curl が
+          # CURLE_PARTIAL_FILE 等で非 0 終了する場合に転送失敗を見逃す。
+          # 0 かつ 200 の両方を満たしたときだけ次へ進む。
+          set +e
           HTTP_CODE="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-              -o downloaded-calc.html -w '%{http_code}' "$URL/calc.html" || true)"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "デプロイ先 $URL/calc.html の取得に失敗しました（リトライ後も失敗）。"
-            echo "リダイレクト追従後の HTTP コード: ${HTTP_CODE:-取得できず}"
-            echo "配信物が存在しない、応答が無い、または HTTP エラーの可能性があります。"
+              -o downloaded-calc.html -w '%{http_code}' "$URL/calc.html")"
+          CURL_STATUS=$?
+          set -e
+          if [ "$CURL_STATUS" -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
+            if [ "$CURL_STATUS" -ne 0 ]; then
+              echo "デプロイ先 $URL/calc.html の取得に失敗しました（リトライ後も失敗）。"
+              echo "curl の終了ステータス: $CURL_STATUS"
+            fi
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "デプロイ先 $URL/calc.html が 200 を返しませんでした。"
+              echo "リダイレクト追従後の HTTP コード: ${HTTP_CODE:-取得できず}"
+            fi
+            echo "配信物が存在しない、応答が無い、転送が途中で壊れた、または HTTP エラーの可能性があります。"
             exit 1
           fi
 

@@ -173,6 +173,7 @@ function describeFailures(failed) {
  * @param {(ms:number) => Promise<void>} input.sleep - 待機
  * @param {number} [input.timeoutSec] - 未完了を待つ上限
  * @param {number} [input.pollIntervalSec] - 再取得の間隔
+ * @param {number} [input.quietSec] - 「全部成功」を信じるまでに集合が変わらないことを求める秒数
  * @param {boolean} [input.stopHookActive] - 2 度目以降の停止か
  * @returns {Promise<{exit:0|2, lines:string[]}>}
  */

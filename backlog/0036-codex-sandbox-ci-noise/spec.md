@@ -27,6 +27,13 @@
 
 `0026-review-output-schema`（`task/0026-review-output-schema/spec.md`）と関連する。同じエージェント定義（`.claude/agents/codex-reviewer.md`）を触る可能性があるため、昇格時は 0026 の変更後の定義を前提にする。
 
+2026-08-23 のリファインメントで実測した。`0026-review-output-schema` は PR #57 でマージされ
+`task/archive/0026-review-output-schema/` にアーカイブ済みのため、上記の前提（0026 の変更後の
+定義を前提にする）は解消した。変更後の `.claude/agents/codex-reviewer.md` を確認したところ、
+出力スキーマ・Critical の条件・承認規則は入ったが、サンドボックス内で `npm run ci` を回す
+ことへの言及は無い。この作業の対象は残っており、着手を妨げる依存は無くなった。
+**昇格可能（人間の判断待ち）。**
+
 ## 仕様
 
 変更後に満たしたい振る舞い（検証可能な命題に落とすのは昇格時）。

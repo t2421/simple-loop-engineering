@@ -44,6 +44,13 @@ e2e を呼ばない。したがって影響範囲は `npm run test:e2e` だけ�
 **昇格の前に、その環境で `PLAYWRIGHT_BROWSERS_PATH` の値と書き込み可否を実測すること。**
 他の 4 件（`0026`・`0027`・`0029`・`0034`）は同じリファインメントで現存を実測できたため昇格した。
 
+2026-08-23 の 3 回目のリファインメントで現存を再実測した。`tools/setup-playwright.mjs` は今も
+`npx playwright install chromium` を無条件に実行し、`package.json` は `pretest:e2e` から呼ぶ
+（`ci` は `lint && lint:docs && test:unit` のままで e2e を呼ばない）。据え置きの理由
+（e2e を回す Cloud 環境の `PLAYWRIGHT_BROWSERS_PATH` の実測待ち）も変わらない。今回の
+リファインメントはローカル macOS セッションで行っており、対象環境の実測は依然できていない。
+**引き続き据え置き。**
+
 足りない判断:
 
 - 判定を「headless shell の実体を直接見る」にするか、「まず launch を試す」に戻すか

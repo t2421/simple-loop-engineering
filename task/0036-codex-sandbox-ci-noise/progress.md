@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0036-codex-sandbox-ci-noise/spec.md`
 - **Branch:** `feat/0036-codex-sandbox-ci-noise`
 - **PR:** `未作成`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -14,7 +14,7 @@
 - [x] 実装 (`.claude/agents/codex-reviewer.md` への規約追記)
 - [x] 完了条件 5・6 の grep 確認（出力を会話に貼る）
 - [x] 完了条件 7 の再現手順（実測 CI 結果あり／なしのレビュー依頼各 1 回）
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
@@ -31,3 +31,9 @@
 - `06:22` - 両 High とも spec 側または `CLAUDE.md` 側の判断を要し、実装エージェントの独断では直せない。`CLAUDE.md` のルール変更は独立した docs PR の対象であり、この作業ブランチに混ぜられない。**Status を `Blocked` にし、人間の判断を待つ。** レビュー往復は 2 回で上限 5 回には達していない。
 - `07:26` - **High 1 の対処方針が決まった。** `CLAUDE.md`「トークンコスト」節を「渡すのは差分・対象 spec・実測の CI 結果だけ」に改め、「レビュアーはサンドボックス内でテストを再実行しない」を明記する案（(a)）を人間が選択した。規約どおり独立した docs PR にした: https://github.com/t2421/simple-loop-engineering/pull/62 （全 5 チェック pass・マージ待ち）。codex は起動時に `CLAUDE.md` を読むため、この改訂は High 2 も同時に閉じる。**この作業はその PR のマージまで Blocked。** マージ後に再レビューへ出す。
 - `08:30` - **訂正: 待つべき docs PR は #62 ではなく #63。** 同じ改訂の PR が並行して 2 本出た（#62 / #63）。差分の 1 行目は同一で、2 行目の文言のみ異なる。再実行を禁じる対象を具体名（`npm run ci`・ユニットテスト・e2e）で挙げていて、この作業で `.claude/agents/codex-reviewer.md` に追記した文と語彙が一致する #63 を採り、#62 は重複として閉じた。https://github.com/t2421/simple-loop-engineering/pull/63 のマージを待つ。
+- `07:16` - High 1・2 の対処として `CLAUDE.md`「トークンコスト」節を改訂する独立した docs PR #63 を作成し、マージされた。改訂は 2 点。(i) レビューへ渡すのを「差分・対象 spec・実測の CI 結果だけ」に改めた（High 1 の衝突を解消）。(ii)「レビュアーはサンドボックス内で `npm run ci`・ユニットテスト・e2e を再実行しない」を追加した。(ii) を `CLAUDE.md` に置いたのは、codex がレビュー起動時に `CLAUDE.md` を読むためである（1 回目のレビューの exec ログで `find .. -name AGENTS.md -o -name CLAUDE.md` と `cat CLAUDE.md` を確認済み）。エージェント定義だけでは codex サブプロセスに届かないという High 2 の指摘に対応する。
+- `07:16` - worktree に main を取り込み、`npm run ci` を再実行。401 件 pass / 0 fail。対 main の差分は `.claude/agents/codex-reviewer.md`(+8) と progress のみ。Blocked を解除して Verify (外部) 3 回目へ。
+- `07:26` - **並行セッションとの重複が判明した（プロセス上の発見）。** 上の `07:26`・`08:30` の 2 行は別セッションが記録したものである。同じ High 1 を独立に診断し、同じ `CLAUDE.md` 改訂の docs PR を 2 本（#62 / #63）作ってしまった。#62 は重複として閉じられ #63 がマージされた。触るファイルが重ならない作業を選べば衝突しないという前提が、**同じ作業の派生 docs PR では成り立たない**ことを示している。`0039-parallel-docs-rules` の規約はディレクトリ割当までしか定めておらず、派生 PR の重複を防げない。
+- `07:26` - Verify (外部) 3 回目（新ルール準拠の依頼。実測 CI 結果を添付し、差分確定後の取得である旨を明記）。**承認。Critical 0 / High 0**（Low 1）。2 回目の High 2 件はどちらも解消と判定された。
+- `07:26` - **High 2 の解消が推測ではなく実測で確認できた。** レビュアーが codex の exec ログを提示し、codex 自身が `nl -ba CLAUDE.md` を実行した出力に、改訂で追加した 182 行目がそのまま含まれていた。エージェント定義だけでは codex サブプロセスに届かないという穴が、`CLAUDE.md` 側への記載で塞がっている。
+- `07:26` - Low 1 件（別 backlog 候補）: 実装がコミット済みで progress だけ未コミットのとき、`codex review --uncommitted` が実装差分を拾わず progress だけをレビューする。エージェント定義 17 行目の但し書きは「未コミットが無いとき」に限定されるためこの状態を救わない。今回はレビュアーが `--base main` も回して補った。定義 14・17 行目はこの差分で変更していないため、この作業の範囲外。

@@ -1,9 +1,9 @@
 # Progress: `0036-codex-sandbox-ci-noise`
 
-- **Target Spec:** `task/0036-codex-sandbox-ci-noise/spec.md`
+- **Target Spec:** `task/archive/0036-codex-sandbox-ci-noise/spec.md`
 - **Branch:** `feat/0036-codex-sandbox-ci-noise`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/64
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -16,7 +16,7 @@
 - [x] 完了条件 7 の再現手順（実測 CI 結果あり／なしのレビュー依頼各 1 回）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

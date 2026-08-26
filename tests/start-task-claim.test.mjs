@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { claimId, isValidSlug, CLAIM_PLACES, nextId } from '../tools/start-task.mjs';
+import {
+  claimId,
+  isValidSlug,
+  CLAIM_PLACES,
+  nextId,
+  parseCliArgs,
+  startTask,
+} from '../tools/start-task.mjs';
 
 /**
  * 一時ディレクトリに作業ディレクトリのレイアウトを作る。
@@ -14,6 +21,36 @@ function makeRoot(dirs = []) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-claim-'));
   for (const dir of dirs) fs.mkdirSync(path.join(root, dir), { recursive: true });
   return root;
+}
+
+/**
+ * 一時ディレクトリに `task/` レイアウトを作る。値が null のディレクトリは
+ * progress.md を置かない（`tests/start-task.test.mjs` の makeLayout と同形）。
+ */
+function makeLayout(dirs) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-claim-'));
+  for (const [dir, progress] of Object.entries(dirs)) {
+    fs.mkdirSync(path.join(root, dir), { recursive: true });
+    if (progress !== null) {
+      fs.writeFileSync(path.join(root, dir, 'progress.md'), progress);
+    }
+  }
+  return root;
+}
+
+/** 選択に足るメタ情報を持つ progress.md */
+function progressMd({ branch = 'feat/x', status = 'Not Started', complexity } = {}) {
+  return [
+    '# Progress: `x`',
+    '',
+    '- **Target Spec:** `task/0001-x/spec.md`',
+    `- **Branch:** \`${branch}\``,
+    '- **PR:** `未作成`',
+    `- **Status:** \`${status}\` (Phase: \`Plan\`)`,
+    ...(complexity === undefined ? [] : [`- **Complexity:** \`${complexity}\``]),
+    '',
+    '## タスクチェックリスト',
+  ].join('\n');
 }
 
 /** root 配下の作業ディレクトリ（`<置き場>/<name>`）を名前順に並べる */
@@ -158,4 +195,127 @@ test('空の状態から claim すると 0001 を確保する', () => {
   assert.equal(result.ok, true);
   assert.equal(result.path, 'task/0001-first');
   assert.equal(fs.existsSync(path.join(root, 'task', '0001-first')), true);
+});
+
+// --- レビュー指摘の回帰テスト ---
+
+// High: `--in` の値の欠落を、`--in` の省略と混ぜない
+test('parseCliArgs: --claim <slug> は task を既定の置き場にする', () => {
+  assert.deepEqual(parseCliArgs(['--claim', 'foo']), { kind: 'claim', slug: 'foo', place: 'task' });
+});
+
+test('parseCliArgs: --claim <slug> --in <place> はその置き場を返す', () => {
+  assert.deepEqual(parseCliArgs(['--claim', 'foo', '--in', 'backlog']), {
+    kind: 'claim',
+    slug: 'foo',
+    place: 'backlog',
+  });
+});
+
+test('parseCliArgs: --in の値が欠けていたら使い方の誤りにする（task に化けさせない）', () => {
+  assert.deepEqual(parseCliArgs(['--claim', 'foo', '--in']), { kind: 'usage' });
+});
+
+test('parseCliArgs: slug の欠落・余分な引数・未知のフラグは使い方の誤り', () => {
+  assert.deepEqual(parseCliArgs(['--claim']), { kind: 'usage' });
+  assert.deepEqual(parseCliArgs(['--claim', 'foo', '--in', 'task', 'junk']), { kind: 'usage' });
+  assert.deepEqual(parseCliArgs(['--claim', 'foo', '--bogus', 'task']), { kind: 'usage' });
+  assert.deepEqual(parseCliArgs(['--next-id', 'junk']), { kind: 'usage' });
+  assert.deepEqual(parseCliArgs(['--bogus']), { kind: 'usage' });
+});
+
+test('parseCliArgs: 引数なしは通常の開始', () => {
+  assert.deepEqual(parseCliArgs([]), { kind: 'start' });
+  assert.deepEqual(parseCliArgs(['--next-id']), { kind: 'next-id' });
+});
+
+test('claimId: place を明示的に undefined で渡しても既定の task が効く（分割代入の既定値）', () => {
+  // parseCliArgs が `--in` の値の欠落を先に弾くので、この既定値が
+  // 不正入力を通す経路にはならない。ここでは既定値そのものの意味を固定する
+  const root = makeRoot(['backlog/0041-x']);
+  const result = claimId({ rootDir: root, slug: 'foo', place: undefined });
+  assert.equal(result.ok, true);
+  assert.equal(result.path, 'task/0042-foo');
+});
+
+// High: slug や置き場が違う 2 者が同じ ID を確保するのを防ぐ
+test('slug が違う 2 者が同じ ID を計算したら、後から気づいた側が降りる', () => {
+  const root = makeRoot(['backlog/0041-x']);
+  // mkdir フックの中で他者が同じ ID（0042）を別の slug で確保する状況を作る
+  const mkdir = (dir) => {
+    fs.mkdirSync(path.join(root, 'task', '0042-other'), { recursive: true });
+    fs.mkdirSync(dir);
+  };
+
+  const result = claimId({ rootDir: root, slug: 'foo', mkdir });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /0042/);
+  // 自分が作ったものは片付ける。相手のものには触らない
+  assert.equal(fs.existsSync(path.join(root, 'task', '0042-foo')), false);
+  assert.equal(fs.existsSync(path.join(root, 'task', '0042-other')), true);
+});
+
+test('置き場が違う 2 者が同じ ID を計算しても、重複 ID が残らない', () => {
+  const root = makeRoot(['backlog/0041-x']);
+  const mkdir = (dir) => {
+    fs.mkdirSync(path.join(root, 'backlog', '0042-other'), { recursive: true });
+    fs.mkdirSync(dir);
+  };
+
+  const result = claimId({ rootDir: root, slug: 'foo', mkdir });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(listWorkDirs(root), ['backlog/0041-x', 'backlog/0042-other']);
+});
+
+// Low: 確保に失敗したとき、自分が作った置き場ディレクトリを残さない
+test('確保に失敗したら、自分が作った置き場ディレクトリも残さない', () => {
+  const root = makeRoot(['task/0041-x']);
+  assert.equal(fs.existsSync(path.join(root, 'backlog')), false);
+  const mkdir = () => {
+    const err = new Error('EEXIST: file already exists');
+    err.code = 'EEXIST';
+    throw err;
+  };
+
+  const result = claimId({ rootDir: root, slug: 'foo', place: 'backlog', mkdir });
+
+  assert.equal(result.ok, false);
+  assert.equal(fs.existsSync(path.join(root, 'backlog')), false);
+});
+
+test('もともとあった置き場ディレクトリは、確保に失敗しても消さない', () => {
+  const root = makeRoot(['backlog/0041-x']);
+  const mkdir = () => {
+    throw new Error('EEXIST: file already exists');
+  };
+
+  assert.equal(claimId({ rootDir: root, slug: 'foo', place: 'backlog', mkdir }).ok, false);
+  assert.equal(fs.existsSync(path.join(root, 'backlog')), true);
+  assert.equal(fs.existsSync(path.join(root, 'backlog', '0041-x')), true);
+});
+
+// High: 確保中のディレクトリで開発ループの手順 1 が落ちないこと
+test('確保しただけの空ディレクトリがあっても、次の作業の選択は落ちない', () => {
+  const root = makeLayout({
+    'task/0001-x': progressMd({ branch: 'feat/0001-x', complexity: 'S' }),
+  });
+  assert.equal(claimId({ rootDir: root, slug: 'reserved' }).ok, true);
+
+  // exec は呼ばれる（worktree add / npm ci）ので記録だけする
+  const result = startTask({ rootDir: root, exec: () => '' });
+
+  assert.equal(result.dirName, '0001-x');
+  assert.equal(result.model, 'haiku');
+});
+
+test('spec があるのに progress が無い作業は、従来どおり書式の破損として失敗する', () => {
+  const root = makeLayout({ 'task/0001-x': null });
+  fs.writeFileSync(path.join(root, 'task', '0001-x', 'spec.md'), '# spec\n');
+
+  assert.throws(
+    () => startTask({ rootDir: root, exec: () => '' }),
+    /task\/0001-x\/progress\.md がありません/,
+  );
 });

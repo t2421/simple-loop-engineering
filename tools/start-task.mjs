@@ -178,8 +178,14 @@ function readTaskEntries(rootDir) {
   for (const dirent of fs.readdirSync(taskDir, { withFileTypes: true })) {
     const m = WORK_DIR_RE.exec(dirent.name);
     if (!dirent.isDirectory() || !m) continue;
-    const progressPath = path.join(taskDir, dirent.name, 'progress.md');
+    const workDir = path.join(taskDir, dirent.name);
+    const progressPath = path.join(workDir, 'progress.md');
     if (!fs.existsSync(progressPath)) {
+      // `--claim` が確保しただけのディレクトリ（spec も progress もまだ無い）は
+      // 「確保中」であって壊れた作業ではない。ここで失敗にすると、起草側が
+      // progress を置くまでの間、開発ループの手順 1 が全員分ハードに落ちる。
+      // spec があるのに progress が無いのは従来どおり書式の破損として失敗させる
+      if (!fs.existsSync(path.join(workDir, 'spec.md'))) continue;
       throw new Error(`task/${dirent.name}/progress.md がありません`);
     }
     const markdown = fs.readFileSync(progressPath, 'utf8');
@@ -331,25 +337,28 @@ export function isValidSlug(slug) {
 }
 
 /**
- * 既に同じ slug の作業ディレクトリ（`NNNN-<slug>`）があるかを探す。
+ * 採番の対象になる作業ディレクトリを、リポジトリルート相対のパスと ID・slug で列挙する。
  * `task/`・`task/archive/`・`backlog/` を見る。採番（`nextId`）と同じ範囲である。
  *
  * @param {string} rootDir
- * @param {string} slug
- * @returns {string | null} 見つかったパス（リポジトリルート相対）。無ければ null
+ * @returns {Array<{path: string, id: string, slug: string}>}
  */
-function findExistingSlug(rootDir, slug) {
+function listWorkDirs(rootDir) {
+  const found = [];
   for (const dir of ['task', path.join('task', 'archive'), 'backlog']) {
     const full = path.join(rootDir, dir);
     if (!fs.existsSync(full)) continue;
     for (const dirent of fs.readdirSync(full, { withFileTypes: true })) {
       const m = WORK_DIR_RE.exec(dirent.name);
-      if (dirent.isDirectory() && m && m[2] === slug) {
-        return `${dir.replaceAll(path.sep, '/')}/${dirent.name}`;
-      }
+      if (!dirent.isDirectory() || !m) continue;
+      found.push({
+        path: `${dir.replaceAll(path.sep, '/')}/${dirent.name}`,
+        id: m[1],
+        slug: m[2],
+      });
     }
   }
-  return null;
+  return found;
 }
 
 /**
@@ -380,27 +389,62 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
 
   // 同じ slug の作業が既にあるなら、ID を消費せずに衝突を報告する。
   // 同じ題材の作業が 2 つの ID で並ぶのを防ぐ
-  const existing = findExistingSlug(rootDir, slug);
-  if (existing !== null) {
-    return { ok: false, reason: `同じ slug の作業が既にあります: ${existing}` };
+  const existing = listWorkDirs(rootDir).find((w) => w.slug === slug);
+  if (existing !== undefined) {
+    return { ok: false, reason: `同じ slug の作業が既にあります: ${existing.path}` };
   }
 
   const id = nextId(rootDir);
   const relative = `${place}/${id}-${slug}`;
   const target = path.join(rootDir, place, `${id}-${slug}`);
 
-  // 置き場そのものが無いことはある（新しいリポジトリ）。確保の対象は
-  // あくまで作業ディレクトリなので、親は recursive に作ってよい
-  fs.mkdirSync(path.join(rootDir, place), { recursive: true });
+  // 置き場そのものが無いことはある（新しいリポジトリ）。確保に失敗したときに
+  // 空の置き場を残さないよう、作ったかどうかを覚えておく
+  const placeDir = path.join(rootDir, place);
+  const placeExisted = fs.existsSync(placeDir);
+  if (!placeExisted) fs.mkdirSync(placeDir, { recursive: true });
+
+  /** 確保に失敗したときに、自分が作ったものだけを片付ける */
+  const cleanup = () => {
+    if (!placeExisted) {
+      try {
+        fs.rmdirSync(placeDir);
+      } catch {
+        // 他者が中身を置いた等で消せなければ、そのままにする
+      }
+    }
+  };
 
   try {
     // 「存在すれば失敗する」作成。この失敗が、採番と作成の間に他者が
-    // 同じ ID を確保したことの証拠になる。ロックファイルは導入しない
+    // まったく同じパスを確保したことの証拠になる。ロックファイルは導入しない
     mkdir(target);
   } catch (err) {
+    cleanup();
     return {
       ok: false,
       reason: `${relative} を確保できませんでした（他者が先に確保した可能性があります。再実行してください）: ${err.message}`,
+    };
+  }
+
+  // **EEXIST だけでは足りない。** slug や置き場が違う 2 者は同じ ID を計算しても
+  // パスが異なるため両方 mkdir に成功し、重複 ID が残る。ID は task/ と backlog/
+  // で 1 つの番号空間なので、作成後に ID をキーにして走査し直す。
+  //
+  // 双方が相手を見て双方とも降りることはある（安全側の結果である）。再実行すれば
+  // 次の ID を得る。自動再試行はしない（範囲外）。
+  const duplicate = listWorkDirs(rootDir).find((w) => w.id === id && w.path !== relative);
+  if (duplicate !== undefined) {
+    try {
+      // 自分が今作った空ディレクトリだけを消す。相手のものには触らない
+      fs.rmdirSync(target);
+    } catch {
+      // 消せなければ、下の理由と併せて人間が片付ける
+    }
+    cleanup();
+    return {
+      ok: false,
+      reason: `ID ${id} を他者が同時に確保しました: ${duplicate.path}（再実行してください）`,
     };
   }
 
@@ -408,34 +452,56 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
 }
 
 /** CLI の使い方。分岐が増えたので 1 箇所にまとめる */
-const USAGE = '使い方: node tools/start-task.mjs [--next-id | --claim <slug> [--in <task|backlog>]]';
+export const USAGE = '使い方: node tools/start-task.mjs [--next-id | --claim <slug> [--in <task|backlog>]]';
+
+/**
+ * CLI の引数（`process.argv.slice(2)`）を解釈する純関数。
+ *
+ * **`--in` の値の欠落を、`--in` の省略と混ぜない。** `--claim foo --in` で
+ * `argv[3]` が undefined のまま `claimId` に渡すと、分割代入の既定値が効いて
+ * `task` に化け、何も作らず失敗すべき入力が確保に成功してしまう。
+ * 既定値を当ててよいのは `--in` ごと省略されたときだけである。
+ *
+ * @param {string[]} argv - `process.argv.slice(2)`
+ * @returns {{kind: 'start'} | {kind: 'next-id'} | {kind: 'claim', slug: string, place: string} | {kind: 'usage'}}
+ */
+export function parseCliArgs(argv) {
+  if (argv.length === 0) return { kind: 'start' };
+  if (argv[0] === '--next-id') {
+    return argv.length === 1 ? { kind: 'next-id' } : { kind: 'usage' };
+  }
+  if (argv[0] === '--claim') {
+    if (argv.length === 2) return { kind: 'claim', slug: argv[1], place: 'task' };
+    // `--in` は値とセットでしか受けない。値の欠落も余分な引数も使い方の誤りとする
+    if (argv.length === 4 && argv[2] === '--in') {
+      return { kind: 'claim', slug: argv[1], place: argv[3] };
+    }
+    return { kind: 'usage' };
+  }
+  return { kind: 'usage' };
+}
 
 function main() {
   const rootDir = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 
-  if (process.argv[2] === '--next-id') {
+  const args = parseCliArgs(process.argv.slice(2));
+
+  if (args.kind === 'usage') {
+    console.error(USAGE);
+    process.exit(1);
+  }
+  if (args.kind === 'next-id') {
     console.log(nextId(rootDir));
     return;
   }
-  if (process.argv[2] === '--claim') {
-    const slug = process.argv[3];
-    // `--in` の欠落と不正値は分けない。どちらも claimId が place として弾く
-    const place = process.argv[4] === '--in' ? process.argv[5] : 'task';
-    if (process.argv[4] !== undefined && process.argv[4] !== '--in') {
-      console.error(USAGE);
-      process.exit(1);
-    }
-    const result = claimId({ rootDir, slug, place });
+  if (args.kind === 'claim') {
+    const result = claimId({ rootDir, slug: args.slug, place: args.place });
     if (!result.ok) {
       console.error(`確保しませんでした: ${result.reason}`);
       process.exit(1);
     }
     console.log(result.path);
     return;
-  }
-  if (process.argv[2] !== undefined) {
-    console.error(USAGE);
-    process.exit(1);
   }
 
   let result;

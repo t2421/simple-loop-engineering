@@ -395,6 +395,17 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
   }
 
   const id = nextId(rootDir);
+  // 番号空間はゼロ埋め 4 桁である（CLAUDE.md）。`9999` の次は `10000` になるが、
+  // `WORK_DIR_RE` は 4 桁しか認識しないので、確保しても以後の走査から**消える**。
+  // 別の slug が同じ `10000` を再確保できてしまうので、作る前に拒む。
+  // `--next-id` 単体の振る舞いは変えない（完了条件 6）。
+  if (id.length !== 4) {
+    return {
+      ok: false,
+      reason: `ID がゼロ埋め 4 桁に収まりません: ${id}。番号空間を使い切っています`,
+    };
+  }
+
   const relative = `${place}/${id}-${slug}`;
   const target = path.join(rootDir, place, `${id}-${slug}`);
 

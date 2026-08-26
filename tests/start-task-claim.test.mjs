@@ -350,3 +350,21 @@ test('置き場をまたいで同じ slug が並行で確保されても、両�
   assert.equal(result.ok, false);
   assert.deepEqual(listWorkDirs(root), ['backlog/0041-x', 'backlog/0043-foo']);
 });
+
+test('番号空間を使い切っていたら、確保せずに失敗する（4 桁に収まらない ID を作らない）', () => {
+  // `10000-foo` は WORK_DIR_RE に一致しないので、確保しても以後の走査から消え、
+  // 別の slug が同じ 10000 を再確保できてしまう
+  const root = makeRoot(['task/9999-z']);
+
+  const result = claimId({ rootDir: root, slug: 'foo' });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /4 桁/);
+  assert.deepEqual(listWorkDirs(root), ['task/9999-z']);
+  assert.equal(fs.existsSync(path.join(root, 'task', '10000-foo')), false);
+});
+
+test('--next-id 単体の振る舞いは桁溢れでも変わらない（完了条件 6）', () => {
+  const root = makeRoot(['task/9999-z']);
+  assert.equal(nextId(root), '10000');
+});

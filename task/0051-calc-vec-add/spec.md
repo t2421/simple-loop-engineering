@@ -13,7 +13,13 @@
 
 ## 背景
 
-`addVec` は `0050-math-vec-add` で公開する。ブラウザから 2 本のベクトルとその和を見て確認する画面が無い。この作業に Figma は無い。トークン表は本仕様が正である。
+`addVec` は `0050-math-vec-add` で公開する。ブラウザから 2 本のベクトルとその和を見て確認する画面が無い。見た目の正は次の Figma フレームとする。
+
+- ファイル: [vector](https://www.figma.com/design/ftGcQpbvknoosfpy3aP1FQ/vector?node-id=2-5)
+- file key: `ftGcQpbvknoosfpy3aP1FQ`
+- node id: `2:5`（`vector-calculator-ui`）
+
+抽出結果は `task/0051-calc-vec-add/calc-vec-add.figma.json` と `task/0051-calc-vec-add/calc-vec-add.png` に置く。抽出後はテストを通すために書き換えない。ライブファイルは完了条件にしない。
 
 `addVec` の実装は `0050-math-vec-add` の範囲である。この作業は公開済みの `addVec` を呼ぶ。
 
@@ -41,35 +47,15 @@
 
 ### 見た目
 
-実装は CSS 変数で参照し、表に無いマジックナンバーを置かない。
-
-新規トークン（この作業で保証する値）:
-
-| トークン | 値 | 用途 |
-|---|---|---|
-| `--size-vec-canvas` | `320px` | SVG の幅・高さ |
-| `--color-vec-axis` | `#d1d5db` | 軸 |
-| `--color-vec-a` | `#2563eb` | ベクトル A |
-| `--color-vec-b` | `#16a34a` | ベクトル B |
-| `--color-vec-sum` | `#dc2626` | 和 |
-| `--size-vec-stroke` | `2px` | ベクトル線の stroke-width |
-| `--size-vec-axis-stroke` | `1px` | 軸の stroke-width |
-
-既存トークン（`src/calc.css` の値を使う。変更しない）:
-
-| トークン | 用途 |
-|---|---|
-| `--font-family` | 見出し・ラベル・入力・ボタン |
-| `--font-size-title` / `--font-weight-title` / `--color-text-title` | 見出し |
-| `--font-size-label` / `--font-weight-label` / `--color-text-label` | ラベル |
-| `--size-input-height` / `--space-input-padding-x` / `--space-input-padding-y` / `--color-border-input` / `--radius-input` | 入力 |
-| `--color-accent` / `--color-white` / `--font-size-button` / `--font-weight-button` / `--size-button-height` / `--radius-button` | 計算ボタン |
-| `--space-calc-gap` / `--space-field-gap` / `--space-inputs-gap` | 余白 |
+- トークンと幾何の正は `task/0051-calc-vec-add/calc-vec-add.figma.json`（ノード `2:5` から抽出したプロパティ）
+- 参照画像の正は `task/0051-calc-vec-add/calc-vec-add.png`（同じノードの書き出し）
+- 実装は CSS 変数でトークンを参照し、表に無いマジックナンバーを置かない
+- 比較するプロパティは塗り、文字色、フォントサイズ、フォントウェイト、パディング、ギャップ、角丸、幅・高さとする
 
 ### 状態
 
 - 通常（未計算）: 数値結果は `—`。SVG は軸のみ
-- 計算後: 数値結果は `addVec` の戻り値を `x, y` 形式で表示する。SVG に A / B / 和の 3 本があり、stroke は上表の色
+- 計算後: 数値結果は `addVec` の戻り値を `x, y` 形式で表示する。SVG に A / B / 和の 3 本があり、stroke は抽出 JSON の色
 - 空入力で計算: 両ベクトルを `[0, 0]` とみなし、数値結果は `0, 0`
 - ホバー: 範囲外
 
@@ -78,8 +64,7 @@
 - `addVec` の実装（`0050-math-vec-add`）
 - ベクトルの引き算・スカラー倍・3 次元
 - 既存スカラー計算機の見た目・トークン・操作の変更
-- Figma 抽出
-- ピクセル完全一致
+- ピクセル完全一致（差分 0）
 - ホバー時の見た目
 - 入力に応じた自動スケール（キャンバスから矢印がはみ出す場合もクリップしてよい。スケール変換はしない）
 
@@ -106,6 +91,6 @@
 3. 「失敗時」に書いた入力・操作で、仕様どおり失敗する。該当がなければこの項は「なし」。
 4. 「範囲外」を実装していない。
 5. 計算は公開済みの `addVec` を使う。UI 側で成分を足さない。
-6. 新規トークン 7 値（`--size-vec-canvas` ほか）が対象要素の計算スタイルまたは SVG 属性と一致する。
+6. 抽出済みの `task/0051-calc-vec-add/calc-vec-add.figma.json` の比較対象プロパティと、対象要素の計算スタイルが一致する。`task/0051-calc-vec-add/calc-vec-add.png` とのピクセル不一致率は 0.5% 以下である。
 7. 既存スカラーの例（左 `2`、右 `3`、足し算 → `5`）が `tests/calc-page.test.mjs` を変更せずに通る。
 8. SVG の各ベクトル終点が、仕様の座標規則（原点中央、y 反転、1 単位 = 1 CSS px）で入力と一致する。

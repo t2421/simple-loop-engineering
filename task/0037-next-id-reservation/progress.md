@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0037-next-id-reservation/spec.md`
 - **Branch:** `feat/0037-next-id-reservation`
-- **PR:** `未作成`
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/70`
 - **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `M`
 
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/start-task-claim.test.mjs`。既存の `tests/start-task.test.mjs` は凍結対象なので触らない)
 - [x] 実装 (`tools/start-task.mjs` に `--claim <slug> [--in <task|backlog>]` を追加)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -31,3 +31,4 @@
 - `13:05` - 再レビュー（3 回目）で**承認**（Critical 0 / High 0）。完了条件 1〜7 をすべて満たしていることも承認側で照合された。
 - `13:05` - 同レビューの Low 2（番号空間の桁溢れ）を修正。最大 ID が `9999` のとき `nextId` は `10000` を返すが、`WORK_DIR_RE` は 4 桁しか認識しないため、確保しても以後の走査から消え、別の slug が同じ `10000` を再確保できる。claim は作る前に 4 桁に収まらない ID を拒むようにした。`--next-id` 単体の振る舞いは変えていない（完了条件 6）ことをテストで固定した。`npm run ci` は 429 件全通過。
 - `13:05` - 同レビューの Low 1（`spec.md` はあるが `progress.md` がまだ無い過渡状態で選択が落ちる）は main 時点から存在する挙動で、本差分はむしろ緩和側に動かしているとの評価。本作業の範囲外とした。
+- `13:15` - PR #70 を作成した。見た目の変更は無いため（`node tools/e2e-needed.mjs main` が `needed=false`）スクリーンキャプチャは添付していない。

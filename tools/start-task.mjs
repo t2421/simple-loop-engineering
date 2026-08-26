@@ -11,6 +11,8 @@
  * 使い方:
  *   node tools/start-task.mjs            次の作業を選び、worktree を用意する
  *   node tools/start-task.mjs --next-id  新規作業に使う次の ID を出す
+ *   node tools/start-task.mjs --claim <slug> [--in <task|backlog>]
+ *                                        次の ID を採り、その場でディレクトリを作って確保する
  */
 
 import fs from 'node:fs';
@@ -304,6 +306,110 @@ export function nextId(rootDir) {
   return nextIdFrom(names);
 }
 
+/**
+ * `--claim` が確保できる置き場。`task/`（既定）と `backlog/` の 2 つだけ。
+ * `task/archive/` は完了した作業の履歴なので新規の確保先にしない。
+ */
+export const CLAIM_PLACES = Object.freeze(['task', 'backlog']);
+
+/**
+ * claim できる slug の形。CLAUDE.md の「英小文字とハイフン」に数字を許した形。
+ *
+ * 先頭を英小文字に固定するのは、`0042-foo` のような名前を slug として渡されると
+ * 作業ディレクトリ名（`<ID>-<slug>`）の ID 部分と見分けがつかなくなるためである。
+ */
+const SLUG_RE = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * slug として正しいかを判定する純関数。
+ *
+ * @param {string} slug
+ * @returns {boolean}
+ */
+export function isValidSlug(slug) {
+  return typeof slug === 'string' && SLUG_RE.test(slug);
+}
+
+/**
+ * 既に同じ slug の作業ディレクトリ（`NNNN-<slug>`）があるかを探す。
+ * `task/`・`task/archive/`・`backlog/` を見る。採番（`nextId`）と同じ範囲である。
+ *
+ * @param {string} rootDir
+ * @param {string} slug
+ * @returns {string | null} 見つかったパス（リポジトリルート相対）。無ければ null
+ */
+function findExistingSlug(rootDir, slug) {
+  for (const dir of ['task', path.join('task', 'archive'), 'backlog']) {
+    const full = path.join(rootDir, dir);
+    if (!fs.existsSync(full)) continue;
+    for (const dirent of fs.readdirSync(full, { withFileTypes: true })) {
+      const m = WORK_DIR_RE.exec(dirent.name);
+      if (dirent.isDirectory() && m && m[2] === slug) {
+        return `${dir.replaceAll(path.sep, '/')}/${dirent.name}`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 次の ID を採り、その場で作業ディレクトリを作って確保する。
+ *
+ * 採番（`--next-id`）とディレクトリ作成が別ステップだと、並行する 2 者が
+ * 続けて採番して同じ値を得る。採番と確保を 1 つの呼び出しに畳むことで、
+ * 確保できた側だけがその ID を持つ。作るのは**空ディレクトリだけ**で、
+ * `spec.md` などの中身は起草側が置く。
+ *
+ * 失敗は例外にせず結果で返す。衝突は異常ではなく通常の分岐で、
+ * 呼び出し側は再実行すれば次の ID を得る（自動再試行はしない）。
+ *
+ * @param {object} input
+ * @param {string} input.rootDir - リポジトリのルート
+ * @param {string} input.slug - 一覧用のラベル
+ * @param {string} [input.place] - 置き場（`task` 既定 / `backlog`）
+ * @param {(dir: string) => void} [input.mkdir] - 「存在すれば失敗する」作成。テストで差し替える
+ * @returns {{ok: true, path: string} | {ok: false, reason: string}}
+ */
+export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkdirSync(dir) }) {
+  if (!CLAIM_PLACES.includes(place)) {
+    return { ok: false, reason: `--in が不正: ${place}（${CLAIM_PLACES.join(' | ')}）` };
+  }
+  if (!isValidSlug(slug)) {
+    return { ok: false, reason: `slug が不正: ${slug}（${SLUG_RE.source} に合致すること）` };
+  }
+
+  // 同じ slug の作業が既にあるなら、ID を消費せずに衝突を報告する。
+  // 同じ題材の作業が 2 つの ID で並ぶのを防ぐ
+  const existing = findExistingSlug(rootDir, slug);
+  if (existing !== null) {
+    return { ok: false, reason: `同じ slug の作業が既にあります: ${existing}` };
+  }
+
+  const id = nextId(rootDir);
+  const relative = `${place}/${id}-${slug}`;
+  const target = path.join(rootDir, place, `${id}-${slug}`);
+
+  // 置き場そのものが無いことはある（新しいリポジトリ）。確保の対象は
+  // あくまで作業ディレクトリなので、親は recursive に作ってよい
+  fs.mkdirSync(path.join(rootDir, place), { recursive: true });
+
+  try {
+    // 「存在すれば失敗する」作成。この失敗が、採番と作成の間に他者が
+    // 同じ ID を確保したことの証拠になる。ロックファイルは導入しない
+    mkdir(target);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `${relative} を確保できませんでした（他者が先に確保した可能性があります。再実行してください）: ${err.message}`,
+    };
+  }
+
+  return { ok: true, path: relative };
+}
+
+/** CLI の使い方。分岐が増えたので 1 箇所にまとめる */
+const USAGE = '使い方: node tools/start-task.mjs [--next-id | --claim <slug> [--in <task|backlog>]]';
+
 function main() {
   const rootDir = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 
@@ -311,8 +417,24 @@ function main() {
     console.log(nextId(rootDir));
     return;
   }
+  if (process.argv[2] === '--claim') {
+    const slug = process.argv[3];
+    // `--in` の欠落と不正値は分けない。どちらも claimId が place として弾く
+    const place = process.argv[4] === '--in' ? process.argv[5] : 'task';
+    if (process.argv[4] !== undefined && process.argv[4] !== '--in') {
+      console.error(USAGE);
+      process.exit(1);
+    }
+    const result = claimId({ rootDir, slug, place });
+    if (!result.ok) {
+      console.error(`確保しませんでした: ${result.reason}`);
+      process.exit(1);
+    }
+    console.log(result.path);
+    return;
+  }
   if (process.argv[2] !== undefined) {
-    console.error('使い方: node tools/start-task.mjs [--next-id]');
+    console.error(USAGE);
     process.exit(1);
   }
 

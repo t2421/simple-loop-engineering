@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0038-promote-tool/spec.md`
 - **Branch:** `feat/0038-promote-tool`
 - **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -13,7 +13,7 @@
 - [x] Specの要件・受け入れ条件の確認
 - [x] テストの作成 (`tests/promote.test.mjs`)
 - [x] 実装 (`tools/promote.mjs`)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
@@ -31,3 +31,5 @@
 - `12:45` - Medium 1（巻き戻しの `git mv` が失敗しても例外を捨て、無条件に「巻き戻しました」と報告する）を修正。`rollback()` が各手順の失敗を集めて返し、戻せなかったときは「巻き戻しにも失敗しました（手で確認してください）」と残骸の所在を伝えるようにした。逆方向の `git mv` だけ失敗させる回帰テストを追加。
 - `12:45` - Medium 2（生成する Branch が `tools/start-task.mjs` の `isValidBranchName` を通らない値になりうる）を修正。`branchFor(name)` を export し、`git mv` の前に `isValidBranchName` で検証して不正なら何も変更せず失敗する。受理集合がずれたら機械が捕まえるよう、テストは `start-task.mjs` から `isValidBranchName` を import して表明している。
 - `12:45` - Low 1（昇格前から `backlog/<name>/progress.md` があると黙って上書きされる）を修正。移動前に存在を確認して失敗する。Low 2（`snapshot` が空ディレクトリの残存を見ていない）も修正し、ディレクトリのエントリを記録するようにした。`npm run ci` は 424 件全通過。
+- `13:05` - 再レビュー（3 回目）で**承認**（Critical 0 / High 0）。「逆方向の `git mv` が成功したとき前 2 手順の失敗を捨ててよいか」への回答は No だったので、指摘どおり修正した。`git mv <dir>` はディレクトリごと rename するため、消し損ねた progress.md は一緒に戻り、書き戻せなかった spec.md は壊れた中身のまま戻る。`rollback()` は逆方向 `git mv` の成否によらず集めた失敗を返すようにした。併せて、spec の書き込みに着手する前に落ちた場合は復元を試みない（`restoreSpec`）ようにし、不要な警告を出さないようにした。
+- `13:05` - 同レビューの Medium 2（`0040-foo.` のような末尾ドットの作業名は `isWorkName` も `isValidBranchName` も通るが git は `feat/0040-foo.` を拒む）を修正。`isGitSafeRef` を `tools/promote.mjs` に置き、末尾ドットと区切りの先頭ドットを上乗せで弾く。受理集合の本体は `tools/start-task.mjs` の `isValidBranchName` に合わせたままにした（あちらは 0037 が触っているファイルなので、この作業からは変更しない）。回帰テスト 3 本を追加。`npm run ci` は 427 件全通過。

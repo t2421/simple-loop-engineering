@@ -138,6 +138,26 @@ export function branchFor(name) {
   return `feat/${name}`;
 }
 
+/**
+ * git が ref 名として受けるかを判定する純関数。
+ *
+ * `tools/start-task.mjs` の `isValidBranchName` は文字種と `..` / `//` / 末尾 `/` /
+ * 末尾 `.lock` を見るが、**git はさらに「区切りの先頭が `.`」「末尾が `.`」も拒む**。
+ * `0040-foo.` のような作業名は `isWorkName` も `isValidBranchName` も通るのに
+ * `git worktree add -b feat/0040-foo.` が失敗するので、昇格は成功したのに
+ * その作業だけ開始できない状態になる。ここで先に弾く。
+ *
+ * 受理集合の本体は向こうに合わせたままにし、ここは**上乗せの制約**だけを持つ。
+ *
+ * @param {string} ref
+ * @returns {boolean}
+ */
+export function isGitSafeRef(ref) {
+  if (typeof ref !== 'string' || ref === '') return false;
+  if (ref.endsWith('.')) return false;
+  return ref.split('/').every((segment) => segment !== '' && !segment.startsWith('.'));
+}
+
 /** 生成する progress のメタ情報。値は `<作業名>` を受け取って埋める */
 const PROGRESS_META = Object.freeze([
   ['Target Spec', (name) => `\`task/${name}/spec.md\``],
@@ -248,7 +268,7 @@ export function promote(
   }
   // 生成する Branch が start-task で使える形かを、動かす前に確かめる
   const branch = branchFor(name);
-  if (!isValidBranchName(branch)) {
+  if (!isValidBranchName(branch) || !isGitSafeRef(branch)) {
     return {
       ok: false,
       reason: `生成する Branch がブランチ名として不正です: ${branch}。slug を見直してください`,
@@ -282,37 +302,48 @@ export function promote(
   // 巻き戻しは**中身も**戻す。移動だけ戻して spec の書き換えを残すと、
   // 「昇格しませんでした」と言いながら backlog の spec から backlog 行が
   // 消えている状態になり、「何も変更せず失敗する」契約を破る
-  const rollback = () => {
+  /**
+   * @param {{restoreSpec: boolean}} opts - spec の書き込みに着手済みなら復元する。
+   *   着手前（progress の書き込みで落ちた）なら spec は無傷なので触らない
+   */
+  const rollback = ({ restoreSpec }) => {
     const failures = [];
     try {
       fs.rmSync(path.join(taskDir, 'progress.md'), { force: true, recursive: true });
     } catch (err) {
       failures.push(`progress.md を消せませんでした: ${err.message}`);
     }
-    try {
-      fs.writeFileSync(path.join(taskDir, 'spec.md'), specText);
-    } catch (err) {
-      failures.push(`spec.md を戻せませんでした: ${err.message}`);
+    if (restoreSpec) {
+      try {
+        writeFile(path.join(taskDir, 'spec.md'), specText);
+      } catch (err) {
+        failures.push(`spec.md を戻せませんでした: ${err.message}`);
+      }
     }
     try {
-      // ディレクトリごと戻すので、上の 2 つが失敗していてもここが成功すれば
-      // 元の状態に戻る。逆に、ここが失敗したら戻っていない
       exec('git', ['mv', `task/${name}`, `backlog/${name}`], { cwd: root });
-      return [];
     } catch (err) {
       failures.push(`task/${name}/ を backlog/ へ戻せませんでした: ${err.message}`);
     }
+    // **逆方向の `git mv` が成功しても「完全に戻った」ではない。**
+    // `git mv <dir>` はディレクトリごと rename するので、消し損ねた progress.md は
+    // backlog/ へ一緒に戻り、書き戻せなかった spec.md は壊れた中身のまま戻る。
+    // 前段の失敗を捨てると、その状態を「何も変更せず失敗した」と報告してしまう
     return failures;
   };
 
+  // spec の書き込みに着手したかを覚えておく。着手前なら復元は不要で、
+  // 「戻せませんでした」と余計な警告を出さずに済む
+  let specAttempted = false;
   try {
     // 新規作成の progress を先に書く。ここで失敗しても spec はまだ無傷である
     writeFile(path.join(taskDir, 'progress.md'), progress.text);
+    specAttempted = true;
     writeFile(path.join(taskDir, 'spec.md'), rewrittenSpec);
   } catch (err) {
     // 巻き戻せなかったなら、巻き戻したと嘘をつかない。
     // 「何も変更せず失敗した」と読まれると、人間が残骸に気づかない
-    const failures = rollback();
+    const failures = rollback({ restoreSpec: specAttempted });
     if (failures.length > 0) {
       return {
         ok: false,

@@ -13,6 +13,7 @@ import {
   BACKLOG_LINE,
   INCOMPLETE_LINE,
   branchFor,
+  isGitSafeRef,
 } from '../tools/promote.mjs';
 import { isValidBranchName } from '../tools/start-task.mjs';
 
@@ -462,7 +463,50 @@ test('完了条件 6: 実物の task/TEMPLATE-progress.md に対して見出し�
 test('失敗時: spec の書き込みだけが失敗しても、書きかけの progress を消して巻き戻す', () => {
   const root = makeRepo();
   const before = snapshot(root);
-  // progress は書けるが spec は書けない、という順序依存の失敗を注入する
+  // 順方向の spec 書き込みだけ失敗させる（巻き戻しの復元は成功させる）
+  let first = true;
+  const writeFile = (file, data) => {
+    if (file.endsWith('spec.md') && first) {
+      first = false;
+      throw new Error('write failed (injected)');
+    }
+    fs.writeFileSync(file, data);
+  };
+
+  const result = promote('0040-foo', { root, writeFile });
+
+  assert.equal(result.ok, false);
+  // 完全に巻き戻せたので、残骸の警告は出さない
+  assert.match(result.reason, /移動を巻き戻しました/);
+  assert.equal(fs.existsSync(path.join(root, 'task', '0040-foo')), false);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('isGitSafeRef: git が拒む形（末尾ドット・区切りの先頭ドット）を弾く', () => {
+  assert.equal(isGitSafeRef('feat/0040-foo'), true);
+  assert.equal(isGitSafeRef('feat/0040-foo.'), false);
+  assert.equal(isGitSafeRef('feat/.hidden'), false);
+  assert.equal(isGitSafeRef('.feat/foo'), false);
+  assert.equal(isGitSafeRef(''), false);
+  // isValidBranchName だけでは末尾ドットを弾けない（この上乗せが要る理由）
+  assert.equal(isValidBranchName('feat/0040-foo.'), true);
+});
+
+test('失敗時: 末尾ドットの作業名は、移動する前に何も変更せず失敗する', () => {
+  const root = makeRepo({ backlogName: '0040-foo.' });
+  const before = snapshot(root);
+
+  const result = promote('0040-foo.', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /Branch/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('失敗時: 巻き戻しの spec 復元が失敗したら、巻き戻したと報告しない', () => {
+  // 逆方向の git mv は成功するが、spec の復元が失敗する。ディレクトリは戻っても
+  // 中身は壊れたままなので「巻き戻した」と言ってはいけない
+  const root = makeRepo();
   const writeFile = (file, data) => {
     if (file.endsWith('spec.md')) throw new Error('write failed (injected)');
     fs.writeFileSync(file, data);
@@ -471,7 +515,7 @@ test('失敗時: spec の書き込みだけが失敗しても、書きかけの 
   const result = promote('0040-foo', { root, writeFile });
 
   assert.equal(result.ok, false);
-  assert.match(result.reason, /巻き戻/);
-  assert.equal(fs.existsSync(path.join(root, 'task', '0040-foo')), false);
-  assert.deepEqual(snapshot(root), before);
+  assert.match(result.reason, /巻き戻しにも失敗/);
+  assert.match(result.reason, /spec\.md を戻せませんでした/);
+  assert.match(result.reason, /手で確認/);
 });

@@ -18,6 +18,8 @@ import { pathToFileURL } from 'node:url';
 // フェンスの解釈は lint と 1 つにする。複製すると「lint は見出しと見ないのに
 // promote は節の先頭と見る」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
+// 生成した Branch を実際に使うのは start-task。受理集合は向こうに合わせる
+import { isValidBranchName } from './start-task.mjs';
 
 /** backlog の spec の「背景」に置く、候補である印の 1 行 */
 export const BACKLOG_LINE = 'この項目は backlog。着手しない。progress は作らない。完了条件は未確定。';
@@ -121,10 +123,25 @@ export function stripIncompleteLine(markdown) {
   return removeLineInSection(markdown, '完了条件', INCOMPLETE_LINE);
 }
 
+/**
+ * 生成する progress の **Branch**。
+ *
+ * `tools/start-task.mjs` がこの値をそのまま `git worktree add -b` に渡すので、
+ * 向こうの `isValidBranchName` を通らない値を書いてはいけない。書いてしまうと
+ * 「昇格は成功したのに、その作業だけ開始できない」という直し方の分からない
+ * 状態になる。生成前に検証する。
+ *
+ * @param {string} name - 作業名（`<id>-<slug>`）
+ * @returns {string}
+ */
+export function branchFor(name) {
+  return `feat/${name}`;
+}
+
 /** 生成する progress のメタ情報。値は `<作業名>` を受け取って埋める */
 const PROGRESS_META = Object.freeze([
   ['Target Spec', (name) => `\`task/${name}/spec.md\``],
-  ['Branch', (name) => `\`feat/${name}\``],
+  ['Branch', (name) => `\`${branchFor(name)}\``],
   ['PR', () => '`未作成`'],
   ['Status', () => '`Not Started` (Phase: `Plan`)'],
   // Complexity は等級の判断そのものなので埋めない。プレースホルダのまま残す
@@ -221,6 +238,22 @@ export function promote(
   if (!fs.existsSync(templatePath)) {
     return { ok: false, reason: 'task/TEMPLATE-progress.md がありません' };
   }
+  // backlog は progress.md を持たない（CLAUDE.md）。あるなら生成で黙って
+  // 上書きすることになるので、触らずに失敗する
+  if (fs.existsSync(path.join(backlogDir, 'progress.md'))) {
+    return {
+      ok: false,
+      reason: `backlog/${name}/progress.md があります。backlog は progress を持ちません。取り除いてから実行してください`,
+    };
+  }
+  // 生成する Branch が start-task で使える形かを、動かす前に確かめる
+  const branch = branchFor(name);
+  if (!isValidBranchName(branch)) {
+    return {
+      ok: false,
+      reason: `生成する Branch がブランチ名として不正です: ${branch}。slug を見直してください`,
+    };
+  }
 
   let specText;
   let templateText;
@@ -250,21 +283,26 @@ export function promote(
   // 「昇格しませんでした」と言いながら backlog の spec から backlog 行が
   // 消えている状態になり、「何も変更せず失敗する」契約を破る
   const rollback = () => {
+    const failures = [];
     try {
-      fs.rmSync(path.join(taskDir, 'progress.md'), { force: true });
-    } catch {
-      // 消せなくても、下の spec 復元と移動の巻き戻しは試みる
+      fs.rmSync(path.join(taskDir, 'progress.md'), { force: true, recursive: true });
+    } catch (err) {
+      failures.push(`progress.md を消せませんでした: ${err.message}`);
     }
     try {
       fs.writeFileSync(path.join(taskDir, 'spec.md'), specText);
-    } catch {
-      // 復元できなかったら、下で状態を伝える
+    } catch (err) {
+      failures.push(`spec.md を戻せませんでした: ${err.message}`);
     }
     try {
+      // ディレクトリごと戻すので、上の 2 つが失敗していてもここが成功すれば
+      // 元の状態に戻る。逆に、ここが失敗したら戻っていない
       exec('git', ['mv', `task/${name}`, `backlog/${name}`], { cwd: root });
-    } catch {
-      // 巻き戻しにも失敗したら、下で状態を伝える
+      return [];
+    } catch (err) {
+      failures.push(`task/${name}/ を backlog/ へ戻せませんでした: ${err.message}`);
     }
+    return failures;
   };
 
   try {
@@ -272,7 +310,15 @@ export function promote(
     writeFile(path.join(taskDir, 'progress.md'), progress.text);
     writeFile(path.join(taskDir, 'spec.md'), rewrittenSpec);
   } catch (err) {
-    rollback();
+    // 巻き戻せなかったなら、巻き戻したと嘘をつかない。
+    // 「何も変更せず失敗した」と読まれると、人間が残骸に気づかない
+    const failures = rollback();
+    if (failures.length > 0) {
+      return {
+        ok: false,
+        reason: `書き換えに失敗し、巻き戻しにも失敗しました（手で確認してください）: ${err.message} / ${failures.join(' / ')}`,
+      };
+    }
     return { ok: false, reason: `書き換えに失敗したため移動を巻き戻しました: ${err.message}` };
   }
 

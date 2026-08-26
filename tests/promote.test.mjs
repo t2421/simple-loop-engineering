@@ -12,7 +12,9 @@ import {
   buildProgress,
   BACKLOG_LINE,
   INCOMPLETE_LINE,
+  branchFor,
 } from '../tools/promote.mjs';
+import { isValidBranchName } from '../tools/start-task.mjs';
 
 /** 昇格前の backlog spec（backlog 行・未確定行・プレースホルダ入り） */
 function backlogSpec() {
@@ -131,7 +133,10 @@ function makeRepo({ backlogName = '0040-foo', withTemplate = true, spec = backlo
   return root;
 }
 
-/** `backlog/` と `task/` 配下の全ファイルを パス -> 中身 で写し取る */
+/**
+ * `backlog/` と `task/` 配下を パス -> 中身 で写し取る。
+ * ディレクトリも記録する（中身が同じでも空ディレクトリが残れば検知したい）。
+ */
 function snapshot(root) {
   const out = {};
   const walk = (rel) => {
@@ -139,8 +144,12 @@ function snapshot(root) {
     if (!fs.existsSync(abs)) return;
     for (const dirent of fs.readdirSync(abs, { withFileTypes: true })) {
       const child = `${rel}/${dirent.name}`;
-      if (dirent.isDirectory()) walk(child);
-      else out[child] = fs.readFileSync(path.join(root, child), 'utf8');
+      if (dirent.isDirectory()) {
+        out[`${child}/`] = null;
+        walk(child);
+      } else {
+        out[child] = fs.readFileSync(path.join(root, child), 'utf8');
+      }
     }
   };
   walk('backlog');
@@ -354,15 +363,12 @@ test('範囲外: 逆方向（task → backlog）の降格は無い', () => {
 
 // --- レビュー指摘の回帰テスト ---
 
-test('失敗時: git mv 後の書き込みに失敗しても、中身ごと巻き戻して何も変更しない', () => {
-  // progress.md をディレクトリとしてコミットしておくと、移動後の
-  // `fs.writeFileSync(task/0040-foo/progress.md)` が EISDIR で落ちる。
-  // spec.md はその後に書くので、巻き戻しが効かなければ backlog 側の spec が
-  // 書き換わったまま残る（High 指摘の経路）
+test('失敗時: backlog に progress.md があると、移動する前に何も変更せず失敗する', () => {
+  // backlog は progress を持たない（CLAUDE.md）。あるまま昇格すると
+  // 生成した progress で黙って上書きすることになる
   const root = makeRepo();
-  const blocker = path.join(root, 'backlog', '0040-foo', 'progress.md', 'keep');
-  fs.mkdirSync(path.dirname(blocker), { recursive: true });
-  fs.writeFileSync(blocker, 'placeholder\n');
+  const blocker = path.join(root, 'backlog', '0040-foo', 'progress.md');
+  fs.writeFileSync(blocker, '手で置かれた progress\n');
   execFileSync('git', ['add', '-A'], { cwd: root });
   execFileSync('git', ['commit', '-qm', 'blocker'], { cwd: root });
   const before = snapshot(root);
@@ -370,11 +376,44 @@ test('失敗時: git mv 後の書き込みに失敗しても、中身ごと巻�
   const result = promote('0040-foo', { root });
 
   assert.equal(result.ok, false);
-  assert.match(result.reason, /巻き戻/);
+  assert.match(result.reason, /progress/);
   assert.deepEqual(snapshot(root), before);
-  // backlog の spec から backlog 行が消えたままになっていない
-  const spec = fs.readFileSync(path.join(root, 'backlog', '0040-foo', 'spec.md'), 'utf8');
-  assert.equal(spec.includes(BACKLOG_LINE), true);
+});
+
+test('失敗時: 生成する Branch がブランチ名として不正なら、移動する前に失敗する', () => {
+  // start-task がこの Branch をそのまま `git worktree add -b` に渡すので、
+  // 向こうの受理集合を通らない値を書いて「昇格はできたが開始できない」を作らない
+  const root = makeRepo({ backlogName: '0040-foo bar' });
+  const before = snapshot(root);
+
+  const result = promote('0040-foo bar', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /Branch/);
+  assert.deepEqual(snapshot(root), before);
+  assert.equal(isValidBranchName(branchFor('0040-foo')), true);
+});
+
+test('失敗時: 巻き戻しにも失敗したら、巻き戻したと報告しない', () => {
+  const root = makeRepo();
+  // 順方向の git mv は本物、逆方向だけ失敗させる
+  const exec = (cmd, args, opts) => {
+    if (cmd === 'git' && args[0] === 'mv' && args[1].startsWith('task/')) {
+      throw new Error('git mv failed (injected)');
+    }
+    return execFileSync(cmd, args, { ...opts, encoding: 'utf8' });
+  };
+  const writeFile = (file, data) => {
+    if (file.endsWith('spec.md')) throw new Error('write failed (injected)');
+    fs.writeFileSync(file, data);
+  };
+
+  const result = promote('0040-foo', { root, exec, writeFile });
+
+  assert.equal(result.ok, false);
+  // 「巻き戻しました」と嘘をつかず、残骸があることを伝える
+  assert.match(result.reason, /巻き戻しにも失敗/);
+  assert.match(result.reason, /手で確認/);
 });
 
 test('コードフェンスの中の `## 完了条件` を節の先頭と誤認しない', () => {

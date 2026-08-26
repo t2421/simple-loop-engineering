@@ -427,13 +427,21 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
     };
   }
 
-  // **EEXIST だけでは足りない。** slug や置き場が違う 2 者は同じ ID を計算しても
-  // パスが異なるため両方 mkdir に成功し、重複 ID が残る。ID は task/ と backlog/
-  // で 1 つの番号空間なので、作成後に ID をキーにして走査し直す。
+  // **EEXIST だけでは足りない。** 事前チェックと mkdir の間に他者が割り込むと、
+  // パスが違うぶん mkdir は両方成功してしまう。破れ方は 2 通りある。
+  //
+  // - 同じ ID・違う slug / 置き場: ID は task/ と backlog/ で 1 つの番号空間なので重複
+  // - 同じ slug・違う ID: 事前チェック通過後に相手が先に確保すると、こちらは
+  //   次の ID を採ってしまい、同じ題材の作業が 2 つの ID で並ぶ
+  //
+  // どちらも「作成後にもう一度走査する」で捕まる。述語は事前チェックと対称にし、
+  // ID と slug の両方を見る。
   //
   // 双方が相手を見て双方とも降りることはある（安全側の結果である）。再実行すれば
   // 次の ID を得る。自動再試行はしない（範囲外）。
-  const duplicate = listWorkDirs(rootDir).find((w) => w.id === id && w.path !== relative);
+  const duplicate = listWorkDirs(rootDir).find(
+    (w) => w.path !== relative && (w.id === id || w.slug === slug),
+  );
   if (duplicate !== undefined) {
     try {
       // 自分が今作った空ディレクトリだけを消す。相手のものには触らない
@@ -442,9 +450,10 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
       // 消せなければ、下の理由と併せて人間が片付ける
     }
     cleanup();
+    const what = duplicate.id === id ? `ID ${id}` : `slug ${slug}`;
     return {
       ok: false,
-      reason: `ID ${id} を他者が同時に確保しました: ${duplicate.path}（再実行してください）`,
+      reason: `${what} を他者が同時に確保しました: ${duplicate.path}（再実行してください）`,
     };
   }
 

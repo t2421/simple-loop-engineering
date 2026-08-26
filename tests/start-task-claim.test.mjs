@@ -319,3 +319,34 @@ test('spec があるのに progress が無い作業は、従来どおり書式�
     /task\/0001-x\/progress\.md がありません/,
   );
 });
+
+test('同じ slug を並行で claim した 2 者は、別 ID になっても両方は成功しない', () => {
+  // 事前チェックを通過したあとに、相手が先に同じ slug を別 ID で確保する状況。
+  // ID だけを見る事後走査では捕まらず、`0042-foo` と `0043-foo` が並んでしまう
+  const root = makeRoot(['backlog/0041-x']);
+  const mkdir = (dir) => {
+    fs.mkdirSync(path.join(root, 'task', '0043-foo'), { recursive: true });
+    fs.mkdirSync(dir);
+  };
+
+  const result = claimId({ rootDir: root, slug: 'foo', mkdir });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /foo/);
+  // 自分が作った分だけ片付ける。相手のものには触らない
+  assert.equal(fs.existsSync(path.join(root, 'task', '0042-foo')), false);
+  assert.equal(fs.existsSync(path.join(root, 'task', '0043-foo')), true);
+});
+
+test('置き場をまたいで同じ slug が並行で確保されても、両方は成功しない', () => {
+  const root = makeRoot(['backlog/0041-x']);
+  const mkdir = (dir) => {
+    fs.mkdirSync(path.join(root, 'backlog', '0043-foo'), { recursive: true });
+    fs.mkdirSync(dir);
+  };
+
+  const result = claimId({ rootDir: root, slug: 'foo', place: 'task', mkdir });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(listWorkDirs(root), ['backlog/0041-x', 'backlog/0043-foo']);
+});

@@ -15,6 +15,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// フェンスの解釈は lint と 1 つにする。複製すると「lint は見出しと見ないのに
+// promote は節の先頭と見る」という解釈の割れが起きる
+import { linesOutsideFences } from './lint-docs.mjs';
 
 /** backlog の spec の「背景」に置く、候補である印の 1 行 */
 export const BACKLOG_LINE = 'この項目は backlog。着手しない。progress は作らない。完了条件は未確定。';
@@ -44,36 +47,55 @@ export function isWorkName(name) {
   return WORK_NAME_RE.test(name);
 }
 
-/**
- * `## <名前>` の節の本文の範囲を返す純関数。
- * 見出しが無ければ null。
- *
- * @param {string} markdown
- * @param {string} heading
- * @returns {{start: number, end: number} | null} 本文の開始・終了インデックス
- */
-function sectionRange(markdown, heading) {
-  const headingRe = new RegExp(`^## ${heading}\\s*$`, 'm');
-  const m = headingRe.exec(markdown);
-  if (m === null) return null;
-  const start = m.index + m[0].length;
-  const next = /^## /m.exec(markdown.slice(start));
-  return { start, end: next === null ? markdown.length : start + next.index };
+/** 正規表現に埋める文字列をエスケープする */
+function escapeRe(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * 1 行とその直後の空行 1 つを取り除く純関数。
+ * `## <名前>` の節の中から、指定の行（とその直後の空行 1 つ）を取り除く純関数。
  *
- * 空行まで落とさないと、消したあとに空行が 2 つ連なる。
+ * **節を限定するのと、フェンスの中を見ないのが要点である。**
  *
- * @param {string} text
- * @param {string} line
+ * - 節の限定: 同じ「未確定」行は「失敗時」「例」にも置かれている。全文置換に
+ *   するとそちらまで消えるが、あの 2 節の確定は内容の判断と不可分なので範囲外である
+ * - フェンス: spec の本文にコードフェンスで見出しの例を貼ることがある。素朴に
+ *   `^## <名前>$` を探すと、そのフェンス内の 1 行を節の先頭と誤認し、本物の節を
+ *   素通りしたまま成功を返す。解釈は `tools/lint-docs.mjs` の `linesOutsideFences`
+ *   に委ね、lint と同じ行集合を見る
+ *
+ * 空行まで落とすのは、消したあとに空行が 2 つ連なるのを避けるためである。
+ *
+ * @param {string} markdown
+ * @param {string} heading - `##` 見出しの名前
+ * @param {string} line - 取り除く行の先頭（この文字列で始まる 1 行を消す）
  * @returns {string}
  */
-function removeLine(text, line) {
-  // 行頭に固定する。本文の途中に同じ文字列が現れても巻き込まない
-  const re = new RegExp(`^${line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\n]*\\n\\n?`, 'm');
-  return text.replace(re, '');
+function removeLineInSection(markdown, heading, line) {
+  const lines = markdown.split('\n');
+  // linesOutsideFences は 1 始まりの行番号を返す
+  const outside = new Set(linesOutsideFences(markdown).map((l) => l.number));
+  const isOutside = (index) => outside.has(index + 1);
+
+  const headingRe = new RegExp(`^## ${escapeRe(heading)}\\s*$`);
+  const start = lines.findIndex((text, i) => isOutside(i) && headingRe.test(text));
+  if (start === -1) return markdown;
+
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (isOutside(i) && /^## /.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+
+  for (let i = start + 1; i < end; i += 1) {
+    if (!isOutside(i) || !lines[i].startsWith(line)) continue;
+    const count = i + 1 < end && lines[i + 1].trim() === '' ? 2 : 1;
+    lines.splice(i, count);
+    return lines.join('\n');
+  }
+  return markdown;
 }
 
 /**
@@ -83,30 +105,20 @@ function removeLine(text, line) {
  * @returns {string}
  */
 export function stripBacklogLine(markdown) {
-  const range = sectionRange(markdown, '背景');
-  if (range === null) return markdown;
-  const body = markdown.slice(range.start, range.end);
-  return markdown.slice(0, range.start) + removeLine(body, BACKLOG_LINE) + markdown.slice(range.end);
+  return removeLineInSection(markdown, '背景', BACKLOG_LINE);
 }
 
 /**
  * 「完了条件」から未確定行を取り除く純関数。
  *
- * **節を限定するのが要点である。** 同じ 1 行は「失敗時」「例」にも置かれており、
- * 全文置換にするとそちらまで消える。あの 2 節の確定は内容の判断と不可分なので
- * 範囲外に置いてある（`tools/promote.mjs` は判断をしない）。
- *
- * 5 番のプレースホルダ（`<この変更固有の、検証可能な命題。>`）も消さない。
+ * 5 番のプレースホルダ（`<この変更固有の、検証可能な命題。>`）は消さない。
  * 残っていることが「完了条件がまだ未確定である」という印になる。
  *
  * @param {string} markdown - spec.md の中身
  * @returns {string}
  */
 export function stripIncompleteLine(markdown) {
-  const range = sectionRange(markdown, '完了条件');
-  if (range === null) return markdown;
-  const body = markdown.slice(range.start, range.end);
-  return markdown.slice(0, range.start) + removeLine(body, INCOMPLETE_LINE) + markdown.slice(range.end);
+  return removeLineInSection(markdown, '完了条件', INCOMPLETE_LINE);
 }
 
 /** 生成する progress のメタ情報。値は `<作業名>` を受け取って埋める */
@@ -180,9 +192,13 @@ function defaultExec(cmd, args, opts = {}) {
  * @param {object} [opts]
  * @param {string} [opts.root] - リポジトリのルート
  * @param {(cmd: string, args: string[], opts?: {cwd?: string}) => unknown} [opts.exec]
+ * @param {(file: string, data: string) => void} [opts.writeFile] - 書き込み。テストで失敗を注入する
  * @returns {{ok: true, moved: string[]} | {ok: false, reason: string}}
  */
-export function promote(name, { root = process.cwd(), exec = defaultExec } = {}) {
+export function promote(
+  name,
+  { root = process.cwd(), exec = defaultExec, writeFile = fs.writeFileSync } = {},
+) {
   if (!isWorkName(name)) {
     return { ok: false, reason: `作業名が <id>-<slug> の形ではありません: ${name}` };
   }
@@ -230,7 +246,20 @@ export function promote(name, { root = process.cwd(), exec = defaultExec } = {})
     return { ok: false, reason: `移動できませんでした（変更していません）: ${err.message}` };
   }
 
+  // 巻き戻しは**中身も**戻す。移動だけ戻して spec の書き換えを残すと、
+  // 「昇格しませんでした」と言いながら backlog の spec から backlog 行が
+  // 消えている状態になり、「何も変更せず失敗する」契約を破る
   const rollback = () => {
+    try {
+      fs.rmSync(path.join(taskDir, 'progress.md'), { force: true });
+    } catch {
+      // 消せなくても、下の spec 復元と移動の巻き戻しは試みる
+    }
+    try {
+      fs.writeFileSync(path.join(taskDir, 'spec.md'), specText);
+    } catch {
+      // 復元できなかったら、下で状態を伝える
+    }
     try {
       exec('git', ['mv', `task/${name}`, `backlog/${name}`], { cwd: root });
     } catch {
@@ -239,11 +268,10 @@ export function promote(name, { root = process.cwd(), exec = defaultExec } = {})
   };
 
   try {
-    fs.writeFileSync(path.join(taskDir, 'spec.md'), rewrittenSpec);
-    fs.writeFileSync(path.join(taskDir, 'progress.md'), progress.text);
+    // 新規作成の progress を先に書く。ここで失敗しても spec はまだ無傷である
+    writeFile(path.join(taskDir, 'progress.md'), progress.text);
+    writeFile(path.join(taskDir, 'spec.md'), rewrittenSpec);
   } catch (err) {
-    // 書けなかったら移動ごと取り消す。backlog の印が残ったままの spec が
-    // task/ に置かれた状態を残さない
     rollback();
     return { ok: false, reason: `書き換えに失敗したため移動を巻き戻しました: ${err.message}` };
   }
@@ -264,7 +292,15 @@ function main() {
     process.exit(1);
   }
 
-  const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  let root;
+  try {
+    root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  } catch (err) {
+    // 他の失敗と出力を揃える。git リポジトリ外での実行でスタックトレースを出さない
+    console.error(`昇格しませんでした: リポジトリのルートを取得できませんでした: ${err.message}`);
+    process.exit(1);
+  }
+
   const result = promote(name, { root });
   if (!result.ok) {
     console.error(`昇格しませんでした: ${result.reason}`);
@@ -276,6 +312,7 @@ function main() {
     console.log(`  ${line}`);
   }
   console.log('\n次: 完了条件の 5 番と progress の **Complexity** を埋める（判断が要る）');
+  console.log('  Complexity がプレースホルダのままだと `npm run lint:docs` は落ちる。埋めるまでが昇格である');
 }
 
 // CLI として起動されたときだけ実行する（テストからの import では走らせない）

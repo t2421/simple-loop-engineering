@@ -351,3 +351,88 @@ test('範囲外: 逆方向（task → backlog）の降格は無い', () => {
   assert.equal(result.ok, false);
   assert.deepEqual(snapshot(root), before);
 });
+
+// --- レビュー指摘の回帰テスト ---
+
+test('失敗時: git mv 後の書き込みに失敗しても、中身ごと巻き戻して何も変更しない', () => {
+  // progress.md をディレクトリとしてコミットしておくと、移動後の
+  // `fs.writeFileSync(task/0040-foo/progress.md)` が EISDIR で落ちる。
+  // spec.md はその後に書くので、巻き戻しが効かなければ backlog 側の spec が
+  // 書き換わったまま残る（High 指摘の経路）
+  const root = makeRepo();
+  const blocker = path.join(root, 'backlog', '0040-foo', 'progress.md', 'keep');
+  fs.mkdirSync(path.dirname(blocker), { recursive: true });
+  fs.writeFileSync(blocker, 'placeholder\n');
+  execFileSync('git', ['add', '-A'], { cwd: root });
+  execFileSync('git', ['commit', '-qm', 'blocker'], { cwd: root });
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /巻き戻/);
+  assert.deepEqual(snapshot(root), before);
+  // backlog の spec から backlog 行が消えたままになっていない
+  const spec = fs.readFileSync(path.join(root, 'backlog', '0040-foo', 'spec.md'), 'utf8');
+  assert.equal(spec.includes(BACKLOG_LINE), true);
+});
+
+test('コードフェンスの中の `## 完了条件` を節の先頭と誤認しない', () => {
+  const fenced = backlogSpec().replace(
+    '## 例\n',
+    '## 例\n\n```\n## 完了条件\n\n未確定（incomplete）。昇格時に埋める。\n```\n',
+  );
+
+  const after = stripIncompleteLine(fenced);
+
+  // フェンスの中は 1 文字も変えない
+  assert.equal(after.includes('```\n## 完了条件\n\n未確定（incomplete）。昇格時に埋める。\n```'), true);
+  // 本物の「完了条件」節の未確定行は消える
+  assert.match(after, /## 完了条件\n\n次をすべて満たしたとき/);
+});
+
+test('コードフェンスの中の `## 背景` を節の先頭と誤認しない', () => {
+  const fenced = backlogSpec().replace('## 種別\n', '## 種別\n\n```\n## 背景\n```\n');
+
+  const after = stripBacklogLine(fenced);
+
+  assert.equal(after.includes('```\n## 背景\n```'), true);
+  assert.equal(after.includes(BACKLOG_LINE), false);
+});
+
+test('完了条件 6: 実物の task/TEMPLATE-progress.md に対して見出し名・順番が一致する', () => {
+  // テスト内の手書き複製ではなく実ファイルを入力にする。
+  // テンプレートが変わったらこのテストが落ちる
+  const templatePath = new URL('../task/TEMPLATE-progress.md', import.meta.url);
+  const template = fs.readFileSync(templatePath, 'utf8');
+  const below = template.slice(template.indexOf('\n---\n') + 5);
+
+  const result = buildProgress({ template, name: '0040-foo' });
+
+  assert.equal(result.ok, true, result.reason);
+  assert.deepEqual(headings(result.text), headings(below));
+  assert.match(result.text, /^# Progress: `0040-foo`\n/);
+  assert.equal(meta(result.text, 'Target Spec'), '`task/0040-foo/spec.md`');
+  assert.equal(meta(result.text, 'Branch'), '`feat/0040-foo`');
+  assert.equal(meta(result.text, 'PR'), '`未作成`');
+  assert.equal(meta(result.text, 'Status'), '`Not Started` (Phase: `Plan`)');
+  assert.equal(meta(result.text, 'Complexity'), '`<S | M | L>`');
+  assert.equal(result.text.includes('# 進捗テンプレート'), false);
+});
+
+test('失敗時: spec の書き込みだけが失敗しても、書きかけの progress を消して巻き戻す', () => {
+  const root = makeRepo();
+  const before = snapshot(root);
+  // progress は書けるが spec は書けない、という順序依存の失敗を注入する
+  const writeFile = (file, data) => {
+    if (file.endsWith('spec.md')) throw new Error('write failed (injected)');
+    fs.writeFileSync(file, data);
+  };
+
+  const result = promote('0040-foo', { root, writeFile });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /巻き戻/);
+  assert.equal(fs.existsSync(path.join(root, 'task', '0040-foo')), false);
+  assert.deepEqual(snapshot(root), before);
+});

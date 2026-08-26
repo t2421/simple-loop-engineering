@@ -26,3 +26,12 @@
 - `11:35` - Medium 2（種別スコープの欠落）を修正。新設節は `## 完了条件の書き方` の兄弟見出しなので「この節は種別 `task` のときだけ適用する」を継承しない。同じ 1 行を新設節の冒頭に足し、backlog では 1・2 までで 3・4 は昇格時に足すと明示した。
 - `11:35` - Low 1（完了条件 7 の PR 側が未検証）を受け、チェック項目「完了条件 5〜7 の検証」を `[/]` に戻した。ローカル差分側（凍結対象を含まない）は実測済み、PR 側の `protected-paths` は PR 作成後に確認する。
 - `12:10` - PR #69 を作成した。完了条件 7 の PR 側（ラベル無しで `protected-paths` が成功する）は、この PR の `protected-paths` チェックが緑であることで確定する。見た目の変更は無いため（`node tools/e2e-needed.mjs main` が `needed=false`）スクリーンキャプチャは添付していない。
+- `12:20` - PR #69 の GitHub Actions が全チェック pass。完了条件 7（ラベル無しで `protected-paths` が成功する）が確定した。
+
+```
+verify              pass  10s
+e2e                 pass  10s
+preview             pass  22s
+progress-coupling   pass   8s
+protected-paths     pass   8s
+```

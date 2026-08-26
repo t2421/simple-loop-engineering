@@ -1,0 +1,353 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import {
+  promote,
+  isWorkName,
+  stripBacklogLine,
+  stripIncompleteLine,
+  buildProgress,
+  BACKLOG_LINE,
+  INCOMPLETE_LINE,
+} from '../tools/promote.mjs';
+
+/** 昇格前の backlog spec（backlog 行・未確定行・プレースホルダ入り） */
+function backlogSpec() {
+  return [
+    '# 何かをする',
+    '',
+    '一行の要約。',
+    '',
+    '## 種別',
+    '',
+    '改善',
+    '',
+    '## 対象',
+    '',
+    '- 場所: `tools/foo.mjs`',
+    '',
+    '## 背景',
+    '',
+    BACKLOG_LINE,
+    '',
+    '本当の背景はここから始まる。',
+    '',
+    '## 仕様',
+    '',
+    '- 何かをする',
+    '',
+    '## 範囲外',
+    '',
+    '- 何かをしない',
+    '',
+    '## 失敗時',
+    '',
+    `${INCOMPLETE_LINE}候補:`,
+    '',
+    '- 入力が無い: 失敗する',
+    '',
+    '## 例',
+    '',
+    INCOMPLETE_LINE,
+    '',
+    '| 操作または入力 | 期待結果 |',
+    '|---|---|',
+    '| `<昇格時に記入>` | `<昇格時に記入>` |',
+    '',
+    '## 完了条件',
+    '',
+    INCOMPLETE_LINE,
+    '',
+    '次をすべて満たしたとき、この仕様は完了とする。',
+    '',
+    '1. 「対象」が仕様どおりに公開または修正されている。',
+    '2. 「例」がすべて、テストまたは再現手順で同じ結果になる。',
+    '3. 「失敗時」に書いた入力・操作で、仕様どおり失敗する。該当がなければこの項は「なし」。',
+    '4. 「範囲外」を実装していない。',
+    '5. <この変更固有の、検証可能な命題。>',
+    '',
+  ].join('\n');
+}
+
+/** 本物の `task/TEMPLATE-progress.md` と同じ形（`---` の上に説明、下に型） */
+function progressTemplate() {
+  return [
+    '# 進捗テンプレート',
+    '',
+    '新しい進捗はこのファイルをコピーして `<...>` を埋める。',
+    '',
+    '---',
+    '',
+    '# Progress: `<作業名>`',
+    '',
+    '- **Target Spec:** `task/<id>-<slug>/spec.md`',
+    '- **Branch:** `<ブランチ名>`',
+    '- **PR:** `<未作成 | PR の URL>`',
+    '- **Status:** `<Not Started | In Progress | Blocked | Done>` (Phase: `<現在の工程>`)',
+    '- **Complexity:** `<S | M | L>`',
+    '',
+    '## タスクチェックリスト',
+    '',
+    '構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。',
+    '',
+    '- [ ] Specの要件・受け入れ条件の確認',
+    '- [ ] テストの作成 (`<テストファイル>`)',
+    '- [ ] 実装 (`<実装ファイル>`)',
+    '- [ ] レビューサブエージェント (`<レビュアー名>`) の承認取得',
+    '- [ ] PR作成（進捗の **PR** に URL を書く。）',
+    '- [ ] PRマージ後のアーカイブ',
+    '',
+    '## 試行ログ・エラー履歴',
+    '',
+    '- `<HH:MM>` - `<やったこと。>`',
+    '',
+  ].join('\n');
+}
+
+/**
+ * 一時ディレクトリに git リポジトリと `backlog/` `task/` の構造を模す。
+ * backlog の中身はコミットしておく（`git mv` は追跡下のファイルにしか効かない）。
+ */
+function makeRepo({ backlogName = '0040-foo', withTemplate = true, spec = backlogSpec() } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'promote-'));
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+
+  fs.mkdirSync(path.join(root, 'task', 'archive'), { recursive: true });
+  if (withTemplate) {
+    fs.writeFileSync(path.join(root, 'task', 'TEMPLATE-progress.md'), progressTemplate());
+  }
+  if (backlogName !== null) {
+    fs.mkdirSync(path.join(root, 'backlog', backlogName), { recursive: true });
+    fs.writeFileSync(path.join(root, 'backlog', backlogName, 'spec.md'), spec);
+  }
+  git('add', '-A');
+  git('commit', '-qm', 'init');
+  return root;
+}
+
+/** `backlog/` と `task/` 配下の全ファイルを パス -> 中身 で写し取る */
+function snapshot(root) {
+  const out = {};
+  const walk = (rel) => {
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs)) return;
+    for (const dirent of fs.readdirSync(abs, { withFileTypes: true })) {
+      const child = `${rel}/${dirent.name}`;
+      if (dirent.isDirectory()) walk(child);
+      else out[child] = fs.readFileSync(path.join(root, child), 'utf8');
+    }
+  };
+  walk('backlog');
+  walk('task');
+  return out;
+}
+
+/** progress.md の `- **キー:** 値` を読む */
+function meta(markdown, key) {
+  const m = new RegExp(`^- \\*\\*${key}:\\*\\*\\s*(.+)$`, 'm').exec(markdown);
+  return m === null ? null : m[1].trim();
+}
+
+/** `##` 見出しを順番に並べる */
+function headings(markdown) {
+  return [...markdown.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+}
+
+// --- isWorkName ---
+
+test('isWorkName: ゼロ埋め 4 桁 + slug だけを受ける', () => {
+  assert.equal(isWorkName('0040-foo'), true);
+  assert.equal(isWorkName('0001-math-add'), true);
+  assert.equal(isWorkName('abc'), false);
+  assert.equal(isWorkName('40-foo'), false);
+  assert.equal(isWorkName('0040'), false);
+  assert.equal(isWorkName('TEMPLATE-spec.md'), false);
+  assert.equal(isWorkName('0040-foo/../etc'), false);
+  assert.equal(isWorkName(' 0040-foo'), false);
+  assert.equal(isWorkName(undefined), false);
+});
+
+// --- 純関数の書き換え ---
+
+test('stripBacklogLine: 背景の backlog 行と直後の空行だけを消す', () => {
+  const after = stripBacklogLine(backlogSpec());
+  assert.equal(after.includes(BACKLOG_LINE), false);
+  assert.match(after, /## 背景\n\n本当の背景はここから始まる。/);
+});
+
+test('stripIncompleteLine: 完了条件の未確定行だけを消し、失敗時と例の前置きは残す', () => {
+  const after = stripIncompleteLine(backlogSpec());
+  assert.match(after, /## 完了条件\n\n次をすべて満たしたとき/);
+  // 「失敗時」「例」の前置きは判断を要するので触らない（範囲外）
+  assert.equal(after.includes(`${INCOMPLETE_LINE}候補:`), true);
+  assert.match(after, /## 例\n\n未確定（incomplete）。昇格時に埋める。\n/);
+  // 5 番のプレースホルダは残す（完了条件が未確定であることの印）
+  assert.equal(after.includes('<この変更固有の、検証可能な命題。>'), true);
+});
+
+test('buildProgress: テンプレートの `---` より下からメタを埋めた進捗を作る', () => {
+  const result = buildProgress({ template: progressTemplate(), name: '0040-foo' });
+  assert.equal(result.ok, true);
+  assert.match(result.text, /^# Progress: `0040-foo`\n/);
+  assert.equal(meta(result.text, 'Target Spec'), '`task/0040-foo/spec.md`');
+  assert.equal(meta(result.text, 'Branch'), '`feat/0040-foo`');
+  assert.equal(meta(result.text, 'PR'), '`未作成`');
+  assert.equal(meta(result.text, 'Status'), '`Not Started` (Phase: `Plan`)');
+  // Complexity は判断を要するのでプレースホルダのまま
+  assert.equal(meta(result.text, 'Complexity'), '`<S | M | L>`');
+  // `---` より上（テンプレートの説明）は持ち込まない
+  assert.equal(result.text.includes('# 進捗テンプレート'), false);
+});
+
+test('buildProgress: 見出し名と順番がテンプレートの `---` より下と同じ', () => {
+  const template = progressTemplate();
+  const below = template.slice(template.indexOf('\n---\n') + 5);
+  const result = buildProgress({ template, name: '0040-foo' });
+  assert.deepEqual(headings(result.text), headings(below));
+});
+
+test('buildProgress: メタ行を欠くテンプレートは失敗を返す', () => {
+  const broken = progressTemplate().replace(/^- \*\*Status:\*\*.*$/m, '');
+  const result = buildProgress({ template: broken, name: '0040-foo' });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /Status/);
+});
+
+// --- 例の表 ---
+
+test('例1: backlog にある作業を昇格すると task へ移り、progress が生成される', () => {
+  const root = makeRepo();
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(fs.existsSync(path.join(root, 'backlog', '0040-foo')), false);
+
+  const spec = fs.readFileSync(path.join(root, 'task', '0040-foo', 'spec.md'), 'utf8');
+  assert.equal(spec.includes(BACKLOG_LINE), false);
+  assert.match(spec, /## 完了条件\n\n次をすべて満たしたとき/);
+  assert.equal(spec.includes('<この変更固有の、検証可能な命題。>'), true);
+  assert.equal(spec.includes(`${INCOMPLETE_LINE}候補:`), true);
+
+  const progress = fs.readFileSync(path.join(root, 'task', '0040-foo', 'progress.md'), 'utf8');
+  assert.match(progress, /^# Progress: `0040-foo`\n/);
+  assert.equal(meta(progress, 'Target Spec'), '`task/0040-foo/spec.md`');
+  assert.equal(meta(progress, 'Branch'), '`feat/0040-foo`');
+  assert.equal(meta(progress, 'PR'), '`未作成`');
+  assert.equal(meta(progress, 'Status'), '`Not Started` (Phase: `Plan`)');
+  assert.equal(meta(progress, 'Complexity'), '`<S | M | L>`');
+});
+
+test('例1: 移動は git の追跡下で行われる（git mv 相当）', () => {
+  const root = makeRepo();
+
+  assert.equal(promote('0040-foo', { root }).ok, true);
+
+  const status = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
+  // spec は移動としてステージ済み（`R`）。中身を書き換えたので作業ツリー側は `M`。
+  // progress は新規追加（未追跡）
+  assert.match(status, /^RM? backlog\/0040-foo\/spec\.md -> task\/0040-foo\/spec\.md$/m);
+  assert.match(status, /^\?\? task\/0040-foo\/progress\.md$/m);
+});
+
+test('例2: 同じコマンドを再実行すると、何も変更せず失敗する', () => {
+  const root = makeRepo();
+  assert.equal(promote('0040-foo', { root }).ok, true);
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /backlog\/0040-foo/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('例3: どこにも存在しない作業は、何も変更せず失敗する', () => {
+  const root = makeRepo();
+  const before = snapshot(root);
+
+  const result = promote('9999-none', { root });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('例4: 形式が不正な引数は、何も変更せず失敗する', () => {
+  const root = makeRepo();
+  const before = snapshot(root);
+
+  for (const name of ['abc', '', undefined, '40-foo', '0040-foo/../x']) {
+    const result = promote(name, { root });
+    assert.equal(result.ok, false, `name=${name}`);
+  }
+  assert.deepEqual(snapshot(root), before);
+});
+
+// --- 失敗時 ---
+
+test('失敗時: 移動先の task/<id>-<slug>/ が既にあると、何も変更せず失敗する', () => {
+  const root = makeRepo();
+  fs.mkdirSync(path.join(root, 'task', '0040-foo'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'task', '0040-foo', 'spec.md'), '既存の中身\n');
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /task\/0040-foo/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('失敗時: backlog/<id>-<slug>/spec.md が無いと、何も変更せず失敗する', () => {
+  const root = makeRepo();
+  fs.rmSync(path.join(root, 'backlog', '0040-foo', 'spec.md'));
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /spec\.md/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('失敗時: task/TEMPLATE-progress.md が無いと、何も変更せず失敗する', () => {
+  const root = makeRepo({ withTemplate: false });
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /TEMPLATE-progress\.md/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+// --- 範囲外 ---
+
+test('範囲外: 完了条件 5 のプレースホルダと Complexity を自動で埋めない', () => {
+  const root = makeRepo();
+
+  assert.equal(promote('0040-foo', { root }).ok, true);
+
+  const spec = fs.readFileSync(path.join(root, 'task', '0040-foo', 'spec.md'), 'utf8');
+  const progress = fs.readFileSync(path.join(root, 'task', '0040-foo', 'progress.md'), 'utf8');
+  assert.equal(spec.includes('<この変更固有の、検証可能な命題。>'), true);
+  assert.equal(meta(progress, 'Complexity'), '`<S | M | L>`');
+});
+
+test('範囲外: 逆方向（task → backlog）の降格は無い', () => {
+  const root = makeRepo({ backlogName: null });
+  fs.mkdirSync(path.join(root, 'task', '0040-foo'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'task', '0040-foo', 'spec.md'), backlogSpec());
+  const before = snapshot(root);
+
+  const result = promote('0040-foo', { root });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(snapshot(root), before);
+});

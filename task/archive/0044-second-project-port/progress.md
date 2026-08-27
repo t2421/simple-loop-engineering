@@ -1,9 +1,9 @@
 # Progress: `0044-second-project-port`
 
-- **Target Spec:** `task/0044-second-project-port/spec.md`
+- **Target Spec:** `task/archive/0044-second-project-port/spec.md`
 - **Branch:** `feat/0044-second-project-port`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/75
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -20,7 +20,7 @@
 - [x] このリポジトリ側に差分が無いことの確認（→ 完了条件 8）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

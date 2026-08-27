@@ -1,9 +1,9 @@
 # Progress: `0039-parallel-docs-rules`
 
-- **Target Spec:** `task/0039-parallel-docs-rules/spec.md`
+- **Target Spec:** `task/archive/0039-parallel-docs-rules/spec.md`
 - **Branch:** `docs/0039-parallel-docs-rules`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/68`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -14,7 +14,7 @@
 - [x] 実装（CLAUDE.md の「並列作業（worktree）」節への並行 docs 作業規約の追記）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。CLAUDE.md 変更のみの独立した docs PR にする）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

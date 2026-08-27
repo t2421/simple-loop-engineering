@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0042-loop-manifest/spec.md`
 - **Branch:** `feat/0042-loop-manifest`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/76
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `L`
 
@@ -17,8 +17,8 @@
 - [x] 実装（マニフェストの読み取り・検証。固有値を参照する `tools/*.mjs` の置き換え）
 - [x] マニフェスト自身を保護パスへ追加 (`.claude/skills/add-protected-path` に従う)
 - [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 8）
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -80,3 +80,5 @@ exit=0
 - `2026-08-28` - Medium: worktree ガードが先頭セグメントだけで照合していたため、`app/src/` のような入れ子の宣言が効かなかった。**同じ宣言を読む進捗結合は prefix 一致で入れ子を扱う**ので、2 実装で宣言の意味が食い違っていた。相対パス全体での照合に直した。
 - `2026-08-28` - Low: 条件付き工程の `command` と `checker` が「宣言はするが読まない」ことを spec の「範囲外」に明記した（読むのは `triggers` だけ。工程の起動はワークフローが担う）。
 - `2026-08-28` - 修正後 `npm run ci` は 531 pass / 0 fail（2 実装の一致テストを 8 件追加）。
+- `2026-08-28` - PR #76 を作成した。**4 回目の再レビューは未実施**（呼び出しが中断された）。3 回目までの指摘はすべて反映済みで、対応後の検証は `npm run ci`（531 pass / 0 fail）とレビュアー提案のテスト追加で行っている。**承認は得ていないので、この時点で Done にしない。**
+- `2026-08-28` - この PR には人間による `allow-protected-change` ラベルが要る（自分のガードに引っかかるのは設計どおり）。

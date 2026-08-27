@@ -537,7 +537,7 @@ function readVerifyDefinitions(ref, definedIn) {
     try {
       out[d.path] = JSON.parse(raw)[d.jsonKey] ?? {};
     } catch (err) {
-      throw new Error(`${ref}:${d.path} を JSON として読めません: ${err.message}`);
+      throw new Error(`${ref}:${d.path} を JSON として読めません: ${err.message}`, { cause: err });
     }
   }
   return out;
@@ -576,6 +576,7 @@ function readManifest(ref) {
       throw new Error(
         `マニフェスト（${MANIFEST_PATH}）が base にも候補側にもありません。既定値では判定しません。\n`
         + `原因: ${err.message}`,
+        { cause: err },
       );
     }
   }

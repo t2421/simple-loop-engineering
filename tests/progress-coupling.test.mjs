@@ -22,6 +22,15 @@ import {
   unchangedProgressPaths,
 } from '../tools/check-progress-coupling.mjs';
 import { findViolations } from '../tools/check-protected-paths.mjs';
+// ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
+// テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
+import { repoManifest } from '../tools/loop-manifest.mjs';
+import { useManifest } from '../tools/check-protected-paths.mjs';
+import { useManifest as useCouplingManifest } from '../tools/check-progress-coupling.mjs';
+import { writeManifest } from './manifest-fixture.mjs';
+useManifest(repoManifest());
+useCouplingManifest(repoManifest());
+
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -863,6 +872,7 @@ function makeRepo(t, { baseProgress = progressText('0026-a', 'work') } = {}) {
   git(cwd, 'init', '-q', '-b', 'main');
   git(cwd, 'config', 'user.email', 'test@example.com');
   git(cwd, 'config', 'user.name', 'test');
+  writeManifest(cwd);
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.mkdirSync(path.join(cwd, 'task/0026-a'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
@@ -999,6 +1009,7 @@ function makeTwoWorkRepo(t) {
   git(cwd, 'init', '-q', '-b', 'main');
   git(cwd, 'config', 'user.email', 'test@example.com');
   git(cwd, 'config', 'user.name', 'test');
+  writeManifest(cwd);
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src/math.mjs'), 'export const a = 1;\n');
   // 0026-a は `work` ブランチの作業、0027-b は別ブランチ（`other`）の作業。

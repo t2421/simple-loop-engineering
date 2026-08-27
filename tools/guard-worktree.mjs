@@ -115,7 +115,12 @@ export function resolvePrimaryRoot(gitCommonDir) {
  * @param {unknown} input.rootDir - プライマリチェックアウトのルート（絶対パス）
  * @returns {{blocked: boolean, reason: 'no-file-path'|'no-root'|'outside-repo'|'worktree'|'implementation-in-primary'|'not-implementation'}}
  */
-export function classifyEdit({ filePath, rootDir, implementation }) {
+export function classifyEdit({
+  filePath,
+  rootDir,
+  // 既定はそのリポジトリの宣言。rootDir が分かるので、フィクスチャでも実物が読める
+  implementation = implementationFrom(loadManifest(rootDir)),
+}) {
   if (typeof filePath !== 'string' || filePath === '') {
     return { blocked: false, reason: 'no-file-path' };
   }
@@ -171,6 +176,19 @@ export function realPathOrSelf(target) {
  *
  * @returns {string | undefined}
  */
+/**
+ * いま動いているチェックアウトのルート。worktree の中なら worktree のルート。
+ * 見つからなければリポジトリ外なので、呼び出し側の `loadManifest` が失敗する。
+ *
+ * @returns {string}
+ */
+function currentRoot() {
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+}
+
 function primaryRoot() {
   try {
     const out = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
@@ -214,11 +232,21 @@ function main() {
   const resolved =
     rootDir === undefined ? filePath : realPathOrSelf(path.resolve(rootDir, filePath));
 
-  const { blocked } = classifyEdit({
-    filePath: resolved,
-    rootDir,
-    implementation: implementationFrom(loadManifest(rootDir)),
-  });
+  // 実装の宣言は**いま動いているチェックアウト**のマニフェストから読む。
+  // プライマリ／worktree の判定は `--git-common-dir`（`primaryRoot`）が担うが、
+  // 宣言は各チェックアウトが持つ。プライマリ側を読むと、worktree で宣言を直しても
+  // 効かない（プライマリが古いコミットのままなら永久に効かない）。
+  let implementation;
+  try {
+    implementation = implementationFrom(loadManifest(currentRoot()));
+  } catch (err) {
+    // **既定値では動かさない。** 何が実装かを知らないまま素通りさせると、
+    // マニフェストを消すだけでこのガードを外せる
+    console.error(`guard-worktree: ${err.message}`);
+    process.exit(BLOCK_EXIT_CODE);
+  }
+
+  const { blocked } = classifyEdit({ filePath: resolved, rootDir, implementation });
   if (!blocked) return;
 
   console.error(blockMessage(filePath));

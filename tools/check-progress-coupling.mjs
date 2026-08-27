@@ -793,8 +793,27 @@ function main() {
     process.exit(1);
   }
 
+  // 使い方の判定は git を触るより先に行う。順番を逆にすると、引数無しの誤用が
+  // 「差分を取得できませんでした」に化ける
+  if (!baseRef) {
+    console.error('使い方: node tools/check-progress-coupling.mjs <base-ref>');
+    process.exit(1);
+  }
+
+  let mergeBase;
   try {
-    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], { encoding: 'utf8' }).trim();
+    mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    // 差分そのものが取れない。**宣言の読み取りより先にこちらを報告する。**
+    // 順番を逆にすると、shallow clone の診断が「マニフェストが読めない」に化ける
+    console.error(`base (${baseRef}) との差分を取得できませんでした。`);
+    console.error('shallow clone の場合は fetch-depth: 0 が要ります。');
+    process.exit(1);
+  }
+  try {
     useManifest(readManifest(mergeBase));
   } catch (err) {
     console.error(`マニフェストを読めませんでした: ${err.message}`);

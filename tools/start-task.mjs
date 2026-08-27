@@ -24,7 +24,7 @@ import { pathToFileURL } from 'node:url';
 // start-task は貼った出力の中の値を読む」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
 // 固有値（依存導入コマンド・モデル表・作業 ID の形）はマニフェストが唯一の宣言である
-import { loadManifest } from './loop-manifest.mjs';
+import { loadManifest, repoManifest } from './loop-manifest.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
@@ -128,7 +128,7 @@ export function parseComplexity(markdown) {
  * @param {string | null | undefined} complexity
  * @returns {string}
  */
-export function modelForComplexity(complexity, models) {
+export function modelForComplexity(complexity, models = complexityModels(repoManifest())) {
   const table = models;
   const grade = complexity ?? DEFAULT_COMPLEXITY;
   if (!Object.hasOwn(table, grade)) {
@@ -158,7 +158,7 @@ export function selectNextTask(entries) {
  * @param {string[]} names - `task/`（archive 含む）と `backlog/` のディレクトリ名
  * @returns {string}
  */
-export function nextIdFrom(names, workDirRegExp) {
+export function nextIdFrom(names, workDirRegExp = workDirRe(repoManifest())) {
   let max = 0;
   for (const name of names) {
     const m = workDirRegExp.exec(name);
@@ -245,7 +245,7 @@ function defaultExec(cmd, args, opts = {}) {
  */
 export function startTask({ rootDir, exec = defaultExec, manifest = loadManifest(rootDir) }) {
   const install = manifest.install;
-  const picked = selectNextTask(readTaskEntries(rootDir));
+  const picked = selectNextTask(readTaskEntries(rootDir, workDirRe(manifest)));
   if (picked === null) {
     throw new Error('選択可能な作業がありません（task/ の archive 以外に Blocked / Done でない作業が無い）');
   }
@@ -361,9 +361,10 @@ export function isValidSlug(slug) {
  * `task/`・`task/archive/`・`backlog/` を見る。採番（`nextId`）と同じ範囲である。
  *
  * @param {string} rootDir
+ * @param {RegExp} workDirRegExp
  * @returns {Array<{path: string, id: string, slug: string}>}
  */
-function listWorkDirs(rootDir) {
+function listWorkDirs(rootDir, workDirRegExp) {
   const found = [];
   for (const dir of ['task', path.join('task', 'archive'), 'backlog']) {
     const full = path.join(rootDir, dir);
@@ -409,7 +410,7 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
 
   // 同じ slug の作業が既にあるなら、ID を消費せずに衝突を報告する。
   // 同じ題材の作業が 2 つの ID で並ぶのを防ぐ
-  const existing = listWorkDirs(rootDir).find((w) => w.slug === slug);
+  const existing = listWorkDirs(rootDir, workDirRe(manifest)).find((w) => w.slug === slug);
   if (existing !== undefined) {
     return { ok: false, reason: `同じ slug の作業が既にあります: ${existing.path}` };
   }
@@ -471,7 +472,7 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
   //
   // 双方が相手を見て双方とも降りることはある（安全側の結果である）。再実行すれば
   // 次の ID を得る。自動再試行はしない（範囲外）。
-  const duplicate = listWorkDirs(rootDir).find(
+  const duplicate = listWorkDirs(rootDir, workDirRe(manifest)).find(
     (w) => w.path !== relative && (w.id === id || w.slug === slug),
   );
   if (duplicate !== undefined) {

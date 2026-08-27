@@ -13,10 +13,12 @@ import {
   nextIdFrom,
   startTask,
 } from '../tools/start-task.mjs';
+import { writeManifest } from './manifest-fixture.mjs';
 
 /** 一時ディレクトリに task/ レイアウトを作る */
 function makeLayout(dirs) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-'));
+  writeManifest(root);
   for (const [dir, progress] of Object.entries(dirs)) {
     fs.mkdirSync(path.join(root, dir), { recursive: true });
     if (progress !== null) {

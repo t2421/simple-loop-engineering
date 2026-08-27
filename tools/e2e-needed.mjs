@@ -12,12 +12,54 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-const E2E_TEST_FILE = 'tests/calc-page.test.mjs';
-const PLAYWRIGHT_SETUP = 'tools/setup-playwright.mjs';
+/**
+ * マニフェストのパス。**このファイルは import を持てない**（CI が base リビジョンの版を
+ * `$RUNNER_TEMP` へ取り出して単体実行するため）。読み取りは最小限を自前に持つ。
+ */
+const MANIFEST_PATH = 'loop.manifest.json';
+
+/** この判定が担当する条件付き工程の名前 */
+const STAGE_NAME = 'e2e';
+
+/** 発火するパスの glob。**base リビジョンのマニフェストから差し込む。** */
+let TRIGGERS = null;
+
+/** 発火条件を差し込む。テストは直接渡す */
+export function useTriggers(triggers) {
+  TRIGGERS = triggers;
+}
+
+/**
+ * glob を正規表現にする純関数。対応するのは `**`（区切りを跨ぐ）と `*`（跨がない）だけ。
+ *
+ * **これは実行機構ではない。** マニフェストから読むのはパターン文字列であって、
+ * 評価されるコードではない。
+ *
+ * @param {string} glob
+ * @returns {RegExp}
+ */
+export function globToRegExp(glob) {
+  let out = '';
+  for (let i = 0; i < glob.length; i += 1) {
+    const c = glob[i];
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        // `a/**` は `a/` 配下すべて。`a/**/b` は間の階層が何段でもよい
+        out += '.*';
+        i += 1;
+        if (glob[i + 1] === '/') i += 1;
+        continue;
+      }
+      out += '[^/]*';
+      continue;
+    }
+    out += c.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${out}$`);
+}
 
 /**
  * `git diff --name-status -M -z` のパス一覧。import 無しで動かすため、
@@ -55,14 +97,10 @@ export function parseNameStatus(raw) {
  * @returns {boolean}
  */
 export function matchesE2ePath(filePath) {
-  if (filePath === 'package.json' || filePath === 'package-lock.json') return true;
-  if (filePath === E2E_TEST_FILE) return true;
-  if (filePath === PLAYWRIGHT_SETUP) return true;
-  if (filePath.startsWith('src/')) return true;
-  const base = path.posix.basename(filePath);
-  if (base.startsWith('calc-page.') && filePath.startsWith('progress/')) return true;
-  if (base.startsWith('calc-page.') && filePath.startsWith('task/')) return true;
-  return false;
+  if (TRIGGERS === null) {
+    throw new Error('発火条件が読み込まれていません（useTriggers を先に呼ぶ）');
+  }
+  return TRIGGERS.some((glob) => globToRegExp(glob).test(filePath));
 }
 
 /**
@@ -123,8 +161,63 @@ function writeNeeded(needed) {
   if (out) fs.appendFileSync(out, line);
 }
 
+/**
+ * 指定した ref のマニフェストから、この工程の発火条件を読む。
+ *
+ * **base 側から読む。** 候補側を読むと、発火条件を空にする変更と実装変更を同じ PR に
+ * 入れるだけで工程を間引ける。CI が base 版のこのファイルを実行するのと同じ理由である。
+ *
+ * 工程の宣言が無ければ「この移植先にこの工程は存在しない」。**空実装は置かない。**
+ *
+ * @param {string} ref
+ * @returns {string[] | null} 発火条件。工程が宣言されていなければ null
+ */
+function readTriggers(ref) {
+  let raw;
+  try {
+    raw = execFileSync('git', ['show', `${ref}:${MANIFEST_PATH}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    console.error(`::warning::${ref} にマニフェストが無いため候補側で判定します（導入 PR のみ想定）。`);
+    raw = fs.readFileSync(MANIFEST_PATH, 'utf8');
+  }
+  const stages = JSON.parse(raw).conditionalStages ?? [];
+  const stage = stages.find((x) => x.name === STAGE_NAME);
+  if (stage === undefined) return null;
+  if (!Array.isArray(stage.triggers) || stage.triggers.length === 0) {
+    throw new Error(`条件付き工程 ${STAGE_NAME} に triggers がありません`);
+  }
+  return stage.triggers;
+}
+
 function main() {
-  const result = resolveNeeded({ baseRef: process.argv[2] });
+  const baseRef = process.argv[2];
+  // 使い方の判定は宣言の読み取りより先に行う。順番を逆にすると、引数無しの誤用が
+  // 「発火条件を読めない」に化けて、間引かない側（needed=true）で素通りする
+  if (!baseRef) {
+    console.error('使い方: node tools/e2e-needed.mjs <base-ref>');
+    process.exit(1);
+  }
+  let triggers;
+  try {
+    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], { encoding: 'utf8' }).trim();
+    triggers = readTriggers(mergeBase);
+  } catch (err) {
+    // 判定できないなら**間引かない**。工程を飛ばす側へ倒さない
+    console.error(`発火条件を読めませんでした。e2e を間引かず回します: ${err.message}`);
+    writeNeeded(true);
+    return;
+  }
+  if (triggers === null) {
+    console.log(`条件付き工程 ${STAGE_NAME} は宣言されていません。この工程は存在しません。`);
+    writeNeeded(false);
+    return;
+  }
+  useTriggers(triggers);
+
+  const result = resolveNeeded({ baseRef });
   if (result.error === 'usage') {
     console.error('使い方: node tools/e2e-needed.mjs <base-ref>');
     process.exit(1);

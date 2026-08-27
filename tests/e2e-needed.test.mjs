@@ -9,6 +9,12 @@ import {
   pathsFromChanges,
   resolveNeeded,
 } from '../tools/e2e-needed.mjs';
+// ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
+// テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
+import { repoManifest } from '../tools/loop-manifest.mjs';
+import { useTriggers } from '../tools/e2e-needed.mjs';
+useTriggers(repoManifest().conditionalStages.find((s) => s.name === 'e2e').triggers);
+
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 

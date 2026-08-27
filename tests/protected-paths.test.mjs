@@ -5,6 +5,12 @@ import {
   findViolations,
   hasAllowLabel,
 } from '../tools/check-protected-paths.mjs';
+// ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
+// テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
+import { repoManifest } from '../tools/loop-manifest.mjs';
+import { useManifest } from '../tools/check-protected-paths.mjs';
+useManifest(repoManifest());
+
 
 /** 差分もラベルも無い、素の入力 */
 const empty = { changes: [], baseScripts: {}, headScripts: {} };
@@ -41,8 +47,8 @@ test('既存 tests/ の期待値を変更した差分は違反になる', () => 
 test('package.json の scripts を変更した差分は違反になる', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test', ci: 'npm test' },
-    headScripts: { test: 'node --test', ci: 'echo ok' },
+    baseScripts: { 'package.json': { test: 'node --test', ci: 'npm test' } },
+    headScripts: { 'package.json': { test: 'node --test', ci: 'echo ok' } },
   });
   assert.equal(v.length, 1);
   assert.equal(v[0].path, 'package.json');
@@ -51,8 +57,8 @@ test('package.json の scripts を変更した差分は違反になる', () => {
 test('package.json の scripts 以外だけの変更は違反にならない', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test' },
-    headScripts: { test: 'node --test' },
+    baseScripts: { 'package.json': { test: 'node --test' } },
+    headScripts: { 'package.json': { test: 'node --test' } },
   });
   assert.deepEqual(v, []);
 });
@@ -155,8 +161,8 @@ test('複数の違反をすべて報告する', () => {
       { status: 'M', path: 'package.json' },
       { status: 'A', path: 'src/new.mjs' },
     ],
-    baseScripts: { ci: 'npm test' },
-    headScripts: { ci: 'true' },
+    baseScripts: { 'package.json': { ci: 'npm test' } },
+    headScripts: { 'package.json': { ci: 'true' } },
   });
   assert.equal(v.length, 3);
 });
@@ -666,3 +672,47 @@ for (const c of INBOUND_CASES) {
     });
   }
 }
+
+// --- マニフェスト（固有値の宣言）自身の保護 ---
+// これを守らないと、「ガードを編集する」代わりに「宣言を編集する」で同じ回避ができる。
+
+test('マニフェストの内容変更は違反になる', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'M', path: 'loop.manifest.json' }] });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, 'loop.manifest.json');
+  assert.match(v[0].reason, /マニフェスト/);
+});
+
+test('マニフェストの削除・リネームも違反になる', () => {
+  const deleted = findViolations({ ...empty, changes: [{ status: 'D', path: 'loop.manifest.json' }] });
+  assert.equal(deleted.length, 1);
+  const renamed = findViolations({
+    ...empty,
+    changes: [{ status: 'R', similarity: 100, path: 'other.json', oldPath: 'loop.manifest.json' }],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('マニフェストの新規追加は違反にならない（導入 PR）', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'A', path: 'loop.manifest.json' }] });
+  assert.deepEqual(v, []);
+});
+
+// --- 台帳の文書は許可リストで判定する（0044 の実測にもとづく） ---
+
+test('台帳の許可リストにある文書の新規追加は違反にならない', () => {
+  for (const name of ['spec.md', 'progress.md']) {
+    const v = findViolations({ ...empty, changes: [{ status: 'A', path: `task/0099-x/${name}` }] });
+    assert.deepEqual(v, [], name);
+  }
+});
+
+test('台帳の許可リストに無い直下の .md は別名 spec として違反になる', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'A', path: 'task/0099-x/notes.md' }] });
+  assert.equal(v.length, 1);
+});
+
+test('作業ディレクトリ直下でなければ別名 spec 判定に掛からない', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'A', path: 'task/0099-x/notes/port-log.md' }] });
+  assert.deepEqual(v, []);
+});

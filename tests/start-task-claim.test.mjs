@@ -11,6 +11,7 @@ import {
   parseCliArgs,
   startTask,
 } from '../tools/start-task.mjs';
+import { writeManifest } from './manifest-fixture.mjs';
 
 /**
  * 一時ディレクトリに作業ディレクトリのレイアウトを作る。
@@ -19,6 +20,7 @@ import {
  */
 function makeRoot(dirs = []) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-claim-'));
+  writeManifest(root);
   for (const dir of dirs) fs.mkdirSync(path.join(root, dir), { recursive: true });
   return root;
 }
@@ -29,6 +31,7 @@ function makeRoot(dirs = []) {
  */
 function makeLayout(dirs) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-claim-'));
+  writeManifest(root);
   for (const [dir, progress] of Object.entries(dirs)) {
     fs.mkdirSync(path.join(root, dir), { recursive: true });
     if (progress !== null) {

@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { writeManifest } from './manifest-fixture.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CHECKER = path.join(repoRoot, 'tools', 'check-protected-paths.mjs');
@@ -34,6 +35,7 @@ function makeRepoWithoutArchive(t) {
   git(dir, 'config', 'user.email', 'test@example.test');
   git(dir, 'config', 'user.name', 'test');
   fs.writeFileSync(path.join(dir, 'package.json'), '{"scripts":{"ci":"echo ci"}}\n');
+  writeManifest(dir);
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'base');
   git(dir, 'branch', '-M', 'main');

@@ -188,6 +188,7 @@ export function loadManifest(rootDir) {
       `マニフェストがありません: ${file}\n`
       + '既定値では動かしません。ループの固有値はこのファイルが唯一の宣言です。\n'
       + `原因: ${err.message}`,
+      { cause: err },
     );
   }
   const parsed = parseManifest(raw);
@@ -199,6 +200,16 @@ export function loadManifest(rootDir) {
     throw new Error(`マニフェストが不正です: ${file}\n  - ${missing.join('\n  - ')}`);
   }
   return parsed.manifest;
+}
+
+/**
+ * このリポジトリのマニフェストを読む。ツールの位置からルートを解決する。
+ * テストと、ルートを知らない呼び出し側が使う。
+ *
+ * @returns {object}
+ */
+export function repoManifest() {
+  return loadManifest(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'));
 }
 
 function main() {

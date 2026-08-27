@@ -20,6 +20,7 @@
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`verify` が `npm run ci`、`e2e` は計算ページに影響しうる差分と `main` への push で `npm run test:e2e` |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
+| `loop.manifest.json` | **プロジェクト固有値の唯一の宣言。** 検証コマンドとその定義の所在、実装ディレクトリ、台帳の文書、保護パス、条件付き工程、Complexity→モデル表、レビュアー名。ツールはここから読む |
 
 作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規の採番は `node tools/start-task.mjs --next-id` で計算する。
 
@@ -155,7 +156,7 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 このリポジトリ固有の決めごとだけ、ここに書く。
 
 - チェックリストは作業固有の項目だけ書く（仕様確認、Figma 抽出、テスト作成、実装、レビュー、PR 作成、見た目なら PR へのスクリーンキャプチャ、PR マージ後のアーカイブ）
-- **Complexity**（`S | M | L`）は spec 起草時に `spec-author` が付与する。`node tools/start-task.mjs` がこの等級から実装に使うモデルを引く（`S → haiku`、`M → sonnet`、`L → fable`）。無い進捗（既存分）は `M` とみなす
+- **Complexity**（`S | M | L`）は spec 起草時に `spec-author` が付与する。`node tools/start-task.mjs` がこの等級から実装に使うモデルを引く。**対応表は `loop.manifest.json` の `complexityModels` が正**（現在は `S → haiku`、`M → sonnet`、`L → fable`）。無い進捗（既存分）は `M` とみなす
 - 構文チェック・テスト実行など全作業共通の検証は progress に書かない。`npm run ci` が強制する
 
 ## アーカイブ
@@ -222,7 +223,11 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `tools/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
 - `tools/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
 
-この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
+- `loop.manifest.json`（プロジェクト固有値の宣言。保護パス一覧・検証コマンドの定義の所在・実装ディレクトリなどが**ここに集まっている**。書き換えれば一覧ごと差し替えてガードを無効化できる）
+- `tools/loop-manifest.mjs`（宣言の読み取りと検査。骨抜きにすれば不正な宣言が通る）
+- `.claude/settings.json`（hook の配線。**判定コードだけ守っても、呼び出しをやめればゲートは呼ばれない**）
+
+この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。**判定に使う固有値は `loop.manifest.json` から読む。読むのは base リビジョンの版である**（候補側を読むと、宣言を書き換えるだけでガードを迂回できる）。
 
 守る対象を増やす・外すときは `.claude/skills/add-protected-path` に従う。**この節に行を足すだけではガードは検知しない。**
 

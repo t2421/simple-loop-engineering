@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findViolations } from '../tools/check-protected-paths.mjs';
+// ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
+// テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
+import { repoManifest } from '../tools/loop-manifest.mjs';
+import { useManifest } from '../tools/check-protected-paths.mjs';
+useManifest(repoManifest());
+
 
 const empty = { changes: [], baseScripts: {}, headScripts: {} };
 

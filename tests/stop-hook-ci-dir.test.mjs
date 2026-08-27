@@ -20,6 +20,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readCwd, resolveCiDir } from '../tools/stop-hook-ci-dir.mjs';
 import { findViolations } from '../tools/check-protected-paths.mjs';
+// ループの固有値はマニフェストが唯一の宣言である。テストも実物を使う
+import { repoManifest } from '../tools/loop-manifest.mjs';
+import { useManifest } from '../tools/check-protected-paths.mjs';
+useManifest(repoManifest());
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(rootDir, 'tools', 'stop-hook-ci-dir.mjs');

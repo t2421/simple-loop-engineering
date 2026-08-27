@@ -36,7 +36,16 @@
     {
       "name": "e2e",
       "command": ["npm", "run", "test:e2e"],
-      "checker": "tools/e2e-needed.mjs"
+      "checker": "tools/e2e-needed.mjs",
+      "triggers": [
+        "package.json",
+        "package-lock.json",
+        "tests/calc-page.test.mjs",
+        "tools/setup-playwright.mjs",
+        "src/**",
+        "progress/calc-page.*",
+        "task/**/calc-page.*"
+      ]
     }
   ],
 
@@ -49,7 +58,8 @@
       "tools/check-progress-coupling.mjs",
       "tools/stop-hook-ci-dir.mjs",
       "tools/check-actions.mjs",
-      "tools/loop-manifest.mjs"
+      "tools/loop-manifest.mjs",
+      ".claude/settings.json"
     ],
     "templates": [
       "task/TEMPLATE-spec.md",

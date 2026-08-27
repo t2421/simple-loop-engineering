@@ -11,7 +11,7 @@
     "height": 1024,
     "fill": "#f8fafc"
   },
-  "_note": "width と height は、値がその要素の CSS で明示的に固定されるトークン、または flex の等分割から一意に決まる幾何値のみを載せる。フォントの行送りに依存して決まる文字要素の見た目上の幅・高さは載せない(残差としてスクショレビューで見る)。lineHeight は Figma のテキストノードの高さで、レイアウトを決めるフォントトークンとして載せる。card.strokeAlign は Figma の内側ストローク(内寸を減らさない)を表す。pixelRegions は 完了条件 6 のピクセル比較の対象領域で、calc-vec-add.png 上の絶対座標である。",
+  "_note": "width と height は、値がその要素の CSS で明示的に固定されるトークン、または flex の等分割から一意に決まる幾何値のみを載せる。フォントの行送りに依存して決まる文字要素の見た目上の幅・高さは載せない(残差としてスクショレビューで見る)。lineHeight は Figma のテキストノードの高さで、レイアウトを決めるフォントトークンとして載せる。card.strokeAlign は Figma の内側ストローク(内寸を減らさない)を表す。gridLine.originX/originY と axis.centerX/centerY と frame は、Figma の書き出し PNG から実測したインク位置である(Figma のレイヤー座標は y 方向に 1px ずれている)。pixelRegions は 完了条件 6 のピクセル比較の対象領域で、calc-vec-add.png 上の絶対座標である。",
   "fonts": {
     "sans": {
       "family": "Noto Sans JP",
@@ -49,6 +49,12 @@
       "y": 112,
       "width": 828,
       "height": 622
+    },
+    "resultsCardFirstRow": {
+      "x": 40,
+      "y": 588,
+      "width": 500,
+      "height": 47
     }
   },
   "elements": {
@@ -354,12 +360,16 @@
         "gridLine": {
           "nodeId": "2:76",
           "stroke": "#e2e8f0",
-          "strokeWidth": 1
+          "strokeWidth": 1,
+          "originX": 250,
+          "originY": 249
         },
         "axis": {
           "nodeId": "2:112",
           "stroke": "#475569",
-          "strokeWidth": 2
+          "strokeWidth": 2,
+          "centerX": 251,
+          "centerY": 249
         },
         "tickLabel": {
           "nodeId": "2:115",
@@ -370,7 +380,14 @@
           "color": "#475569",
           "xOffsetFromGridLine": -12,
           "xBaselineTop": 254,
-          "yRightEdge": 244
+          "yRightEdge": 244,
+          "lineHeight": 13
+        },
+        "frame": {
+          "nodeId": "2:74",
+          "stroke": "#cbd5e1",
+          "strokeWidth": 1,
+          "borderRadius": 8
         }
       },
       "vectors": {
@@ -393,7 +410,8 @@
           "dash": [
             6,
             4
-          ]
+          ],
+          "dashOffset": null
         }
       },
       "arrowHead": {

@@ -13,7 +13,7 @@
           <img class="logo-icon" src="./assets/icons/axis-3d.svg" alt="" width="20" height="20" />
         </span>
         <span class="header-titles">
-          <span class="header-title">ベクトル計算 ビジュアライザー</span>
+          <h1 class="header-title">ベクトル計算 ビジュアライザー</h1>
           <span class="header-subtitle">2D Vector Mathematics Tool</span>
         </span>
       </div>
@@ -24,9 +24,17 @@
 
     <main class="content-wrapper">
       <div class="left-column">
-        <form class="card input-card" id="vector-form" aria-labelledby="input-card-title">
+        <!-- novalidate: type=number の badInput(`-` `1e` など)ではネイティブ検証が
+             submit を止めてしまう。仕様は「空欄・非数は 0 とみなす」なので、
+             検証を切って parseNumber まで届かせる。 -->
+        <form
+          class="card input-card"
+          id="vector-form"
+          aria-labelledby="input-card-title"
+          novalidate
+        >
           <div class="card-header">
-            <h1 class="card-title" id="input-card-title">ベクトル入力</h1>
+            <h2 class="card-title" id="input-card-title">ベクトル入力</h2>
             <p class="card-hint">2D coordinates input</p>
           </div>
 
@@ -129,7 +137,7 @@
                 height="500"
                 viewBox="0 0 500 500"
                 role="img"
-                aria-label="ベクトル A、ベクトル B、その和を表す 2 次元グラフ"
+                aria-label="ベクトル A、ベクトル B、その和を描く 2 次元グラフ"
               >
                 <defs>
                   <marker
@@ -193,11 +201,11 @@
               <div class="floating-legend">
                 <div class="legend-row">
                   <span class="legend-swatch legend-swatch-a" aria-hidden="true"></span>
-                  <span class="legend-label" id="legend-a">ベクトル A (3, 4)</span>
+                  <span class="legend-label" id="legend-a">ベクトル A</span>
                 </div>
                 <div class="legend-row">
                   <span class="legend-swatch legend-swatch-b" aria-hidden="true"></span>
-                  <span class="legend-label" id="legend-b">ベクトル B (-1, 2)</span>
+                  <span class="legend-label" id="legend-b">ベクトル B</span>
                 </div>
                 <div class="legend-row">
                   <span class="legend-swatch legend-swatch-sum" aria-hidden="true">
@@ -205,7 +213,7 @@
                     <span class="legend-dash"></span>
                     <span class="legend-dash"></span>
                   </span>
-                  <span class="legend-label legend-label-sum" id="legend-sum">A + B (2, 6)</span>
+                  <span class="legend-label legend-label-sum" id="legend-sum">A + B</span>
                 </div>
               </div>
             </div>

@@ -8,6 +8,15 @@ import { addVec } from './math.mjs';
  */
 const ORIGIN_X = 250;
 const ORIGIN_Y = 250;
+
+/**
+ * グリッド線のインクが載るラティス。抽出 JSON の graphCard.grid.gridLine が正。
+ * 参照 PNG の実測では、縦線は列 250+35u だが横線は行 249+35u で、
+ * y 側だけ 1px 上にある(Figma のレイヤー座標の非対称)。矢印と目盛りは
+ * ORIGIN_Y = 250 のままなので、ここだけ別の原点を使う。
+ */
+const GRID_ORIGIN_X = 250;
+const GRID_ORIGIN_Y = 249;
 const UNIT_PX = 35;
 const AXIS_RANGE = 6;
 
@@ -24,6 +33,12 @@ const TICK_X_BOX_HEIGHT = 13;
 const TICK_Y_RIGHT_EDGE = 244;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * 凡例の見出し。値は計算後に addVec の戻り値から付ける。
+ * 未計算のうちは値を出さない(結果表示の `—` と食い違わせない)。
+ */
+const LEGEND_LABELS = Object.freeze({ a: 'ベクトル A', b: 'ベクトル B', sum: 'A + B' });
 
 const form = document.getElementById('vector-form');
 const inputs = {
@@ -49,7 +64,7 @@ const legend = {
  * @param {number} y
  * @returns {{x: number, y: number}}
  */
-export function toCanvas(x, y) {
+function toCanvas(x, y) {
   return { x: ORIGIN_X + UNIT_PX * x, y: ORIGIN_Y - UNIT_PX * y };
 }
 
@@ -71,7 +86,7 @@ function parseNumber(input) {
  * @param {readonly [number, number]} vec
  * @returns {string}
  */
-export function formatVec(vec) {
+function formatVec(vec) {
   return `(${vec[0]}, ${vec[1]})`;
 }
 
@@ -87,10 +102,11 @@ function drawGrid() {
     if (unit === 0) continue;
     // 1px の線を 1 物理ピクセルに載せる。整数座標だとストロークが半分ずつ
     // 2 列にまたがってぼやけ、抽出 PNG の輪郭と一致しない。
-    const offset = ORIGIN_X + UNIT_PX * unit + GRID_LINE_HALF_PX;
+    const x = GRID_ORIGIN_X + UNIT_PX * unit + GRID_LINE_HALF_PX;
+    const y = GRID_ORIGIN_Y + UNIT_PX * unit + GRID_LINE_HALF_PX;
     gridLinesGroup.append(
-      createSvg('line', { x1: offset, y1: 0, x2: offset, y2: 500 }),
-      createSvg('line', { x1: 0, y1: offset, x2: 500, y2: offset })
+      createSvg('line', { x1: x, y1: 0, x2: x, y2: 500 }),
+      createSvg('line', { x1: 0, y1: y, x2: 500, y2: y })
     );
   }
 }
@@ -157,9 +173,9 @@ function calculate() {
   const sum = addVec(a, b);
 
   resultValue.textContent = formatVec(sum);
-  legend.a.textContent = `ベクトル A ${formatVec(a)}`;
-  legend.b.textContent = `ベクトル B ${formatVec(b)}`;
-  legend.sum.textContent = `A + B ${formatVec(sum)}`;
+  legend.a.textContent = `${LEGEND_LABELS.a} ${formatVec(a)}`;
+  legend.b.textContent = `${LEGEND_LABELS.b} ${formatVec(b)}`;
+  legend.sum.textContent = `${LEGEND_LABELS.sum} ${formatVec(sum)}`;
   drawVectors(a, b, sum);
 }
 

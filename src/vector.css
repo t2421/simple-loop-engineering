@@ -34,6 +34,7 @@
   --color-text-muted: #475569;
   --color-text-faint: #94a3b8;
   --color-white: #ffffff;
+  --color-legend-bg: rgba(255, 255, 255, 0.8);
   --color-vector-a: #2563eb;
   --color-vector-b: #ea580c;
   --color-vector-sum: #10b981;
@@ -50,6 +51,7 @@
   --radius-badge: 100px;
   --radius-swatch: 2px;
   --radius-grid-frame: 8px;
+  --blur-legend: 2px;
 
   /* 余白・ギャップ */
   --space-page-padding: 40px;
@@ -193,6 +195,7 @@ body {
 }
 
 .header-title {
+  margin: 0;
   font-size: var(--font-size-header-title);
   font-weight: var(--font-weight-header-title);
   color: var(--color-white);
@@ -503,8 +506,8 @@ body {
   top: var(--size-legend-offset);
   left: var(--size-legend-offset);
   padding: var(--space-legend-padding);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(2px);
+  background: var(--color-legend-bg);
+  backdrop-filter: blur(var(--blur-legend));
   border: var(--border-width-default) solid var(--color-border-card);
   border-radius: var(--radius-control);
   display: flex;

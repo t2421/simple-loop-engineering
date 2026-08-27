@@ -19,7 +19,7 @@
 - file key: `ftGcQpbvknoosfpy3aP1FQ`
 - node id: `2:5`（`vector-calculator-ui`）
 
-抽出結果は `task/0051-calc-vec-add/calc-vec-add.figma.json` と `task/0051-calc-vec-add/calc-vec-add.png` に置く。抽出後はテストを通すために書き換えない。ライブファイルは完了条件にしない。
+抽出結果は `task/0051-calc-vec-add/calc-vec-add.figma.json` と `task/0051-calc-vec-add/calc-vec-add.png` に置く。**抽出済みの値は、テストを通すために書き換えない。** 参照 PNG から実測した位置トークンの**追記**は、下の「凍結対象への変更」の手続きに従う。ライブファイルは完了条件にしない。
 
 `addVec` の実装は `0050-math-vec-add` の範囲である。この作業は公開済みの `addVec` を呼ぶ。
 
@@ -37,13 +37,13 @@
 改訂内容は次のとおり。
 
 - **対象を新しいページ（`src/vector.html` ほか）にした。** これにより `src/calc.html` は一切変更されず、`tests/calc-page.test.mjs` は変更なしで通り続ける（理由 2 の解消）。既存の検証は 1 つも弱まらない。
-- **ピクセル比較の対象を、この作業が実装する 3 領域に限定した**（`headerBar` / `inputCard` / `graphCard`）。`計算結果` カードは加算 1 行のみを実装するため、ピクセル比較ではなく DOM とテキストと計算スタイルで検証する（理由 3 の解消）。閾値 0.5% は据え置き、比較する領域では緩めない。
+- **ピクセル比較の対象を、この作業が実装する領域に限定した**（`headerBar` / `inputCard` / `graphCard`、およびレビュー後に足した `resultsCardFirstRow`）。`計算結果` カードのうち 範囲外 の 4 行は比較しないが、**加算行は範囲内なので領域に含める**（理由 3 の解消）。閾値 0.5% は据え置き、比較する領域では緩めない。
 - **SVG の座標規則を Figma の実測値に合わせた**（1 単位 = 35px、原点は 500×500 グリッドの中央）。改訂前の「1 単位 = 1 CSS px」は Figma と一致しない。
 - 減算・内積・ベクトルの長さは 範囲外 のまま据え置き、別の作業に切り出す。
 
 ### 凍結対象への変更
 
-この作業は、`CLAUDE.md` の「変えてはいけないもの」に載る次の 2 つを変更する。**どちらも検証を強める向きで、弱めない。**
+この作業は、`CLAUDE.md` の「変えてはいけないもの」に載る次の 3 つを変更する。**いずれも検証を強める向きで、弱めない。**
 
 1. **`task/0051-calc-vec-add/spec.md`（このファイル）** — 上記の改訂。理由は前節のとおり。
 2. **`package.json` の `scripts.test:e2e`** — 新しい e2e ファイルを追加する。
@@ -53,6 +53,21 @@
    ```
 
    既存の `tests/calc-page.test.mjs` は列挙から**外さない**。検証を 1 つ足すだけである。
+
+3. **`task/0051-calc-vec-add/calc-vec-add.figma.json`** — 参照 PNG から実測した位置トークンを**追記**する。
+
+   この作業で新規に作った抽出物だが、レビュー指摘への対応で追記したため、コミットすると保護パスの変更として検知される。**既存のキーの値は 1 つも変更していない。追加と `_note` の加筆だけである。**
+
+   | 追加したキー | 値 | 実測の根拠（参照 PNG 上、SVG 座標） |
+   |---|---|---|
+   | `grid.gridLine.originX` / `originY` | 250 / 249 | 縦グリッド線のインクは列 `250+35u`、横グリッド線は行 `249+35u`。y ラティスだけ 1px 上にある |
+   | `grid.axis.centerX` / `centerY` | 251 / 249 | 縦軸のインクは列 250-251、横軸のインクは行 248-249 |
+   | `grid.frame` | `#cbd5e1` / 1px / 角丸 8px | グリッドの外枠。SVG 座標 0 と 499 に 1px |
+   | `grid.tickLabel.lineHeight` | 13 | 目盛りラベルのベースライン計算に使う |
+   | `vectors.sum.dashOffset` | `null` | 破線の位相は Figma から抽出できないことの記録 |
+   | `pixelRegions.resultsCardFirstRow` | 40,588,500x47 | 加算行。**比較領域を 3 → 4 に増やす**（狭めていない） |
+
+   これらは**実装をトークンに従わせるために足した**のであって、実装に合わせて期待値を動かしたのではない。追記前は、グリッドの外枠・軸の座標・横グリッド線のラティスがどの検証も通っていなかった（外枠を `display: none` にしても不一致率が動かないことを変異テストで確認した）。追記後はいずれも計算スタイルと実ピクセルで検証される。
 
 `tools/run-unit-tests.mjs` は変更しない。同ツールは `tests/*.test.mjs` からユニットテストを集めるので、この作業の e2e は `tests/calc-vec-add.e2e.mjs` という名前にして、列挙から自然に外れるようにした。凍結対象を触らずに済ませるための命名である。
 
@@ -134,7 +149,8 @@
 3. 「失敗時」に書いた入力・操作で、仕様どおり失敗する。該当がなければこの項は「なし」。
 4. 「範囲外」を実装していない。
 5. 計算は公開済みの `addVec` を使う。UI 側で成分を足さない。
-6. 抽出済みの `task/0051-calc-vec-add/calc-vec-add.figma.json` の比較対象プロパティと、対象要素の計算スタイルが一致する。`calc-vec-add.figma.json` の `pixelRegions` が示す 3 領域（`headerBar` / `inputCard` / `graphCard`）それぞれについて、実装の描画と `task/0051-calc-vec-add/calc-vec-add.png` の同じ領域とのピクセル不一致率が 0.5% 以下である。
+6. 抽出済みの `task/0051-calc-vec-add/calc-vec-add.figma.json` の比較対象プロパティと、対象要素の計算スタイルが一致する。`calc-vec-add.figma.json` の `pixelRegions` が示す 4 領域（`headerBar` / `inputCard` / `graphCard` / `resultsCardFirstRow`）それぞれについて、実装の描画と `task/0051-calc-vec-add/calc-vec-add.png` の同じ領域とのピクセル不一致率が 0.5% 以下である。
+   低コントラストの 1px 要素（グリッドの外枠・軸・グリッド線）は、色差がピクセル比較の許容差を跨がず不一致率に現れない。これらは計算スタイルに加えて、描画した実ピクセルの色を名指しで確かめることで検証する。
 7. 既存スカラーの例（左 `2`、右 `3`、足し算 → `5`）が `tests/calc-page.test.mjs` を変更せずに通る。`src/calc.html` / `src/calc.css` / `src/calc.mjs` を変更しない。
 8. SVG の各ベクトル終点が、仕様の座標規則（原点 `(250, 250)`、y 反転、1 単位 = 35 CSS px）で入力と一致する。
 9. ページは外部ホストへリクエストしない。フォントは `src/assets/fonts/` から読む。

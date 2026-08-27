@@ -448,6 +448,8 @@ test('graphCard: 凡例', async () => {
     'gap',
     'borderColor',
     'borderWidth',
+    'backgroundColor',
+    'backdropFilter',
   ]);
   assert.equal(box.top, px(el.offsetTop));
   assert.equal(box.left, px(el.offsetLeft));
@@ -456,6 +458,8 @@ test('graphCard: 凡例', async () => {
   assert.equal(box.gap, px(el.gap));
   assert.equal(box.borderColor, hexToRgb(el.border.color));
   assert.equal(box.borderWidth, px(el.border.width));
+  assert.equal(box.backgroundColor, el.fill);
+  assert.equal(box.backdropFilter, `blur(${el.backdropBlur}px)`);
 
   const label = await computedStyle('#legend-a', ['color', 'fontSize', 'fontWeight', 'lineHeight']);
   assert.equal(label.color, hexToRgb(el.label.color));
@@ -470,7 +474,8 @@ test('graphCard: 凡例', async () => {
 
 // --- SVG の幾何(ピクセル比較の閾値では捕まらない 1px のずれを、値として直接見る) ---
 
-test('SVG: 軸は抽出 PNG の実測位置に引かれている', async () => {
+test('SVG: 軸は抽出 JSON の実測位置に引かれている', async () => {
+  const { axis, width, height } = figma.elements.graphCard.grid;
   const axes = await page.$$eval('#axes line', (els) =>
     els.map((el) => ({
       x1: Number(el.getAttribute('x1')),
@@ -479,10 +484,18 @@ test('SVG: 軸は抽出 PNG の実測位置に引かれている', async () => {
       y2: Number(el.getAttribute('y2')),
     }))
   );
-  // 縦軸: 列 250-251 にインクが載る => 中心 251
-  assert.deepEqual(axes[0], { x1: 251, y1: 0, x2: 251, y2: 500 });
-  // 横軸: 行 248-249 にインクが載る => 中心 249
-  assert.deepEqual(axes[1], { x1: 0, y1: 249, x2: 500, y2: 249 });
+  // 期待値は抽出 JSON から引く。実装のリテラルを写さない。
+  assert.deepEqual(axes[0], { x1: axis.centerX, y1: 0, x2: axis.centerX, y2: height });
+  assert.deepEqual(axes[1], { x1: 0, y1: axis.centerY, x2: width, y2: axis.centerY });
+});
+
+test('SVG: グリッドの外枠が抽出 JSON のトークンどおり', async () => {
+  const { frame } = figma.elements.graphCard.grid;
+  const style = await computedStyle('.grid-frame', ['stroke', 'strokeWidth']);
+  assert.equal(style.stroke, hexToRgb(frame.stroke));
+  assert.equal(style.strokeWidth, px(frame.strokeWidth));
+  const rx = await page.$eval('.grid-frame', (el) => el.getAttribute('rx'));
+  assert.equal(Number(rx), frame.borderRadius);
 });
 
 test('SVG: グリッド線は ±1..±6 の 12 本ずつで、半ピクセルに載る', async () => {
@@ -492,17 +505,37 @@ test('SVG: グリッド線は ±1..±6 の 12 本ずつで、半ピクセルに�
       x1: Number(el.getAttribute('x1')),
       y1: Number(el.getAttribute('y1')),
       x2: Number(el.getAttribute('x2')),
+      y2: Number(el.getAttribute('y2')),
     }))
   );
   assert.equal(lines.length, axisRange * 2 * 2);
 
-  const vertical = lines.filter((l) => l.x1 === l.x2).map((l) => l.x1).sort((a, b) => a - b);
-  const expected = [];
-  for (let unit = -axisRange; unit <= axisRange; unit++) {
-    if (unit === 0) continue;
-    expected.push(originX + unitPx * unit + 0.5);
-  }
-  assert.deepEqual(vertical, expected);
+  const lattice = (origin) => {
+    const out = [];
+    for (let unit = -axisRange; unit <= axisRange; unit++) {
+      if (unit === 0) continue;
+      out.push(origin + unitPx * unit + 0.5);
+    }
+    return out;
+  };
+
+  const gridLine = figma.elements.graphCard.grid.gridLine;
+  const vertical = lines
+    .filter((l) => l.x1 === l.x2)
+    .map((l) => l.x1)
+    .sort((a, b) => a - b);
+  assert.deepEqual(vertical, lattice(gridLine.originX), '縦グリッド線');
+
+  // 横線のラティスは y 側だけ 1px 上にある(抽出 JSON の gridLine.originY)。
+  // ここを見ていないと、軸だけ直してグリッドを直し忘れる形がすり抜ける。
+  const horizontal = lines
+    .filter((l) => l.y1 === l.y2)
+    .map((l) => l.y1)
+    .sort((a, b) => a - b);
+  assert.deepEqual(horizontal, lattice(gridLine.originY), '横グリッド線');
+
+  // originX は spec の座標規則(矢印・目盛りが使う原点)と一致していること
+  assert.equal(gridLine.originX, originX);
 });
 
 test('SVG: 目盛りラベルは抽出 JSON の位置規則どおり', async () => {
@@ -517,10 +550,49 @@ test('SVG: 目盛りラベルは抽出 JSON の位置規則どおり', async () 
   );
   const xOne = labels.find((l) => l.text === '1' && l.anchor === 'start');
   assert.equal(xOne.x, originX + unitPx * 1 + tickLabel.xOffsetFromGridLine);
+  assert.equal(xOne.y, tickLabel.xBaselineTop + tickLabel.lineHeight / 2);
 
   const yOne = labels.find((l) => l.text === '1' && l.anchor === 'end');
   assert.equal(yOne.x, tickLabel.yRightEdge);
   assert.equal(yOne.y, originY - unitPx * 1);
+});
+
+test('描画された 1px 要素の色と位置を実ピクセルで確かめる', async () => {
+  // グリッド枠・軸・グリッド線は低コントラストの 1px で、pixelmatch の色許容差では
+  // 位置ずれも色違いも判定を跨がない(閾値 0.1 に戻しても同じ)。
+  // 計算スタイルだけでは display:none や要素の消失も捕まらないので、
+  // 実際に描かれたピクセルを名指しで確かめる。
+  await page.reload();
+  await page.evaluate(() => globalThis.document.fonts.ready);
+  const shot = PNG.sync.read(await page.screenshot());
+  const svg = await page.$eval('#vec-add-canvas', (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y) };
+  });
+  const hexAt = (sx, sy) => {
+    const i = (shot.width * (svg.y + sy) + (svg.x + sx)) << 2;
+    return (
+      '#' +
+      [0, 1, 2].map((k) => shot.data[i + k].toString(16).padStart(2, '0')).join('')
+    );
+  };
+  const { grid } = figma.elements.graphCard;
+  const { unitPx } = grid;
+  // 枠線: SVG 座標 x=0 の縦辺(角丸を避けて中ほどを見る)
+  assert.equal(hexAt(0, 400), grid.frame.stroke, 'グリッド枠');
+  // 縦軸: インクは列 centerX-1 と centerX
+  assert.equal(hexAt(grid.axis.centerX, 100), grid.axis.stroke, '縦軸');
+  // 横軸: インクは行 centerY-1 と centerY
+  assert.equal(hexAt(100, grid.axis.centerY), grid.axis.stroke, '横軸');
+  // 縦グリッド線 (unit +1) と横グリッド線 (unit -6)
+  assert.equal(hexAt(grid.gridLine.originX + unitPx, 100), grid.gridLine.stroke, '縦グリッド線');
+  // 横グリッド線のサンプル点は凡例(左上に absolute で重なる)の外に取る。
+  // 凡例は計算後にラベルが伸びるので、左寄りの座標だと誤検出しうる。
+  assert.equal(
+    hexAt(400, grid.gridLine.originY - unitPx * 6),
+    grid.gridLine.stroke,
+    '横グリッド線'
+  );
 });
 
 test('SVG: 初期状態では矢印を描かない', async () => {
@@ -528,6 +600,14 @@ test('SVG: 初期状態では矢印を描かない', async () => {
   await page.evaluate(() => globalThis.document.fonts.ready);
   assert.equal(await page.$$eval('#vector-arrows line', (els) => els.length), 0);
   assert.equal(await page.$eval('#vec-add-result', (el) => el.textContent.trim()), '—');
+
+  // 未計算のうちは凡例も値を持たない。マークアップに和を焼き込むと
+  // 「結果は — なのに凡例には和がある」という食い違いになり、
+  // その和は addVec の戻り値でもない(完了条件 5)。
+  const legendTexts = await page.$$eval('.legend-label', (els) =>
+    els.map((el) => el.textContent.trim())
+  );
+  assert.deepEqual(legendTexts, ['ベクトル A', 'ベクトル B', 'A + B']);
 });
 
 test('SVG: 矢印の終点が座標規則どおり (完了条件 8)', async () => {
@@ -628,6 +708,20 @@ test('A (3, 4)、B (-1, 2) → (2, 6) (Figma の既定値)', async () => {
 
 test('空欄のまま計算すると (0, 0)', async () => {
   assert.equal(await calculate({ ax: '', ay: '', bx: '', by: '' }), '(0, 0)');
+});
+
+test('非数(badInput)を入れても 0 として計算される', async () => {
+  // type=number は `-` や `1e` を編集中の値として受けるが、value は空文字で読める。
+  // novalidate が無いとネイティブ検証が submit を止め、結果が前の値のまま残る。
+  await page.reload();
+  await page.evaluate(() => globalThis.document.fonts.ready);
+  for (const id of ['#vec-a-x', '#vec-a-y', '#vec-b-x', '#vec-b-y']) await page.fill(id, '');
+  await page.click('#vec-a-x');
+  await page.keyboard.type('-');
+  // 他の 3 欄は空 => 0。`-` も非数なので 0。よって和は (0, 0)。
+  // novalidate が無いと submit が発火せず、初期表示の `—` のまま残って落ちる。
+  await page.click('#vec-add-calculate');
+  assert.equal(await page.$eval('#vec-add-result', (el) => el.textContent.trim()), '(0, 0)');
 });
 
 test('入力欄で Enter を押しても計算される', async () => {

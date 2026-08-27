@@ -1,0 +1,563 @@
+/* トークン: task/0051-calc-vec-add/calc-vec-add.figma.json (node 2:5) を正とする */
+
+/* 自己ホストのフォント。外部ホストへリクエストしない(完了条件 9)。
+   どちらも可変フォントなので、1 ファイルで必要なウェイトをまかなう。 */
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: block;
+  src: url('./assets/fonts/noto-sans-jp-subset.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: block;
+  src: url('./assets/fonts/jetbrains-mono-latin.woff2') format('woff2');
+}
+
+:root {
+  /* 色 */
+  --color-canvas-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-input: #f1f5f9;
+  --color-header-bg: #0f172a;
+  --color-badge-bg: #1e293b;
+  --color-button-bg: #1e293b;
+  --color-logo-bg: #38bdf8;
+  --color-accent: #38bdf8;
+  --color-border-card: #e2e8f0;
+  --color-grid-line: #e2e8f0;
+  --color-grid-frame: #cbd5e1;
+  --color-text-strong: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-faint: #94a3b8;
+  --color-white: #ffffff;
+  --color-legend-bg: rgba(255, 255, 255, 0.8);
+  --color-vector-a: #2563eb;
+  --color-vector-b: #ea580c;
+  --color-vector-sum: #10b981;
+
+  /* 枠線 */
+  --border-width-default: 1px;
+  --border-width-axis: 2px;
+  --border-width-vector: 3px;
+
+  /* 角丸 */
+  --radius-card: 16px;
+  --radius-control: 8px;
+  --radius-logo: 8px;
+  --radius-badge: 100px;
+  --radius-swatch: 2px;
+  --radius-grid-frame: 8px;
+  --blur-legend: 2px;
+
+  /* 余白・ギャップ */
+  --space-page-padding: 40px;
+  --space-card-padding: 28px;
+  --space-card-gap: 24px;
+  --space-column-gap: 32px;
+  --space-left-column-gap: 24px;
+  --space-header-left-gap: 16px;
+  --space-header-title-gap: 2px;
+  --space-badge-padding-x: 10px;
+  --space-badge-padding-y: 4px;
+  --space-vector-group-gap: 12px;
+  --space-vector-header-gap: 8px;
+  --space-field-row-gap: 16px;
+  --space-field-gap: 6px;
+  --space-input-padding-x: 14px;
+  --space-results-gap: 16px;
+  --space-result-row-padding-y: 12px;
+  --space-legend-padding: 12px;
+  --space-legend-gap: 8px;
+  --space-legend-row-gap: 8px;
+  --space-legend-dash-gap: 2px;
+
+  /* 幅・高さ */
+  --size-header-height: 72px;
+  --size-logo: 36px;
+  --size-logo-icon: 20px;
+  --size-left-column-width: 500px;
+  --size-right-column-width: 828px;
+  --size-input-height: 44px;
+  --size-button-height: 48px;
+  --size-vector-dot: 12px;
+  --size-grid: 500px;
+  --size-workspace-height: 520px;
+  --size-grid-offset-top: 10px;
+  --size-legend-offset: 16px;
+  --size-swatch-width: 14px;
+  --size-swatch-height: 4px;
+  --size-swatch-dash: 4px;
+
+  /* タイポグラフィ */
+  --font-sans: 'Noto Sans JP', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-size-header-title: 18px;
+  --font-weight-header-title: 700;
+  --font-size-header-subtitle: 11px;
+  --font-weight-header-subtitle: 400;
+  --font-size-badge: 12px;
+  --font-weight-badge: 500;
+  --font-size-card-title: 18px;
+  --font-weight-card-title: 700;
+  --font-size-card-hint: 12px;
+  --font-weight-card-hint: 400;
+  --font-size-vector-name: 15px;
+  --font-weight-vector-name: 700;
+  --font-size-field-label: 12px;
+  --font-weight-field-label: 400;
+  --font-size-field-input: 14px;
+  --font-weight-field-input: 700;
+  --font-size-button: 15px;
+  --font-weight-button: 700;
+  --font-size-result-label: 14px;
+  --font-weight-result-label: 500;
+  --font-size-result-value: 16px;
+  --font-weight-result-value: 700;
+  --font-size-tick-label: 10px;
+  --font-weight-tick-label: 400;
+  --font-size-legend: 11px;
+  --font-weight-legend: 500;
+  --font-weight-legend-sum: 700;
+
+  /* 行送り。Figma のテキストノードの高さ(抽出 JSON の lineHeight)が正。
+     レイアウトの縦のリズムはこの値で決まる。 */
+  --line-height-header-title: 22px;
+  --line-height-header-subtitle: 13px;
+  --line-height-badge: 14px;
+  --line-height-card-title: 22px;
+  --line-height-card-hint: 14px;
+  --line-height-vector-name: 18px;
+  --line-height-field-label: 14px;
+  --line-height-field-input: 18px;
+  --line-height-button: 18px;
+  --line-height-result-label: 17px;
+  --line-height-result-value: 21px;
+  --line-height-legend: 13px;
+
+  /* 影 */
+  --shadow-card: inset 0 0 0 var(--border-width-default) var(--color-border-card),
+    0 4px 10px rgba(0, 0, 0, 0.02);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-canvas-bg);
+  font-family: var(--font-sans);
+}
+
+/* --- ヘッダー --- */
+
+.header-bar {
+  height: var(--size-header-height);
+  padding: 0 var(--space-page-padding);
+  background: var(--color-header-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-header-left-gap);
+}
+
+.logo {
+  width: var(--size-logo);
+  height: var(--size-logo);
+  border-radius: var(--radius-logo);
+  background: var(--color-logo-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-icon {
+  width: var(--size-logo-icon);
+  height: var(--size-logo-icon);
+  display: block;
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-header-title-gap);
+}
+
+.header-title {
+  margin: 0;
+  font-size: var(--font-size-header-title);
+  font-weight: var(--font-weight-header-title);
+  color: var(--color-white);
+  line-height: var(--line-height-header-title);
+}
+
+.header-subtitle {
+  font-size: var(--font-size-header-subtitle);
+  font-weight: var(--font-weight-header-subtitle);
+  color: var(--color-text-faint);
+  line-height: var(--line-height-header-subtitle);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  padding: var(--space-badge-padding-y) var(--space-badge-padding-x);
+  background: var(--color-badge-bg);
+  border-radius: var(--radius-badge);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-badge);
+  color: var(--color-accent);
+  line-height: var(--line-height-badge);
+}
+
+/* --- レイアウト --- */
+
+.content-wrapper {
+  padding: var(--space-page-padding);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-column-gap);
+}
+
+.left-column {
+  width: var(--size-left-column-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-left-column-gap);
+}
+
+.right-column {
+  width: var(--size-right-column-width);
+  flex-shrink: 0;
+}
+
+/* --- カード共通 --- */
+
+.card {
+  background: var(--color-surface);
+  /* Figma の枠線は内側ストロークで、内寸(444px)を減らさない。
+     border だと content-box が 2px 狭まるので inset の影で描く。 */
+  border: none;
+  border-radius: var(--radius-card);
+  padding: var(--space-card-padding);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  margin: 0;
+  font-size: var(--font-size-card-title);
+  font-weight: var(--font-weight-card-title);
+  color: var(--color-text-strong);
+  line-height: var(--line-height-card-title);
+}
+
+.card-hint {
+  margin: 0;
+  font-size: var(--font-size-card-hint);
+  font-weight: var(--font-weight-card-hint);
+  color: var(--color-text-faint);
+  line-height: var(--line-height-card-hint);
+}
+
+/* --- 入力カード --- */
+
+.input-card {
+  gap: var(--space-card-gap);
+}
+
+.vector-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-vector-group-gap);
+}
+
+.vector-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-vector-header-gap);
+}
+
+.vector-dot {
+  width: var(--size-vector-dot);
+  height: var(--size-vector-dot);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vector-dot-a {
+  background: var(--color-vector-a);
+}
+
+.vector-dot-b {
+  background: var(--color-vector-b);
+}
+
+.vector-name {
+  font-size: var(--font-size-vector-name);
+  font-weight: var(--font-weight-vector-name);
+  color: var(--color-text-strong);
+  line-height: var(--line-height-vector-name);
+}
+
+.field-row {
+  display: flex;
+  gap: var(--space-field-row-gap);
+}
+
+.field {
+  flex: 1 0 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-field-gap);
+}
+
+.field-label {
+  font-size: var(--font-size-field-label);
+  font-weight: var(--font-weight-field-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-field-label);
+}
+
+.field-input {
+  width: 100%;
+  height: var(--size-input-height);
+  padding: 0 var(--space-input-padding-x);
+  background: var(--color-surface-input);
+  border: none;
+  border-radius: var(--radius-control);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-field-input);
+  font-weight: var(--font-weight-field-input);
+  line-height: var(--line-height-field-input);
+  color: var(--color-text-strong);
+}
+
+/* ネイティブのスピナー(Figma に無い要素)を消す */
+.field-input::-webkit-outer-spin-button,
+.field-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.field-input {
+  appearance: textfield;
+}
+
+.calc-button {
+  width: 100%;
+  height: var(--size-button-height);
+  background: var(--color-button-bg);
+  border: none;
+  border-radius: var(--radius-control);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-button);
+  font-weight: var(--font-weight-button);
+  line-height: var(--line-height-button);
+  color: var(--color-white);
+  cursor: pointer;
+}
+
+/* 塗りが濃色の要素はブラウザ標準のフォーカスリングと同化して見えなくなるため、
+   白い縁を挟んでどの背景色でも視認できるようにする */
+.calc-button:focus-visible,
+.field-input:focus-visible {
+  outline: 2px solid var(--color-vector-a);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-white);
+}
+
+/* --- 結果カード --- */
+
+.results-card {
+  gap: var(--space-results-gap);
+}
+
+.result-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-result-row-padding-y) 0;
+  border-bottom: var(--border-width-default) solid var(--color-border-card);
+}
+
+.result-label {
+  margin: 0;
+  font-size: var(--font-size-result-label);
+  font-weight: var(--font-weight-result-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-result-label);
+}
+
+.result-value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-result-value);
+  font-weight: var(--font-weight-result-value);
+  color: var(--color-text-strong);
+  line-height: var(--line-height-result-value);
+}
+
+/* --- グラフカード --- */
+
+.graph-card {
+  gap: var(--space-card-gap);
+}
+
+/* グラフカードのヒントだけ、入力カード(--color-text-faint)より濃い。
+   抽出 JSON の graphCard.cardHint.color が正。 */
+.graph-card .card-hint {
+  color: var(--color-text-muted);
+}
+
+.graph-workspace-row {
+  height: var(--size-workspace-height);
+  display: flex;
+  justify-content: center;
+}
+
+.grid-container {
+  position: relative;
+  width: var(--size-grid);
+  height: var(--size-grid);
+  margin-top: var(--size-grid-offset-top);
+}
+
+.graph-canvas {
+  display: block;
+  width: var(--size-grid);
+  height: var(--size-grid);
+}
+
+.grid-frame {
+  fill: none;
+  stroke: var(--color-grid-frame);
+  stroke-width: var(--border-width-default);
+  rx: var(--radius-grid-frame);
+}
+
+.grid-lines line {
+  stroke: var(--color-grid-line);
+  stroke-width: var(--border-width-default);
+}
+
+.axis {
+  stroke: var(--color-text-muted);
+  stroke-width: var(--border-width-axis);
+}
+
+.tick-labels text {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-tick-label);
+  font-weight: var(--font-weight-tick-label);
+  fill: var(--color-text-muted);
+}
+
+.vector-arrows line {
+  stroke-width: var(--border-width-vector);
+}
+
+.vector-line-a {
+  stroke: var(--color-vector-a);
+}
+
+.vector-line-b {
+  stroke: var(--color-vector-b);
+}
+
+.vector-line-sum {
+  stroke: var(--color-vector-sum);
+  stroke-dasharray: 6 4;
+}
+
+/* --- 凡例 --- */
+
+.floating-legend {
+  position: absolute;
+  top: var(--size-legend-offset);
+  left: var(--size-legend-offset);
+  padding: var(--space-legend-padding);
+  background: var(--color-legend-bg);
+  backdrop-filter: blur(var(--blur-legend));
+  border: var(--border-width-default) solid var(--color-border-card);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-legend-gap);
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-legend-row-gap);
+}
+
+.legend-swatch {
+  width: var(--size-swatch-width);
+  height: var(--size-swatch-height);
+  border-radius: var(--radius-swatch);
+  flex-shrink: 0;
+}
+
+.legend-swatch-a {
+  background: var(--color-vector-a);
+}
+
+.legend-swatch-b {
+  background: var(--color-vector-b);
+}
+
+.legend-swatch-sum {
+  border-radius: 0;
+  display: flex;
+  gap: var(--space-legend-dash-gap);
+}
+
+.legend-dash {
+  width: var(--size-swatch-dash);
+  height: var(--size-swatch-dash);
+  background: var(--color-vector-sum);
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-size: var(--font-size-legend);
+  font-weight: var(--font-weight-legend);
+  color: var(--color-text-strong);
+  line-height: var(--line-height-legend);
+  white-space: nowrap;
+}
+
+.legend-label-sum {
+  font-weight: var(--font-weight-legend-sum);
+  color: var(--color-vector-sum);
+}

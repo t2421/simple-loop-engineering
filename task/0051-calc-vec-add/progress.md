@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0051-calc-vec-add/spec.md`
 - **Branch:** `feat/0051-calc-vec-add`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/73
 - **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `M`
 
@@ -18,8 +18,8 @@
 - [x] 実装 (`src/vector.html` / `src/vector.css` / `src/vector.mjs`。`src/calc.*` は変更しない)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得（3 回目で承認。Critical/High/Medium/Low いずれも 0 件）
 - [x] レビューサブエージェント (`visual-design-reviewer`) の承認取得（2 回目で承認。Critical 0 件）
-- [ ] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける）
-- [ ] 見た目のスクリーンキャプチャを PR 本文に貼る（未計算と、例の 1 件以上の計算後）
+- [x] PR作成（進捗の **PR** に URL を書く。**`allow-protected-change` ラベルは人間が付ける**）
+- [x] 見た目のスクリーンキャプチャを PR 本文に貼る（未計算・計算後・負の成分の 3 状態）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -95,3 +95,4 @@
   - codex の 3 回目は指摘ゼロ。不承認は 2 回で終了し、上限 5 回には達していない。
 - 17:35 - **作業ディレクトリを取り違えた。** progress の更新を、worktree ではなく **main のチェックアウト**に書いてしまった（シェルの作業ディレクトリが main に戻っていたのに相対パスで書いた）。`git checkout --` で main 側を復元し、worktree に対して絶対パスで入れ直した。CLAUDE.md「進捗の更新は、その作業の worktree の、その作業のブランチで行う」に反する操作だった。
 - 17:35 - **別作業の候補として記録（この作業では対応しない）。** `tools/check-protected-paths.mjs` は `main...HEAD` の範囲で判定するため、**同一 PR 内で新規作成した抽出物は、その後どれだけ書き換えても保護されない**。今回は追加のみ・実測どおりだったので実害ゼロだが、原理的には「抽出 → 実装 → 抽出物を実装に合わせて書き換え」が素通りする。凍結の意図に対する穴であり、塞ぐなら凍結対象ツール自身の改訂になるので `.claude/skills/add-protected-path` に従う独立した作業になる。backlog 候補。
+- 17:45 - PR #73 を作成した。スクリーンキャプチャ 3 状態（未計算・計算後・負の成分）を `user-attachments` に上げて本文から参照した（リポジトリには置かない）。**`allow-protected-change` ラベルの付与とマージは人間の作業。**

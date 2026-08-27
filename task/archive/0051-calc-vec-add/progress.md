@@ -1,9 +1,9 @@
 # Progress: `0051-calc-vec-add`
 
-- **Target Spec:** `task/0051-calc-vec-add/spec.md`
+- **Target Spec:** `task/archive/0051-calc-vec-add/spec.md`
 - **Branch:** `feat/0051-calc-vec-add`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/73
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -20,7 +20,7 @@
 - [x] レビューサブエージェント (`visual-design-reviewer`) の承認取得（2 回目で承認。Critical 0 件）
 - [x] PR作成（進捗の **PR** に URL を書く。**`allow-protected-change` ラベルは人間が付ける**）
 - [x] 見た目のスクリーンキャプチャを PR 本文に貼る（未計算・計算後・負の成分の 3 状態）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

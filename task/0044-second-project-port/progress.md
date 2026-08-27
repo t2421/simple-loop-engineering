@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0044-second-project-port/spec.md`
 - **Branch:** `feat/0044-second-project-port`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/75
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `L`
 
@@ -19,7 +19,7 @@
 - [x] 匿名化の確認（移植先 P を特定できる識別子が作業ディレクトリに 0 件。→ 完了条件 7）
 - [x] このリポジトリ側に差分が無いことの確認（→ 完了条件 8）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴

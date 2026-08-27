@@ -413,6 +413,11 @@ test('宣言した台帳の場所とファイル名で作業を選ぶ', (t) => {
     progressFile: 'QG_log.md',
     docs: ['design.md', 'QG_log.md'],
   };
+  // 台帳を移すなら、それを守る保護エントリも一緒に移す。
+  // 片方だけ変えた宣言は読み込み時に拒まれる（稼働中の台帳が無保護になるため）
+  manifest.protected.appendOnlyDirs = manifest.protected.appendOnlyDirs.map(
+    (d) => (d.ledger === true ? { ...d, prefix: 'docs/workflow/' } : d),
+  );
   fs.writeFileSync(path.join(root, 'loop.manifest.json'), JSON.stringify(manifest));
 
   const workDir = path.join(root, 'docs/workflow/0007-x');

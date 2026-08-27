@@ -68,6 +68,24 @@ function pick(obj, keyPath) {
 }
 
 /**
+ * 正規表現の文字列に含まれる捕獲グループの数を数える純関数。
+ *
+ * 利用側は 1 番目を ID、2 番目を slug として使う。`^\\d{4}-.+$` のような
+ * 「一致はするが捕獲しない」形を通すと、採番が `undefined` を数値化し、
+ * slug の重複検知は `undefined` 同士の比較になって**無言で消える**。
+ *
+ * エスケープと文字クラスを落としてから `(` を数える（`(?:` などは捕獲しない）。
+ *
+ * @param {string} source
+ * @returns {number}
+ */
+export function countCaptureGroups(source) {
+  const withoutEscapes = source.replace(/\\./g, '');
+  const withoutClasses = withoutEscapes.replace(/\[[^\]]*\]/g, '');
+  return (withoutClasses.match(/\((?!\?)/g) ?? []).length;
+}
+
+/**
  * 値が「非空の文字列配列」かを判定する純関数。
  *
  * @param {unknown} v
@@ -108,6 +126,11 @@ export function parseManifest(raw) {
   } else {
     try {
       new RegExp(manifest.workId.pattern);
+      if (countCaptureGroups(manifest.workId.pattern) < 2) {
+        reasons.push(
+          'workId.pattern は捕獲グループを 2 つ持つ必要があります（1 番目が ID、2 番目が slug）',
+        );
+      }
     } catch (err) {
       reasons.push(`workId.pattern が正規表現として不正です: ${err.message}`);
     }
@@ -178,6 +201,13 @@ export function parseManifest(raw) {
     || Array.isArray(manifest.complexityModels)
     || Object.values(manifest.complexityModels).some((v) => typeof v !== 'string' || v === '')) {
     reasons.push('complexityModels は文字列を値に持つオブジェクトである必要があります');
+  } else {
+    // 等級を書かない進捗は `M` とみなされる。表に `M` が無いと、既存の進捗を選んだ
+    // 瞬間に落ちる。**読み込み時に落とすほうが、作業を選んだ後に落ちるより早い**
+    const missing = ['S', 'M', 'L'].filter((g) => !Object.hasOwn(manifest.complexityModels, g));
+    if (missing.length > 0) {
+      reasons.push(`complexityModels に等級がありません: ${missing.join(', ')}`);
+    }
   }
   for (const key of ['dir', 'specFile', 'progressFile']) {
     if (typeof manifest.ledger[key] !== 'string' || manifest.ledger[key] === '') {
@@ -188,6 +218,22 @@ export function parseManifest(raw) {
   if (!isStringArray(manifest.verify.invokedIn)) {
     reasons.push('verify.invokedIn は非空の文字列配列である必要があります');
   }
+
+  // **稼働中の台帳が、実際に守られているかを見る。**
+  // `ledger.dir` は start-task と進捗結合が読み、保護するパスは
+  // `appendOnlyDirs[].prefix` が決める。この 2 つは別の値なので、移植で片方だけ
+  // 書き換えると「新しい台帳を見て作業するのに、凍結は存在しない古いディレクトリを
+  // 守り続ける」状態になる。稼働中の spec の書き換え・削除が違反 0 件になる
+  const ledgerDirs = (Array.isArray(manifest.protected.appendOnlyDirs) ? manifest.protected.appendOnlyDirs : [])
+    .filter((d) => d !== null && typeof d === 'object' && d.ledger === true)
+    .map((d) => d.prefix);
+  if (typeof manifest.ledger.dir === 'string' && !ledgerDirs.includes(manifest.ledger.dir)) {
+    reasons.push(
+      `ledger.dir（${manifest.ledger.dir}）を守る protected.appendOnlyDirs のエントリ`
+      + `（ledger: true・同じ prefix）がありません`,
+    );
+  }
+
   // **自己保護。** マニフェスト自身が保護対象で無ければ、書き換え放題になる
   if (manifest.protected.self !== MANIFEST_PATH) {
     reasons.push(`protected.self が自分自身（${MANIFEST_PATH}）を指していません: ${manifest.protected.self}`);

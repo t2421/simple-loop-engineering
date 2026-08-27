@@ -816,6 +816,14 @@ const BROKEN_MANIFESTS = [
   // **欠落も型不正と同じく拒む。** 空配列で補うと、呼び出し元が無保護になる
   ['verify.invokedIn 欠落', (m) => { delete m.verify.invokedIn; }],
   ['verify.invokedIn = []', (m) => { m.verify.invokedIn = []; }],
+  // 稼働中の台帳が実際に守られているか（宣言どうしの食い違いを拒む）
+  ['ledger.dir が appendOnlyDirs に無い', (m) => { m.ledger.dir = 'docs/workflow/'; }],
+  ['appendOnlyDirs の ledger:true を外す', (m) => { delete m.protected.appendOnlyDirs[0].ledger; }],
+  // 捕獲グループを持たない workId.pattern
+  ['workId.pattern が捕獲しない', (m) => { m.workId.pattern = '^\\d{4}-.+$'; }],
+  // 等級表の欠け
+  ['complexityModels に M が無い', (m) => { m.complexityModels = { S: 'haiku', L: 'fable' }; }],
+  ['complexityModels = {}', (m) => { m.complexityModels = {}; }],
 ];
 
 for (const [name, mutate] of BROKEN_MANIFESTS) {

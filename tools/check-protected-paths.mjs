@@ -645,6 +645,25 @@ export function validateManifestShape(manifest) {
   }
   if (!isStr(manifest.workId.pattern)) {
     reasons.push('workId.pattern は非空の文字列である必要があります');
+  } else {
+    // 利用側は捕獲グループ 1 を ID、2 を slug として使う。捕獲しない形を通すと
+    // 採番も slug の重複検知も無言で壊れる（→ tools/loop-manifest.mjs の同項目）
+    const source = manifest.workId.pattern.replace(/\\./g, '').replace(/\[[^\]]*\]/g, '');
+    if ((source.match(/\((?!\?)/g) ?? []).length < 2) {
+      reasons.push('workId.pattern は捕獲グループを 2 つ持つ必要があります（1 番目が ID、2 番目が slug）');
+    }
+  }
+
+  // **稼働中の台帳が実際に守られているか。** `ledger.dir` は start-task と進捗結合が読み、
+  // 守るパスは `appendOnlyDirs[].prefix` が決める。片方だけ書き換えると、新しい台帳で
+  // 作業しながら凍結は古いディレクトリを守り続け、稼働中の spec が無保護になる
+  const ledgerPrefixes = (Array.isArray(pr.appendOnlyDirs) ? pr.appendOnlyDirs : [])
+    .filter((d) => d !== null && typeof d === 'object' && d.ledger === true)
+    .map((d) => d.prefix);
+  if (isStr(led.dir) && !ledgerPrefixes.includes(led.dir)) {
+    reasons.push(
+      `ledger.dir（${led.dir}）を守る protected.appendOnlyDirs のエントリ（ledger: true・同じ prefix）がありません`,
+    );
   }
   // ガード自身は条件付き工程を読まないが、**2 実装の厳しさを揃える。**
   // 片方だけが緩いと、緩いほうを通る宣言が「検査済み」に見える
@@ -672,6 +691,9 @@ export function validateManifestShape(manifest) {
     || Array.isArray(manifest.complexityModels)
     || Object.values(manifest.complexityModels ?? {}).some((v) => !isStr(v))) {
     reasons.push('complexityModels は文字列を値に持つオブジェクトである必要があります');
+  } else {
+    const missing = ['S', 'M', 'L'].filter((g) => !Object.hasOwn(manifest.complexityModels, g));
+    if (missing.length > 0) reasons.push(`complexityModels に等級がありません: ${missing.join(', ')}`);
   }
   if (!isStr(pr.allowLabel)) reasons.push('protected.allowLabel は非空の文字列である必要があります');
   return reasons;

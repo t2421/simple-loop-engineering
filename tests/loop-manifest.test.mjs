@@ -12,6 +12,7 @@ import {
   checkDefinedInExists,
   loadManifest,
   repoManifest,
+  countCaptureGroups,
 } from '../tools/loop-manifest.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -171,7 +172,17 @@ const BROKEN_LEAVES = [
   ['verify.invokedIn 欠落', (m) => { delete m.verify.invokedIn; }, 'invokedIn'],
   ['implementation.dirs = [42]', (m) => { m.implementation.dirs = [42]; }, 'implementation.dirs'],
   ['implementation が両方空', (m) => { m.implementation.dirs = []; m.implementation.files = []; }, 'implementation'],
+  ['ledger.dir が appendOnlyDirs に無い', (m) => { m.ledger.dir = 'docs/workflow/'; }, 'ledger.dir'],
+  ['workId.pattern が捕獲しない', (m) => { m.workId.pattern = '^\\d{4}-.+$'; }, 'workId.pattern'],
+  ['complexityModels に M が無い', (m) => { m.complexityModels = { S: 'haiku', L: 'fable' }; }, 'complexityModels'],
 ];
+
+test('countCaptureGroups: エスケープと文字クラスを数に入れない', () => {
+  assert.equal(countCaptureGroups('^(\\d{4})-(.+)$'), 2);
+  assert.equal(countCaptureGroups('^\\d{4}-.+$'), 0);
+  assert.equal(countCaptureGroups('^(?:x)(a)(b)$'), 2);
+  assert.equal(countCaptureGroups('^([0-9])-([a-z(]+)$'), 2);
+});
 
 for (const [name, mutate, key] of BROKEN_LEAVES) {
   test(`失敗時2: 型不正を拒む — ${name}`, () => {

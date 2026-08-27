@@ -11,12 +11,12 @@
 | 性質 | 実測 |
 |---|---|
 | パッケージマネージャ | **無い**。`package.json` / `pyproject.toml` / `Package.swift` のいずれも持たない |
-| 実装の実体 | シェルスクリプト 13 本、`.mjs` 1 本、レジストリ JSON、Markdown 83 本 |
+| 実装の実体 | シェルスクリプト群、`.mjs` 少数、設定 JSON、Markdown 多数 |
 | 検証の定義 | **GitHub Actions のワークフロー YAML に 7 ステップ直書き**。1 コマンドで回す入口が無い |
 | テスト | シェルのテスト 1 本（24 ケース）。ランナーによる自動発見も列挙ファイルも無い |
 | UI | 無い。e2e・見た目・プレビューに対応物が無い |
-| 既存のループ | **ある。** 独自の `CLAUDE.md`（374 行）、フェーズ 0〜4、クオリティゲート、レビュアーエージェント 6 種、`UserPromptSubmit` フック、スキル 6 種 |
-| 台帳 | `docs/workflow/<日付>_<slug>/` に要件定義書・設計書・QG 判定ログ。状態は `tasks.json` |
+| 既存のループ | **ある。** 独自の `CLAUDE.md`、複数フェーズ、クオリティゲート、複数のレビュアーエージェント、`UserPromptSubmit` フック、複数のスキル |
+| 台帳 | 作業ごとのディレクトリに要件定義書・設計書・QG 判定ログ。状態は別の JSON |
 
 ## 1. 予測との照合（spec「背景」の 4 分類）
 
@@ -25,7 +25,7 @@
 
 | 分類 | 予測 | 実測 | 判定 |
 |---|---|---|---|
-| ヒット 0 = 完全に汎用 | `archive` / `check-actions` / `check-progress-coupling` / `guard-worktree` は無変更で動く | `check-actions`・`guard-worktree` は無変更で動いた。**`check-progress-coupling` は「動いたが常に通る」**。`archive` は移植しなかった | **半分外れ** |
+| ヒット 0 = 完全に汎用 | `archive` / `check-actions` / `check-progress-coupling` / `guard-worktree` は無変更で動く | 無変更で動いたのは **`check-actions` の 1 本だけ**。`check-progress-coupling` は「動くが実装パスの大半を見落とす」。`guard-worktree` は定数 2 箇所の差し替えと hook 登録が要った。`archive` は移植しなかった | **ほぼ外れ** |
 | コメントのみ | `lint-docs`・`stop-hook-ci-dir` は実質汎用 | `stop-hook-ci-dir` は無変更で動いた。**`lint-docs` は全面改訂が要り、今回は移植しなかった** | **外れ** |
 | 1 概念に凝集 | `start-task`（`npm ci`）・`check-protected-paths`（`package.json`） | `check-protected-paths` は 1 概念では済まず **6 箇所**の書き換えが要った | **外れ** |
 | 真に固有 | `run-unit-tests`・`setup-playwright`・`e2e-needed` | 予測どおり。対応物が無いので移植しなかった | **当たり** |
@@ -36,8 +36,15 @@
 言語には依存しないがディレクトリ名には依存するツールが「ヒット 0 = 汎用」に化けた。
 
 最悪の失敗は `check-progress-coupling.mjs` である。**無変更でコピーしても実行でき、
-終了コード 0 を返す。** 中身は「`src/`・`tests/`・`tools/` に変更がないため対象外です」
-であり、P にその 3 つは存在しないので**あらゆる差分が対象外になる**。
+終了コード 0 を返す。** 中身は「`src/`・`tests/`・`tools/` に変更がないため対象外です」である。
+
+P に `src/` と `tools/` は無い。`tests/` だけは**たまたま同じ名前で存在する**ので、
+`tests/` を触る差分ではこのチェッカーは発火する。したがって「あらゆる差分が対象外になる」
+のではなく、正しくは **P の実装パスの大半（`scripts/`・`schemas/`・`templates/`・`.claude/`・
+リポジトリ直下の実装ファイル）が対象外になる**である。貼った出力が示すのも、
+その 1 回の試験差分がこの 3 つを含まなかったことまでである。
+
+偶然一致した 1 つがあるぶん、かえって質が悪い。**部分的に発火するので「効いている」ように見える。**
 
 ```
 --- check-progress-coupling ---
@@ -96,12 +103,19 @@ P にも残っている。P では「テスト関数を書いたが `run_test` �
 `e2e-needed.mjs`・`setup-playwright.mjs`・見た目のレビュアーは**ファイルごと置かなかった**。
 常に false を返す判定や、何も見ないレビュアー定義は作っていない。
 
-P には夜間 E2E があるが、これは別リポジトリを対象にした時刻起動であり、
-差分ベースの条件付き工程ではない。**対応物ではない。**
+P には時刻起動の重いテストがあるが、差分ベースで発火する条件付き工程ではない。
+**対応物ではない。**
 
 ### 2.5 `CLAUDE.md` の不変部分と穴
 
-今回 `CLAUDE.md` は書き換えていない（後述 2.6 の理由）。読み合わせた結果の対応は次のとおり。
+今回 `CLAUDE.md` は書き換えていない（後述 2.6 の理由）。下表は**読み合わせの結果であって、
+手移植の実測ではない**。
+
+> **測っていない領域として明示しておく。** `loop-port` スキルは「`CLAUDE.md` を先に埋める。
+> ツールより先である」を移植順序の第 1 項に置き、固有語のヒットもここが最多としている。
+> つまり**移植コストの本体を今回は測れていない**。下の「穴」判定（出力を貼る規定・
+> トークンコストの規律）が実地で成立するかは未検証である。0043 が
+> 「`CLAUDE.md` テンプレート」を設計するときは、この空白を埋める移植をもう 1 件要する。
 
 | 移植元の記述 | P での扱い |
 |---|---|
@@ -156,6 +170,14 @@ origin/main では `Tests: 24, Failures: 0` なので、移植による退行で
 `ci.sh` が各検証を含むこと」の 2 段に変えた。片方だけ見ると、
 YAML だけ → `ci.sh` を空にして通せる、`ci.sh` だけ → 呼ぶのをやめて通せる。
 
+修正後、P のテストは緑に戻った。
+
+```
+ok - local Markdown links resolve
+
+Tests: 24, Failures: 0
+```
+
 そのテストは移植後の設定では保護対象（`tests/`）なので、この修正自体が
 `allow-protected-change` を要求する。**ガードが設計どおりに働いた。**
 
@@ -189,6 +211,11 @@ P は「作業依頼を受けたら実作業前に必ず外部の台帳に起票
 | **新規: 定数を差し替えても文言は追随しない** | カタログに無い。実測で**3 回**踏んだ |
 | **新規: 台帳が追跡されていること** | カタログに無い。移植の前提条件（2.6 a） |
 | **新規: 移植先に既存のループがある場合** | カタログに無い。置き換えではなく対応づけが正しい（2.6 c） |
+| **新規: Stop hook の終了コード** | カタログに無い。止めるのは exit 2 である（下記） |
+
+**不要だった項目: 無し。** カタログ 13 グループのうち「この移植先には要らなかった」と
+判定できたものは 1 つも無い。2.7・2.8 の 2 件は**今回の移植範囲に入れなかった**だけで、
+不要と判定したわけではない（`start-task` を移植すればモデル表もレビュアーも要る）。
 
 #### 新規項目「定数を差し替えても文言は追随しない」
 
@@ -209,7 +236,7 @@ P は「作業依頼を受けたら実作業前に必ず外部の台帳に起票
 | 1 | 新設 `scripts/ci.sh` | （無かった） | 検証 8 ステップの入口 | ローカルと CI で同じ検証を回せず、`definedIn` が定まらなかった |
 | 2 | ワークフロー YAML | 検証 7 ステップの直書き | `./scripts/ci.sh` の呼び出し + 保護パス / 進捗結合の 2 ジョブ | 定義を 1 箇所に寄せ、ゲートを CI に載せる |
 | 3 | ワークフロー YAML | `fetch-depth` 既定 | `fetch-depth: 0` | base との差分を取るのに全履歴が要る |
-| 4 | `scripts/ci.sh` | `git diff --exit-code` | 実行前後の `git status --porcelain` 比較 | 未コミット変更があるとローカルで必ず落ち、Stop hook と両立しない |
+| 4 | `scripts/ci.sh` | `git diff --exit-code` | 実行前後のスナップショット比較（`git status --porcelain` **と追跡分の差分のハッシュ**） | 未コミット変更があるとローカルで必ず落ち、Stop hook と両立しない。ステータスだけ比べると、既に `M` と出ているファイルを検査が書き換えても素通りする（レビュー指摘） |
 | 5 | `check-protected-paths` `TEMPLATES` | テンプレ 4 件 | 配布用テンプレ 1 件 | 移植元の型は P に存在しない |
 | 6 | 同 `CHECKER` | `tools/…` | `scripts/loop/…` | 配置が違う |
 | 7 | 同 `SPEC_FILE` | `spec.md` | `01_requirements.md` | 完了条件が置かれるファイルが違う |
@@ -224,9 +251,34 @@ P は「作業依頼を受けたら実作業前に必ず外部の台帳に起票
 | 16 | `.gitignore` | 台帳を除外 | 台帳を追跡 | 追跡外の差分は守れない（2.6 a） |
 | 17 | `.claude/settings.json` | `UserPromptSubmit` のみ | `Stop` / `PostToolUse` を追加 | 検証と Actions 結果をセッション停止時に強制する |
 | 18 | `tests/` の CI 固定テスト | YAML の中身を固定 | YAML の呼び出し + `ci.sh` の中身の 2 段 | 移植が P 既存の凍結を壊したため（2.6 b） |
+| 19 | `guard-worktree` の実装パス定数 | `['src','tests','tools']` | P のレイアウト + 単体ファイル | 無変更では実装編集をブロックしない |
+| 20 | `.claude/settings.json` | （`PreToolUse` 無し） | `guard-worktree` を `PreToolUse` へ登録 | 登録しなければガードは呼ばれない |
+| 21 | Stop hook のコマンド | 検証失敗時に exit 1 | 検証失敗時に **exit 2** | 1 は非ブロッキングのエラー。セッションを止めるのは 2（下記） |
 
-**無変更で動いたもの:** `check-actions.mjs`、`guard-worktree.mjs`、`stop-hook-ci-dir.mjs`
-（コメント中の `npm run ci` は残っており、誤解を招く。文言としては要修正）。
+**無変更で動いたもの:** `check-actions.mjs`、`stop-hook-ci-dir.mjs`
+（後者はコメント中の `npm run ci` が残っており、誤解を招く。文言としては要修正）。
+
+**`guard-worktree.mjs` は無変更では効かなかった。** レビューの指摘で気づき、実測した。
+定数が `['src', 'tests', 'tools']` のままだと、P の実装をプライマリで編集しても
+ブロックされない。さらに `.claude/settings.json` の `PreToolUse` に登録しなければ
+そもそも呼ばれない。定数を差し替え、単体ファイル対応を足し、登録したうえで、
+**宣言した実装パスが 1 つ残らずブロックされることを測った**。
+
+```
+scripts/ci.sh                                  BLOCK (implementation-in-primary)
+tests/repository-workflow.test.sh              BLOCK (implementation-in-primary)
+schemas/x.json                                 BLOCK (implementation-in-primary)
+templates/y.md                                 BLOCK (implementation-in-primary)
+.claude/settings.json                          BLOCK (implementation-in-primary)
+setup.sh                                       BLOCK (implementation-in-primary)
+repos.json                                     BLOCK (implementation-in-primary)
+docs/workflow/2026-08-27_loop-port/QG_log.md   pass  (not-implementation)
+README.md                                      pass  (not-implementation)
+```
+
+**これは `check-progress-coupling` と同型の取りこぼしである。** 同じ罠に 2 回落ちた。
+1 回目は自力で気づき、2 回目は外部レビューで気づいた。
+「ヒット 0 = 汎用」という分類そのものが、この罠を作っている。
 
 **移植しなかったもの（理由つき）:**
 
@@ -279,20 +331,38 @@ exit=0
 
 ### (c) Stop hook — 検証を意図的に壊す
 
+**移植の途中で、この機構の終了コードに穴があることが分かった。**
+
+移植元の Stop hook は `... && npm run ci 1>&2 && ... check-actions.mjs` という形で、
+検証が落ちるとコマンド全体が **exit 1** で終わる。ところがこの仕組み自身、
+`check-actions.mjs` の中で「止める」ときだけ **exit 2** を使い分けている。
+
 ```
-=== (c-1) 検証が健全なとき ===
-=== Ensure checks did not modify tracked files ===
+198:    exit: 2,
+344:    process.exit(2);
+```
 
+exit 1 は「非ブロッキングのエラー」であり、表示はされるが止まらない。
+つまり **「検証が落ちたときに止める」経路だけが、止まらない終了コードを返していた**。
+移植先では検証失敗を exit 2 に直したうえで測った。
+
+```
+=== (c-1) 健全なとき ===
+Stop hook exit=0
 ci: all checks passed
+check-actions: HEAD がリモートに無いため（未 push）、判定しません。
 
-=== (c-2) 検証を意図的に壊す（registry 検査を空にする） ===
-Stop hook exit=1
-
-=== Run ShellCheck ===
-::warning::shellcheck が無いため飛ばします（CI では必ず実行される）
+=== (c-2) 検証を壊したとき ===
+Stop hook exit=2（2 = セッションをブロックする）
 
 === Validate repository registry ===
+registry check deliberately broken
 ```
+
+> **移植元への申し送り（この作業では直さない。範囲外）:** 同じ穴が移植元の
+> `.claude/settings.json` にもある。`npm run ci` が落ちたときの Stop hook の
+> 終了コードは 1 であり、`check-actions.mjs` が使う 2 と食い違う。
+> **backlog に起票すべきである。**
 
 3 つとも成立した。**省略したゲートは無い。**
 
@@ -313,6 +383,11 @@ Stop hook exit=1
 2. **配布形態を npm パッケージにしない。** P に npm は無い。`.mjs` のファイル群をそのまま置ければ動いた。単一ディレクトリのコピー（`git subtree` かインストールスクリプト）で足りる
 3. **移植したツールにはテストを伴わせる。** 今回は移植先にテストを置かなかったため、`check-progress-coupling` が「常に通る」状態を**実行してみるまで気づけなかった**（1 節）。ゲートを配ってテストを配らないと、移植先で誰も効果を確かめていない状態になる
 4. **利用者向け文言を定数から生成する。** 手で書いた文字列は定数の差し替えに追随しない（2.7 新規項目）
+5. **「検証がファイルを書き換えたか」はステータスではなく内容で見る。** `git status --porcelain` の
+   前後比較では、既に `M` と出ているファイルの再変更を取りこぼす（3-4）
+6. **ゲートを配るときは「レイアウト適合テスト」を伴わせる。** 宣言した実装パスを 1 件ずつ
+   判定器に与え、すべてが対象になることを機械が確かめる。今回 `guard-worktree` の
+   取りこぼしは外部レビューでしか見つからなかった。テストがあれば移植の時点で落ちた
 
 ### `loop-port` スキルへ
 
@@ -323,3 +398,4 @@ Stop hook exit=1
 - ローカルの worktree 1 つとブランチ 2 本。**push もマージもしていない**
 - P のプライマリチェックアウトには触れていない（worktree は P の gitignore 済みディレクトリ配下）
 - 撤去は worktree の削除とブランチの削除だけで済む
+- P のリモートには一切影響していない（`git push` を実行していない）

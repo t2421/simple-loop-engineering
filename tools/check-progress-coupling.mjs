@@ -54,13 +54,53 @@ import { pathToFileURL } from 'node:url';
 export const BYPASS_LABEL = 'no-progress-needed';
 
 /** ここに変更があれば「実装 PR」とみなす */
-const IMPLEMENTATION_DIRS = ['src/', 'tests/', 'tools/'];
+/**
+ * マニフェストのパス。**このファイルは import を持てない**（CI が base リビジョンの版を
+ * `$RUNNER_TEMP` へ取り出して単体実行するため）。読み取りは最小限を自前に持つ。
+ */
+const MANIFEST_PATH = 'loop.manifest.json';
+
+/**
+ * 判定に使う固有値。**base リビジョンのマニフェストから組み立てる。**
+ * `main()` が差し込む。テストは `useManifest` で直接渡す。
+ */
+let CONFIG = null;
+
+/**
+ * マニフェストから判定に使う形を作る純関数。
+ *
+ * @param {object} manifest
+ * @returns {{implDirs: string[], implFiles: string[], taskDir: string, progressFile: string}}
+ */
+export function configFromManifest(manifest) {
+  return {
+    implDirs: manifest.implementation.dirs,
+    // ディレクトリに属さない実装も数える。prefix だけでは取りこぼす（0044 の実測）
+    implFiles: manifest.implementation.files ?? [],
+    taskDir: manifest.ledger.dir,
+    progressFile: manifest.ledger.progressFile,
+    ledgerSpec: manifest.ledger.specFile,
+    workNameRe: new RegExp(manifest.workId.pattern),
+  };
+}
+
+/** 判定に使う固有値を差し込む */
+export function useManifest(manifest) {
+  CONFIG = configFromManifest(manifest);
+}
+
+function config() {
+  if (CONFIG === null) {
+    throw new Error('マニフェストが読み込まれていません（useManifest を先に呼ぶ）');
+  }
+  return CONFIG;
+}
 
 /** 作業の進捗ファイル名 */
-const PROGRESS_FILE = 'progress.md';
+
 
 /** 作業ディレクトリの親。旧 `progress/` レイアウトは対象外 */
-const TASK_DIR = 'task/';
+
 
 /**
  * 作業ディレクトリ名の形。**ID の 4 桁だけを縛り、slug の文字種は絞らない。**
@@ -68,7 +108,7 @@ const TASK_DIR = 'task/';
  * 同じ広さに揃える。ここだけ `[a-z0-9-]` などに絞ると、`0026-api_v2` のような
  * 正当な作業がこのゲートだけ通れなくなる。
  */
-const WORK_NAME_RE = /^\d{4}-[^/\\]+$/;
+
 
 /**
  * 作業ディレクトリ名として正しいかを判定する純関数。
@@ -80,7 +120,7 @@ const WORK_NAME_RE = /^\d{4}-[^/\\]+$/;
 export function isWorkName(name) {
   if (typeof name !== 'string') return false;
   if (name !== name.trim()) return false;
-  return WORK_NAME_RE.test(name);
+  return config().workNameRe.test(name);
 }
 
 /**
@@ -141,7 +181,8 @@ export function pathsFromChanges(changes) {
  * @returns {boolean}
  */
 export function isImplementationPath(filePath) {
-  return IMPLEMENTATION_DIRS.some((dir) => filePath.startsWith(dir));
+  if (config().implFiles.includes(filePath)) return true;
+  return config().implDirs.some((dir) => filePath.startsWith(dir));
 }
 
 /**
@@ -159,10 +200,10 @@ export function isImplementationPath(filePath) {
  * @returns {boolean}
  */
 export function isActiveProgressPath(filePath) {
-  if (!filePath.startsWith(TASK_DIR)) return false;
-  const rest = filePath.slice(TASK_DIR.length).split('/');
+  if (!filePath.startsWith(config().taskDir)) return false;
+  const rest = filePath.slice(config().taskDir.length).split('/');
   if (rest.length !== 2) return false;
-  if (rest[1] !== PROGRESS_FILE) return false;
+  if (rest[1] !== config().progressFile) return false;
   // `archive` は `<4 桁 ID>-` で始まらないので下の名前検査でも落ちるが、
   // 「完了済みは数えない」という意図は独立させて明示しておく
   if (rest[0] === 'archive') return false;
@@ -253,7 +294,7 @@ export function classifyProgressChanges(
       // ホワイトリストに入らないものはすべてここ（A / D / T / R / C / 未知 / base に無い）
       rejected.add(change.path);
     } else if (contentChanged(change.path)) {
-      works.add(change.path.slice(TASK_DIR.length).split('/')[0]);
+      works.add(change.path.slice(config().taskDir.length).split('/')[0]);
     } else {
       unchanged.add(change.path);
     }
@@ -553,7 +594,7 @@ function makeBranchOf(mergeBase, execGit) {
   return (work) => {
     try {
       // 「読めない」は判定結果として扱うので、git の fatal を画面に出さない
-      const text = execGit(['show', `${mergeBase}:${TASK_DIR}${work}/${PROGRESS_FILE}`], {
+      const text = execGit(['show', `${mergeBase}:${config().taskDir}${work}/${config().progressFile}`], {
         quiet: true,
       });
       return readBranch(text);
@@ -680,10 +721,21 @@ function readHeadBranch() {
   return value === '' ? null : value;
 }
 
+/**
+ * 実装の宣言を、利用者に見せる 1 行にする。
+ * **文言も固有値から組み立てる。** 手書きの文字列は定数の差し替えに追随しない
+ * （0044 の移植で 5 回踏んだ）。
+ *
+ * @returns {string}
+ */
+function implLabel() {
+  return [...config().implDirs, ...config().implFiles].join('・');
+}
+
 const MESSAGES = {
-  'bypass-label': `ラベル ${BYPASS_LABEL} があるため通過させます（人間による明示承認）。`,
-  'docs-only': 'src/・tests/・tools/ に変更がないため対象外です。',
-  coupled: '実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。',
+  'bypass-label': () => `ラベル ${BYPASS_LABEL} があるため通過させます（人間による明示承認）。`,
+  'docs-only': () => `実装（${implLabel()}）に変更がないため対象外です。`,
+  coupled: () => `実装の変更に、進行中の作業の ${config().progressFile} がちょうど 1 件伴っています。`,
 };
 
 /**
@@ -696,6 +748,38 @@ function onGitHubActions() {
   return (process.env.GITHUB_ACTIONS ?? '').trim().toLowerCase() === 'true';
 }
 
+/**
+ * 指定した ref のマニフェストを読む。**base 側から読む。**
+ * 候補側を読むと、実装ディレクトリの宣言を空にする変更と実装変更を同じ PR に入れる
+ * だけで、この検査を迂回できる。base にも候補側にも無ければ失敗する。
+ *
+ * このファイルは単体実行されるので `tools/loop-manifest.mjs` を import できない。
+ *
+ * @param {string} ref
+ * @returns {object}
+ */
+function readManifest(ref) {
+  let raw;
+  try {
+    raw = execFileSync('git', ['show', `${ref}:${MANIFEST_PATH}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    // base に無いのは、この仕組みを導入する PR だけである（guard.yml が
+    // 「base にチェッカーが無いため候補側で判定します」とするのと同じ経路）
+    console.error(`::warning::${ref} にマニフェストが無いため候補側で判定します（導入 PR のみ想定）。`);
+    raw = fs.readFileSync(MANIFEST_PATH, 'utf8');
+  }
+  const manifest = JSON.parse(raw);
+  for (const key of ['implementation', 'ledger', 'workId']) {
+    if (manifest[key] === undefined || manifest[key] === null) {
+      throw new Error(`${ref}:${MANIFEST_PATH} に必須項目がありません: ${key}`);
+    }
+  }
+  return manifest;
+}
+
 function main() {
   const baseRef = process.argv[2];
   const headBranch = readHeadBranch();
@@ -706,6 +790,14 @@ function main() {
   if (!headBranch && onGitHubActions()) {
     console.error('GITHUB_HEAD_REF が空です。進捗の Branch と照合できません。');
     console.error('このチェックは pull_request イベントで動かしてください。');
+    process.exit(1);
+  }
+
+  try {
+    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], { encoding: 'utf8' }).trim();
+    useManifest(readManifest(mergeBase));
+  } catch (err) {
+    console.error(`マニフェストを読めませんでした: ${err.message}`);
     process.exit(1);
   }
 
@@ -722,51 +814,52 @@ function main() {
   }
 
   if (result.ok) {
-    console.log(MESSAGES[result.reason]);
+    const message = MESSAGES[result.reason];
+    console.log(typeof message === 'function' ? message() : message);
     if (result.reason === 'coupled') console.log(`  作業: ${result.works[0]}`);
     return;
   }
 
   if (result.reason === 'unchanged') {
-    console.error('進行中の作業の progress.md が差分に出ていますが、中身が変わっていません');
+    console.error(`進行中の作業の ${config().progressFile} が差分に出ていますが、中身が変わっていません`);
     console.error('（実行ビットなど、ファイルのモードだけの変更です）:');
     for (const p of result.unchanged) console.error(`  - ${p}`);
-    console.error('工程を進めたら、その作業の progress.md の内容——Status・チェックボックス・');
+    console.error(`工程を進めたら、その作業の ${config().progressFile} の内容——Status・チェックボックス・`);
     console.error('試行ログ——を書き足して、同じ PR に含めてください。モードを変えただけでは');
     console.error('進捗を記録したことになりません。');
   } else if (result.reason === 'missing') {
-    console.error('実装（src/・tests/・tools/）を変更していますが、進行中の作業の');
-    console.error('progress.md（task/<id>-<slug>/progress.md）の更新が含まれていません。');
-    console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');
-    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
+    console.error(`実装（${implLabel()}）を変更していますが、進行中の作業の`);
+    console.error(`${config().progressFile}（${config().taskDir}<作業名>/${config().progressFile}）の更新が含まれていません。`);
+    console.error(`工程を進めたら、その作業の ${config().progressFile} を同じ PR で更新してください。`);
+    console.error(`数えるのは、base に既にある ${config().progressFile} の内容を書き足した更新だけです。`);
     if (result.strays.length > 0) {
       console.error('次の変更は、その形でないため数えていません:');
       for (const stray of result.strays) console.error(`  - ${stray}`);
       console.error('（新規追加・削除・種別の変更（symlink への置き換えなど）・移動）');
     }
-    console.error('この PR で新しく作った progress.md は数えません。spec + progress は');
+    console.error(`この PR で新しく作った ${config().progressFile} は数えません。仕様 + ${config().progressFile} は`);
     console.error('先に計画用ブランチの docs PR で main へ入れてください。');
   } else if (result.reason === 'stray') {
-    console.error('進行中の作業の progress.md に、その場の更新でない変更が含まれています:');
+    console.error(`進行中の作業の ${config().progressFile} に、その場の更新でない変更が含まれています:`);
     for (const stray of result.strays) console.error(`  - ${stray}`);
-    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
+    console.error(`数えるのは、base に既にある ${config().progressFile} の内容を書き足した更新だけです。`);
     console.error('新規追加・削除・種別の変更（symlink への置き換えなど）・作業ディレクトリを');
     console.error('またぐ移動（アーカイブを含む）は、実装 PR に混ぜないでください。');
     console.error('1 PR = 1 作業です。');
-    console.error('spec + progress の新規作成は計画用ブランチの docs PR へ、');
+    console.error(`${config().ledgerSpec ?? '仕様'} + ${config().progressFile} の新規作成は計画用ブランチの docs PR へ、`);
     console.error('アーカイブは main への直接コミットへ分けてください。');
   } else if (result.reason === 'foreign') {
-    console.error(`更新された progress.md がこの PR の作業のものではありません: ${result.works[0]}`);
+    console.error(`更新された ${config().progressFile} がこの PR の作業のものではありません: ${result.works[0]}`);
     console.error(
       `  task/${result.works[0]}/progress.md の Branch（base 側）: ${result.branch ?? '（行がありません）'}`,
     );
     console.error(`  この PR の head ブランチ: ${result.headBranch}`);
-    console.error('この PR のブランチで進めている作業の progress.md を更新してください。');
-    console.error('別の作業の progress.md を触っているなら、PR を分けてください。');
+    console.error(`この PR のブランチで進めている作業の ${config().progressFile} を更新してください。`);
+    console.error(`別の作業の ${config().progressFile} を触っているなら、PR を分けてください。`);
     console.error('Branch は base（merge-base）側から読みます。着手時に main へ入れた値が');
     console.error('正であり、この PR で書き換えても判定は変わりません。');
   } else {
-    console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
+    console.error(`進行中の作業の ${config().progressFile} が ${result.works.length} 件更新されています:`);
     for (const work of result.works) console.error(`  - ${work}`);
     console.error('1 PR = 1 作業です。作業ごとに PR を分けてください。');
   }

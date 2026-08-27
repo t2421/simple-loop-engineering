@@ -24,50 +24,86 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-/** 人間による明示承認の経路。この PR ラベルが付いていればガードを通過させる */
+/**
+ * マニフェストのパス。**このファイルは import を持てない**（CI が base リビジョンの版を
+ * `$RUNNER_TEMP` へ取り出して単体実行するため）。読み取りは最小限を自前に持つ。
+ */
+export const MANIFEST_PATH = 'loop.manifest.json';
+
+/**
+ * 人間による明示承認の経路。この PR ラベルが付いていればガードを通過させる。
+ *
+ * マニフェスト側にも `protected.allowLabel` があるが、**ここは定数のままにする。**
+ * ラベル名をマニフェストから読むと、マニフェストを書き換えて「常に付いている扱いの
+ * ラベル名」に差し替える経路が開く。承認の合図は判定コード側に固定する。
+ */
 export const ALLOW_LABEL = 'allow-protected-change';
 
-/** 見出し・順番を固定した型。移動しても中身を変えてもいけない */
-const TEMPLATES = [
-  'task/TEMPLATE-spec.md',
-  'task/TEMPLATE-progress.md',
-  'specs/TEMPLATE.md',
-  'progress/TEMPLATE.md',
-];
-
 /**
- * 判定の根拠そのもの。ガードジョブは base リビジョンのこのファイルを実行するので、
- * これを書き換えられるとガードを恒久的に無効化できる。移動も変更も削除も許さない。
- */
-const CHECKER = 'tools/check-protected-paths.mjs';
-
-/** 作業の仕様はこのファイル名だけにする */
-const SPEC_FILE = 'spec.md';
-
-/**
- * CI のジョブが委譲する判定・実行ファイル。scripts やワークフローを触らずに
- * ユニットを間引いたり、e2e 判定を常に false にしたり、progress 結合の検査を
- * 骨抜きにしたりできないようにする。
- * 新規追加は導入 PR のため許可。変更・削除・移動は許さない。
+ * 判定に使う固有値。**base リビジョンのマニフェストから組み立てる。**
  *
- * `tools/check-progress-coupling.mjs` も同じ性質を持つ。ガードジョブは base 版を
- * 実行するので骨抜き PR 自体は無傷の base 版で検査されるが、それがマージされた
- * 瞬間に以後の base が骨抜き版になる（2 PR で恒久的に無効化できる）。
+ * ディスク上のマニフェスト（＝候補側）を読んではならない。読むと、保護パスを削る
+ * マニフェストの変更と、保護パスの変更を同じ PR に入れるだけでガードを迂回できる。
+ * このファイル自身を base 版で実行しているのと同じ理由である。
+ *
+ * `main()` が base から読んで差し込む。テストは直接渡す。
  */
-const GATE_HELPERS = [
-  'tools/run-unit-tests.mjs',
-  'tools/e2e-needed.mjs',
-  'tools/check-progress-coupling.mjs',
-  // Stop hook が CI を回す対象ディレクトリの判定。書き換えれば変更の無い
-  // チェックアウトを指させ、セッション停止時の検証を骨抜きにできる
-  'tools/stop-hook-ci-dir.mjs',
-  // push した HEAD の GitHub Actions の結果の判定。Stop hook が委譲する。
-  // 書き換えれば、赤い・未確定の Actions のまま会話を終えられる
-  'tools/check-actions.mjs',
-];
+let CONFIG = null;
 
+/**
+ * マニフェストのオブジェクトから、判定に使う形へ組み立てる純関数。
+ *
+ * @param {object} manifest
+ * @returns {object}
+ */
+export function configFromManifest(manifest) {
+  const ledger = manifest.ledger;
+  return {
+    templates: manifest.protected.templates,
+    checker: manifest.protected.checker,
+    self: manifest.protected.self,
+    gateHelpers: manifest.protected.gateHelpers,
+    specFile: ledger.specFile,
+    ledgerDocs: ledger.docs,
+    verifyDefinedIn: manifest.verify.definedIn,
+    appendOnlyDirs: manifest.protected.appendOnlyDirs.map((d) => ({
+      prefix: d.prefix,
+      label: d.label,
+      archiveMove: d.archiveMove === true,
+      // 台帳のディレクトリだけが「1 作業 1 spec」の規約に従う。
+      // 直下に置いてよい文書は **許可リスト**である（単数の除外では、
+      // 設計書や実装計画を複数持つ移植先を弾いてしまう）
+      ledgerDocs: d.ledger === true ? ledger.docs : undefined,
+      exclude: d.ledger === true ? ledger.progressFile : undefined,
+      specFile: d.ledger === true ? ledger.specFile : undefined,
+    })),
+  };
+}
+
+/**
+ * 判定に使う固有値を差し込む。テストと `main()` の両方から使う。
+ *
+ * @param {object} manifest
+ */
+export function useManifest(manifest) {
+  CONFIG = configFromManifest(manifest);
+}
+
+function config() {
+  if (CONFIG === null) {
+    throw new Error('マニフェストが読み込まれていません（useManifest を先に呼ぶ）');
+  }
+  return CONFIG;
+}
+
+
+/**
+ * CI のジョブが委譲する判定・実行ファイルか。マニフェストの `protected.gateHelpers`。
+ * ここを空にされると、検証コマンドを触らずにユニットを間引いたり、条件付き工程の
+ * 判定を常に false にしたりできる。だからマニフェスト自身も保護対象である。
+ */
 function isGateHelper(filePath) {
-  return GATE_HELPERS.includes(filePath);
+  return config().gateHelpers.includes(filePath);
 }
 
 /**
@@ -78,16 +114,7 @@ function isGateHelper(filePath) {
  * 移動も許さない。リネームでディレクトリの外へ出せば、テストの削除や CI の
  * 無効化ができてしまうため。
  */
-const APPEND_ONLY_DIRS = [
-  // `task/<id>-<slug>/` には spec.md・progress.md・関連ファイル（Figma 抽出物など）が
-  // 同居する。期待値は spec.md だけでなく抽出物にもあるので、配下は原則すべて守る。
-  // 除外は progress.md だけ。進捗は工程を進めるたびに更新するもので、保護すると
-  // 作業 PR が毎回ラベルを要求することになり、ガードが形骸化する。
-  { prefix: 'task/', label: '仕様', archiveMove: true, exclude: 'progress.md', specFile: SPEC_FILE },
-  { prefix: 'specs/', label: '仕様', archiveMove: true },
-  { prefix: 'tests/', label: 'テスト', archiveMove: false },
-  { prefix: '.github/workflows/', label: 'ワークフロー', archiveMove: false },
-];
+
 
 /**
  * 別名の spec かを判定する純関数。
@@ -108,7 +135,9 @@ function isAliasSpec(dir, p) {
   const depth = rest[0] === 'archive' ? 3 : 2;
   if (rest.length !== depth) return false;
   const name = rest[rest.length - 1];
-  return name !== dir.specFile && name !== dir.exclude;
+  // **許可リストで判定する。** 移植先の台帳は作業ごとに複数の文書を持ちうる
+  // （0044 の実測。単数の除外だと、設計書を足す通常の PR が毎回ラベルを要求する）
+  return !dir.ledgerDocs.includes(name);
 }
 
 /**
@@ -172,10 +201,11 @@ function covers(dir, p) {
  */
 function isProtectedPath(p) {
   return (
-    p === CHECKER
+    p === config().checker
+    || p === config().self
     || isGateHelper(p)
-    || TEMPLATES.includes(p)
-    || APPEND_ONLY_DIRS.some((d) => covers(d, p))
+    || config().templates.includes(p)
+    || config().appendOnlyDirs.some((d) => covers(d, p))
   );
 }
 
@@ -282,7 +312,13 @@ export function decompose(changes) {
 }
 
 /**
- * `package.json` の `scripts` が変わったかを判定する純関数。
+ * 検証コマンドの定義が変わったかを判定する純関数。
+ *
+ * 移植元は JSON の `scripts` オブジェクトを比較していたが、**形式に依存させない。**
+ * 定義の実体が `Makefile` や `pyproject.toml`、ワークフロー YAML のこともある
+ * （0044 の実測。移植先は YAML 直書きだった）。
+ * `jsonKey` を持つ定義は「その JSON キーの中身」を、持たない定義は
+ * 「ファイルの内容そのもの」を比較する。呼び出し側が正規化して渡す。
  * キーの増減と値の変更の両方を見る。
  *
  * @param {Record<string, string>} baseScripts - base 側の scripts
@@ -304,8 +340,8 @@ export function scriptsChanged(baseScripts, headScripts) {
  *
  * @param {object} input
  * @param {Array<{status: string, path: string, oldPath?: string, similarity?: number}>} input.changes
- * @param {Record<string, string>} [input.baseScripts] - base 側の package.json の scripts
- * @param {Record<string, string>} [input.headScripts] - head 側の package.json の scripts
+ * @param {Record<string, string> | null} [input.baseScripts] - base 側の検証定義（パスごと）
+ * @param {Record<string, string> | null} [input.headScripts] - head 側の検証定義（パスごと）
  * @param {Set<string>} [input.baseArchivedIds] - base の `archive/` にある作業の ID。
  *   **`main()` は必ず渡すこと。** 渡さないと PR をまたぐ ID 再利用を検知できない
  * @returns {Array<{path: string, reason: string}>} 違反の一覧。空なら通過
@@ -336,7 +372,7 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
 
     // --- 単一ファイルの規則 ---
 
-    if (path === CHECKER) {
+    if (path === config().checker) {
       // 新規追加（ガード導入 PR）だけ許可
       if (kind === 'appeared' && from === undefined) continue;
       violations.push({ path: render(e), reason: 'ガードの判定ロジック自体は変更も移動もできない' });
@@ -350,21 +386,32 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
       continue;
     }
 
-    if (TEMPLATES.includes(path)) {
+    if (config().templates.includes(path)) {
       violations.push({ path: render(e), reason: '型（TEMPLATE）は変更も移動もできない' });
       continue;
     }
 
-    if (path === 'package.json') {
-      if (scriptsChanged(baseScripts, headScripts)) {
-        violations.push({ path: 'package.json', reason: '検証コマンド（scripts）が変わっている' });
+    // マニフェスト自身。**保護対象の筆頭である。** これを書き換えられると、
+    // 保護パスの一覧ごと差し替えてガードを無効化できる
+    if (path === config().self) {
+      // 新規追加（導入 PR）だけ許可
+      if (kind === 'appeared' && from === undefined) continue;
+      violations.push({ path: render(e), reason: 'マニフェスト（固有値の宣言）は変更も移動もできない' });
+      continue;
+    }
+
+    if (config().verifyDefinedIn.some((d) => d.path === path)) {
+      // base 側が読めない＝導入 PR。比較対象が無いので判定しない
+      if (baseScripts === null || headScripts === null) continue;
+      if (scriptsChanged(baseScripts[path], headScripts[path])) {
+        violations.push({ path, reason: '検証コマンドの定義が変わっている' });
       }
       continue;
     }
 
     // --- 保護ディレクトリの規則 ---
 
-    const dir = APPEND_ONLY_DIRS.find((d) => covers(d, path));
+    const dir = config().appendOnlyDirs.find((d) => covers(d, path));
     if (!dir) continue;
 
     if (kind === 'modified') {
@@ -462,14 +509,90 @@ function readLabels() {
 }
 
 /**
- * 指定した ref の package.json の scripts を読む。ref が読めなければ例外を投げる。
+ * 指定した ref の「検証コマンドの定義」を、マニフェストの `verify.definedIn` に従って読む。
+ *
+ * `jsonKey` があれば JSON のそのキーを、無ければファイルの内容そのものを採る。
+ * どれか 1 つでも読めなければ null を返す（＝導入 PR。比較しない）。
  *
  * @param {string} ref - `git show` に渡す ref
- * @returns {Record<string, string>}
+ * @param {Array<{path: string, jsonKey?: string}>} definedIn
+ * @returns {Record<string, Record<string, string>> | null}
  */
-function readScripts(ref) {
-  const raw = execFileSync('git', ['show', `${ref}:package.json`], { encoding: 'utf8' });
-  return JSON.parse(raw).scripts ?? {};
+function readVerifyDefinitions(ref, definedIn) {
+  const out = {};
+  for (const d of definedIn) {
+    let raw;
+    try {
+      raw = execFileSync('git', ['show', `${ref}:${d.path}`], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      return null;
+    }
+    if (d.jsonKey === undefined) {
+      out[d.path] = { content: raw };
+      continue;
+    }
+    try {
+      out[d.path] = JSON.parse(raw)[d.jsonKey] ?? {};
+    } catch (err) {
+      throw new Error(`${ref}:${d.path} を JSON として読めません: ${err.message}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * 指定した ref のマニフェストを読んで最小限の形を確かめる。
+ *
+ * **base 側から読む。** ディスク上（候補側）を読むと、保護パスを削るマニフェストの
+ * 変更と保護パスの変更を同じ PR に入れるだけでガードを迂回できる。
+ * このファイル自身を base 版で実行しているのと同じ理由である。
+ *
+ * このファイルは単体実行されるので `tools/loop-manifest.mjs` を import できない。
+ * ここでは**判定に要る形だけ**を確かめる（完全な検査はあちらが持つ）。
+ *
+ * @param {string} ref
+ * @returns {object}
+ */
+function readManifest(ref) {
+  let raw;
+  try {
+    raw = execFileSync('git', ['show', `${ref}:${MANIFEST_PATH}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    // base にマニフェストが無いのは、**この仕組みを導入する PR だけ**である。
+    // そのときだけ候補側で判定する（`.github/workflows/guard.yml` が
+    // 「base にチェッカーが無いため候補側で判定します」とするのと同じ経路）。
+    // マージ後は必ず base 側の経路になる。
+    // **既定値では動かさない。** 候補側にも無ければそのまま失敗する。
+    console.error(`::warning::${ref} にマニフェストが無いため候補側で判定します（導入 PR のみ想定）。`);
+    try {
+      raw = fs.readFileSync(MANIFEST_PATH, 'utf8');
+    } catch (err) {
+      throw new Error(
+        `マニフェスト（${MANIFEST_PATH}）が base にも候補側にもありません。既定値では判定しません。\n`
+        + `原因: ${err.message}`,
+      );
+    }
+  }
+  const manifest = JSON.parse(raw);
+  const missing = [
+    'ledger', 'protected', 'verify',
+  ].filter((k) => manifest[k] === undefined || manifest[k] === null);
+  if (missing.length > 0) {
+    throw new Error(`${ref}:${MANIFEST_PATH} に必須項目がありません: ${missing.join(', ')}`);
+  }
+  if (manifest.protected.self !== MANIFEST_PATH) {
+    throw new Error(
+      `${ref}:${MANIFEST_PATH} の protected.self が自分自身を指していません: ${manifest.protected.self}\n`
+      + 'マニフェストが自己保護していないと、書き換え放題になります。',
+    );
+  }
+  return manifest;
 }
 
 /**
@@ -481,7 +604,7 @@ function readScripts(ref) {
  */
 function readBaseArchivedIds(mergeBase) {
   const ids = new Set();
-  for (const dir of APPEND_ONLY_DIRS) {
+  for (const dir of config().appendOnlyDirs) {
     if (!dir.specFile) continue;
     let out;
     try {
@@ -538,8 +661,10 @@ function main() {
 
   try {
     changes = parseNameStatus(raw);
-    baseScripts = readScripts(mergeBase);
-    headScripts = readScripts('HEAD');
+    // **base のマニフェストで判定する。** 候補側を読むと迂回できる
+    useManifest(readManifest(mergeBase));
+    baseScripts = readVerifyDefinitions(mergeBase, config().verifyDefinedIn);
+    headScripts = readVerifyDefinitions('HEAD', config().verifyDefinedIn);
     // これを渡さないと PR をまたぐ ID 再利用を取り逃がす
     baseArchivedIds = readBaseArchivedIds(mergeBase);
   } catch (err) {

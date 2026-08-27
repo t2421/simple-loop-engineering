@@ -1,0 +1,72 @@
+{
+  "_": [
+    "ループ機構がプロジェクト固有として扱う値の唯一の宣言。ツールはここから読む。",
+    "**このファイルは保護パスの筆頭である。** 書き換えは allow-protected-change を要する。",
+    "ガードはこのファイルを base リビジョンから読む。候補側を読むと、マニフェストを",
+    "書き換えるだけでガードを迂回できる（tools/check-protected-paths.mjs 自身と同じ理由）。",
+    "実行時に差し替わるフック API は持たない。宣言だけである（0042 の完了条件 10）。"
+  ],
+
+  "workId": {
+    "pattern": "^(\\d{4})-(.+)$",
+    "label": "ゼロ埋め 4 桁 ID + slug"
+  },
+
+  "install": ["npm", "ci"],
+
+  "verify": {
+    "command": ["npm", "run", "ci"],
+    "definedIn": [{ "path": "package.json", "jsonKey": "scripts" }],
+    "invokedIn": [".github/workflows/ci.yml", ".claude/settings.json"]
+  },
+
+  "implementation": {
+    "dirs": ["src/", "tests/", "tools/"],
+    "files": []
+  },
+
+  "ledger": {
+    "dir": "task/",
+    "specFile": "spec.md",
+    "progressFile": "progress.md",
+    "docs": ["spec.md", "progress.md"]
+  },
+
+  "conditionalStages": [
+    {
+      "name": "e2e",
+      "command": ["npm", "run", "test:e2e"],
+      "checker": "tools/e2e-needed.mjs"
+    }
+  ],
+
+  "protected": {
+    "self": "loop.manifest.json",
+    "checker": "tools/check-protected-paths.mjs",
+    "gateHelpers": [
+      "tools/run-unit-tests.mjs",
+      "tools/e2e-needed.mjs",
+      "tools/check-progress-coupling.mjs",
+      "tools/stop-hook-ci-dir.mjs",
+      "tools/check-actions.mjs",
+      "tools/loop-manifest.mjs"
+    ],
+    "templates": [
+      "task/TEMPLATE-spec.md",
+      "task/TEMPLATE-progress.md",
+      "specs/TEMPLATE.md",
+      "progress/TEMPLATE.md"
+    ],
+    "appendOnlyDirs": [
+      { "prefix": "task/", "label": "仕様", "archiveMove": true, "ledger": true },
+      { "prefix": "specs/", "label": "仕様", "archiveMove": true },
+      { "prefix": "tests/", "label": "テスト", "archiveMove": false },
+      { "prefix": ".github/workflows/", "label": "ワークフロー", "archiveMove": false }
+    ],
+    "allowLabel": "allow-protected-change"
+  },
+
+  "complexityModels": { "S": "haiku", "M": "sonnet", "L": "fable" },
+
+  "reviewers": { "code": "codex-reviewer", "visual": "visual-design-reviewer" }
+}

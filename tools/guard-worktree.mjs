@@ -32,12 +32,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// 実装ディレクトリの宣言はマニフェストが唯一の出所である
+import { loadManifest } from './loop-manifest.mjs';
 
 /** worktree を置くディレクトリ。ここから下はプライマリでの編集ではない */
 export const WORKTREES_DIR = '.worktrees';
 
 /** worktree で編集すべき実装のディレクトリ */
-export const IMPLEMENTATION_DIRS = ['src', 'tests', 'tools'];
+/**
+ * 実装のディレクトリ。**マニフェストの `implementation` が唯一の宣言である。**
+ * 末尾の `/` を落として先頭セグメントと比べる。
+ *
+ * @param {object} manifest
+ * @returns {{dirs: string[], files: string[]}}
+ */
+export function implementationFrom(manifest) {
+  return {
+    dirs: manifest.implementation.dirs.map((d) => d.replace(/\/$/, '')),
+    // ディレクトリに属さない実装（リポジトリ直下のスクリプト等）も数える。
+    // prefix だけの判定では取りこぼす（0044 の実測）
+    files: manifest.implementation.files ?? [],
+  };
+}
 
 /** ブロックの終了コード。Claude Code はこれを見て stderr をセッションへ戻す */
 export const BLOCK_EXIT_CODE = 2;
@@ -99,7 +115,7 @@ export function resolvePrimaryRoot(gitCommonDir) {
  * @param {unknown} input.rootDir - プライマリチェックアウトのルート（絶対パス）
  * @returns {{blocked: boolean, reason: 'no-file-path'|'no-root'|'outside-repo'|'worktree'|'implementation-in-primary'|'not-implementation'}}
  */
-export function classifyEdit({ filePath, rootDir }) {
+export function classifyEdit({ filePath, rootDir, implementation }) {
   if (typeof filePath !== 'string' || filePath === '') {
     return { blocked: false, reason: 'no-file-path' };
   }
@@ -114,7 +130,10 @@ export function classifyEdit({ filePath, rootDir }) {
 
   const segments = relative.split(path.sep);
   if (segments[0] === WORKTREES_DIR) return { blocked: false, reason: 'worktree' };
-  if (IMPLEMENTATION_DIRS.includes(segments[0])) {
+  if (segments.length === 1 && implementation.files.includes(segments[0])) {
+    return { blocked: true, reason: 'implementation-in-primary' };
+  }
+  if (implementation.dirs.includes(segments[0])) {
     return { blocked: true, reason: 'implementation-in-primary' };
   }
   return { blocked: false, reason: 'not-implementation' };
@@ -195,7 +214,11 @@ function main() {
   const resolved =
     rootDir === undefined ? filePath : realPathOrSelf(path.resolve(rootDir, filePath));
 
-  const { blocked } = classifyEdit({ filePath: resolved, rootDir });
+  const { blocked } = classifyEdit({
+    filePath: resolved,
+    rootDir,
+    implementation: implementationFrom(loadManifest(rootDir)),
+  });
   if (!blocked) return;
 
   console.error(blockMessage(filePath));

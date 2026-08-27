@@ -6,7 +6,8 @@
  * 作成が飛ばされる事故が繰り返された）。選択と採番を計算に置き換え、開始を
  * このコマンドに畳む。
  *
- * 選んだ作業の **Complexity** から、実装に使うモデルも併せて出力する（`COMPLEXITY_MODELS`）。
+ * 選んだ作業の **Complexity** から、実装に使うモデルも併せて出力する
+ * （マニフェストの `complexityModels`）。
  *
  * 使い方:
  *   node tools/start-task.mjs            次の作業を選び、worktree を用意する
@@ -22,6 +23,8 @@ import { pathToFileURL } from 'node:url';
 // フェンスの解釈は lint と 1 つにする。複製すると「lint は未記載と見るのに
 // start-task は貼った出力の中の値を読む」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
+// 固有値（依存導入コマンド・モデル表・作業 ID の形）はマニフェストが唯一の宣言である
+import { loadManifest } from './loop-manifest.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
@@ -36,7 +39,9 @@ const UNSELECTABLE = new Set(['Blocked', 'Done']);
  * 実装をサブエージェントへ委任するときは、ここで引いたモデル名を
  * Agent 呼び出しの model に渡す。
  */
-export const COMPLEXITY_MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fable' });
+export function complexityModels(manifest) {
+  return manifest.complexityModels;
+}
 
 /**
  * **Complexity** を持たない progress（この項目より前に書かれた既存分）の既定の等級。
@@ -44,7 +49,16 @@ export const COMPLEXITY_MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fa
  */
 export const DEFAULT_COMPLEXITY = 'M';
 
-const WORK_DIR_RE = /^(\d{4})-(.+)$/;
+/**
+ * 作業ディレクトリ名の形。**マニフェストの `workId.pattern` から作る。**
+ * 4 桁連番は移植元の都合であって契約ではない（0044 の移植先は `<日付>_<slug>` だった）。
+ *
+ * @param {object} manifest
+ * @returns {RegExp}
+ */
+export function workDirRe(manifest) {
+  return new RegExp(manifest.workId.pattern);
+}
 
 /**
  * `- **キー:** 値` の生の値を、**コードフェンスの外の行から**探す純関数。最初の一致を採る。
@@ -106,7 +120,7 @@ export function parseComplexity(markdown) {
  * 等級から実装に使うモデル名を引く純関数。
  * null（未記載）は `DEFAULT_COMPLEXITY` とみなす。表に無い等級は失敗させる。
  *
- * 表引きは `Object.hasOwn` で行う。素の `COMPLEXITY_MODELS[grade]` だと
+ * 表引きは `Object.hasOwn` で行う。素の `models[grade]` だと
  * `constructor`・`toString`・`valueOf`・`__proto__` などの `Object.prototype`
  * 継承プロパティが「表にある」と判定され、worktree を作ったうえでモデル名として
  * 関数を渡してしまう。**自分で書いた 3 つの鍵だけ**を表とみなす。
@@ -114,12 +128,13 @@ export function parseComplexity(markdown) {
  * @param {string | null | undefined} complexity
  * @returns {string}
  */
-export function modelForComplexity(complexity) {
+export function modelForComplexity(complexity, models) {
+  const table = models;
   const grade = complexity ?? DEFAULT_COMPLEXITY;
-  if (!Object.hasOwn(COMPLEXITY_MODELS, grade)) {
-    throw new Error(`Complexity が不正: ${grade}（${Object.keys(COMPLEXITY_MODELS).join(' | ')}）`);
+  if (!Object.hasOwn(table, grade)) {
+    throw new Error(`Complexity が不正: ${grade}（${Object.keys(table).join(' | ')}）`);
   }
-  return COMPLEXITY_MODELS[grade];
+  return table[grade];
 }
 
 /**
@@ -143,10 +158,10 @@ export function selectNextTask(entries) {
  * @param {string[]} names - `task/`（archive 含む）と `backlog/` のディレクトリ名
  * @returns {string}
  */
-export function nextIdFrom(names) {
+export function nextIdFrom(names, workDirRegExp) {
   let max = 0;
   for (const name of names) {
-    const m = WORK_DIR_RE.exec(name);
+    const m = workDirRegExp.exec(name);
     if (m) max = Math.max(max, Number(m[1]));
   }
   return String(max + 1).padStart(4, '0');
@@ -171,12 +186,12 @@ export function isValidBranchName(name) {
  * @param {string} rootDir
  * @returns {Array<{id: string, dirName: string, status: string, branch: string | null}>}
  */
-function readTaskEntries(rootDir) {
+function readTaskEntries(rootDir, workDirRegExp) {
   const taskDir = path.join(rootDir, 'task');
   if (!fs.existsSync(taskDir)) return [];
   const entries = [];
   for (const dirent of fs.readdirSync(taskDir, { withFileTypes: true })) {
-    const m = WORK_DIR_RE.exec(dirent.name);
+    const m = workDirRegExp.exec(dirent.name);
     if (!dirent.isDirectory() || !m) continue;
     const workDir = path.join(taskDir, dirent.name);
     const progressPath = path.join(workDir, 'progress.md');
@@ -228,7 +243,8 @@ function defaultExec(cmd, args, opts = {}) {
  * @param {(cmd: string, args: string[], opts?: {cwd?: string}) => unknown} [input.exec]
  * @returns {{id: string, dirName: string, branch: string, worktreePath: string, complexity: string, model: string, created: boolean}}
  */
-export function startTask({ rootDir, exec = defaultExec }) {
+export function startTask({ rootDir, exec = defaultExec, manifest = loadManifest(rootDir) }) {
+  const install = manifest.install;
   const picked = selectNextTask(readTaskEntries(rootDir));
   if (picked === null) {
     throw new Error('選択可能な作業がありません（task/ の archive 以外に Blocked / Done でない作業が無い）');
@@ -243,7 +259,7 @@ export function startTask({ rootDir, exec = defaultExec }) {
   // 等級の確認は worktree に触る前に済ませる（不正なら何も作らずに終わる）
   let model;
   try {
-    model = modelForComplexity(picked.complexity);
+    model = modelForComplexity(picked.complexity, complexityModels(manifest));
   } catch (err) {
     throw new Error(`task/${picked.dirName}/progress.md の ${err.message}`, { cause: err });
   }
@@ -266,10 +282,14 @@ export function startTask({ rootDir, exec = defaultExec }) {
   exec('git', ['worktree', 'add', worktreePath, '-b', picked.branch, 'main'], { cwd: rootDir });
 
   try {
-    exec('npm', ['ci'], { cwd: worktreePath });
+    // 依存導入コマンドは**省略可能**である。持たないプロジェクトもある
+    // （0044 の移植先がそうだった）。無ければ何も実行しない。空コマンドは置かない
+    if (install !== undefined) {
+      exec(install[0], install.slice(1), { cwd: worktreePath });
+    }
   } catch (err) {
     throw new Error(
-      `npm ci が失敗しました（worktree は残してあります。再実行で再入します）: ${err.message}`,
+      `${(install ?? []).join(' ')} が失敗しました（worktree は残してあります。再実行で再入します）: ${err.message}`,
       { cause: err },
     );
   }
@@ -300,7 +320,7 @@ export function formatStartTask(result) {
  * @param {string} rootDir
  * @returns {string}
  */
-export function nextId(rootDir) {
+export function nextId(rootDir, manifest = loadManifest(rootDir)) {
   const names = [];
   for (const dir of ['task', path.join('task', 'archive'), 'backlog']) {
     const full = path.join(rootDir, dir);
@@ -309,7 +329,7 @@ export function nextId(rootDir) {
       if (dirent.isDirectory()) names.push(dirent.name);
     }
   }
-  return nextIdFrom(names);
+  return nextIdFrom(names, workDirRe(manifest));
 }
 
 /**
@@ -349,7 +369,7 @@ function listWorkDirs(rootDir) {
     const full = path.join(rootDir, dir);
     if (!fs.existsSync(full)) continue;
     for (const dirent of fs.readdirSync(full, { withFileTypes: true })) {
-      const m = WORK_DIR_RE.exec(dirent.name);
+      const m = workDirRegExp.exec(dirent.name);
       if (!dirent.isDirectory() || !m) continue;
       found.push({
         path: `${dir.replaceAll(path.sep, '/')}/${dirent.name}`,
@@ -379,7 +399,7 @@ function listWorkDirs(rootDir) {
  * @param {(dir: string) => void} [input.mkdir] - 「存在すれば失敗する」作成。テストで差し替える
  * @returns {{ok: true, path: string} | {ok: false, reason: string}}
  */
-export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkdirSync(dir) }) {
+export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkdirSync(dir), manifest = loadManifest(rootDir) }) {
   if (!CLAIM_PLACES.includes(place)) {
     return { ok: false, reason: `--in が不正: ${place}（${CLAIM_PLACES.join(' | ')}）` };
   }
@@ -394,9 +414,10 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
     return { ok: false, reason: `同じ slug の作業が既にあります: ${existing.path}` };
   }
 
-  const id = nextId(rootDir);
+  const id = nextId(rootDir, manifest);
   // 番号空間はゼロ埋め 4 桁である（CLAUDE.md）。`9999` の次は `10000` になるが、
-  // `WORK_DIR_RE` は 4 桁しか認識しないので、確保しても以後の走査から**消える**。
+  // 作業 ID の形（マニフェストの `workId.pattern`）に合わない名前は、確保しても
+  // 以後の走査から**消える**。
   // 別の slug が同じ `10000` を再確保できてしまうので、作る前に拒む。
   // `--next-id` 単体の振る舞いは変えない（完了条件 6）。
   if (id.length !== 4) {

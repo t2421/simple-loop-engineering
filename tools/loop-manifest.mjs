@@ -1,0 +1,219 @@
+/**
+ * ループ機構がプロジェクト固有として扱う値を、宣言 1 ファイルから読む。
+ *
+ * ## なぜ宣言なのか（実行機構ではない）
+ *
+ * ループが検証から必要としているのは「名前・コマンド・終了コード・出力」の 4 つだけである。
+ * 実行時に差し替わるフック API は作らない。**このファイルは JSON を読んで検査するだけで、
+ * マニフェストから読んだものを評価・実行しない。**
+ *
+ * ## なぜ「読めなければ既定値」ではないのか
+ *
+ * 既定値で補うと、マニフェストを消す・壊すだけで移植元の値に戻せてしまう。
+ * ループのゲートは固有値の上に立っているので、それは検証を弱める経路になる。
+ * **欠落・型不正は必ず明示的に失敗させる。**
+ *
+ * ## base 版を単体実行するツールはこれを import できない
+ *
+ * `tools/check-protected-paths.mjs`・`tools/check-progress-coupling.mjs`・
+ * `tools/e2e-needed.mjs` は、CI が base リビジョンの版を `$RUNNER_TEMP` へ取り出して
+ * 単体で実行する。相対 import は解決できない。それらは最小の読み取りを自前に持ち、
+ * **`git show <base-ref>:<manifest>` から読む**（ディスク上の候補側を読むと、
+ * マニフェストを書き換えるだけでガードを迂回できる）。
+ *
+ * ここは import できる側（`start-task` など）が使う。
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+/** マニフェストのパス（リポジトリルートからの相対） */
+export const MANIFEST_PATH = 'loop.manifest.json';
+
+/** 欠けていたら失敗させる項目。パスは `.` 区切り */
+export const REQUIRED_KEYS = Object.freeze([
+  'workId.pattern',
+  'verify.command',
+  'verify.definedIn',
+  'implementation.dirs',
+  'ledger.dir',
+  'ledger.specFile',
+  'ledger.progressFile',
+  'ledger.docs',
+  'protected.self',
+  'protected.checker',
+  'protected.gateHelpers',
+  'protected.templates',
+  'protected.appendOnlyDirs',
+  'protected.allowLabel',
+  'complexityModels',
+]);
+
+/**
+ * `.` 区切りのキーで値を引く純関数。無ければ undefined。
+ *
+ * @param {unknown} obj
+ * @param {string} keyPath
+ * @returns {unknown}
+ */
+function pick(obj, keyPath) {
+  let cur = obj;
+  for (const key of keyPath.split('.')) {
+    if (cur === null || typeof cur !== 'object' || !(key in cur)) return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
+/**
+ * 値が「非空の文字列配列」かを判定する純関数。
+ *
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isStringArray(v) {
+  return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string' && x !== '');
+}
+
+/**
+ * マニフェストの生テキストを解析して検査する純関数。
+ *
+ * **既定値で補わない。** 欠落・型不正はすべて理由の配列で返す。
+ *
+ * @param {string} raw - JSON のテキスト
+ * @returns {{ok: true, manifest: object} | {ok: false, reasons: string[]}}
+ */
+export function parseManifest(raw) {
+  let manifest;
+  try {
+    manifest = JSON.parse(raw);
+  } catch (err) {
+    return { ok: false, reasons: [`JSON として読めません: ${err.message}`] };
+  }
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return { ok: false, reasons: ['最上位がオブジェクトではありません'] };
+  }
+
+  const reasons = [];
+  for (const key of REQUIRED_KEYS) {
+    if (pick(manifest, key) === undefined) reasons.push(`必須項目がありません: ${key}`);
+  }
+  // 欠落があるなら型は見ない。「無い」と「形が違う」を混ぜて出すと読みにくい
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  if (typeof manifest.workId.pattern !== 'string') {
+    reasons.push('workId.pattern は文字列である必要があります');
+  } else {
+    try {
+      new RegExp(manifest.workId.pattern);
+    } catch (err) {
+      reasons.push(`workId.pattern が正規表現として不正です: ${err.message}`);
+    }
+  }
+  if (!isStringArray(manifest.verify.command)) {
+    reasons.push('verify.command は非空の文字列配列である必要があります');
+  }
+  if (!Array.isArray(manifest.verify.definedIn) || manifest.verify.definedIn.length === 0) {
+    reasons.push('verify.definedIn は非空の配列である必要があります');
+  } else if (!manifest.verify.definedIn.every((d) => d !== null && typeof d === 'object' && typeof d.path === 'string' && d.path !== '')) {
+    reasons.push('verify.definedIn の各要素は { path } を持つ必要があります');
+  }
+  if (!Array.isArray(manifest.implementation.dirs)) {
+    reasons.push('implementation.dirs は配列である必要があります');
+  }
+  if (manifest.implementation.files !== undefined && !Array.isArray(manifest.implementation.files)) {
+    reasons.push('implementation.files は配列である必要があります');
+  }
+  if (!isStringArray(manifest.ledger.docs)) {
+    reasons.push('ledger.docs は非空の文字列配列である必要があります');
+  } else if (!manifest.ledger.docs.includes(manifest.ledger.specFile)) {
+    reasons.push('ledger.docs に ledger.specFile が含まれていません');
+  }
+  if (!isStringArray(manifest.protected.gateHelpers)) {
+    reasons.push('protected.gateHelpers は非空の文字列配列である必要があります');
+  }
+  if (!Array.isArray(manifest.protected.appendOnlyDirs) || manifest.protected.appendOnlyDirs.length === 0) {
+    reasons.push('protected.appendOnlyDirs は非空の配列である必要があります');
+  }
+  // **自己保護。** マニフェスト自身が保護対象で無ければ、書き換え放題になる
+  if (manifest.protected.self !== MANIFEST_PATH) {
+    reasons.push(`protected.self が自分自身（${MANIFEST_PATH}）を指していません: ${manifest.protected.self}`);
+  }
+  if (manifest.install !== undefined && !isStringArray(manifest.install)) {
+    // install は**省略可能**（0044 の移植先には対応物が無かった）。
+    // 書くなら形は正しいことを求める
+    reasons.push('install は省略するか、非空の文字列配列である必要があります');
+  }
+  if (manifest.conditionalStages !== undefined) {
+    if (!Array.isArray(manifest.conditionalStages)) {
+      reasons.push('conditionalStages は省略するか、配列である必要があります');
+    } else if (!manifest.conditionalStages.every((s) => s !== null && typeof s === 'object' && typeof s.name === 'string')) {
+      reasons.push('conditionalStages の各要素は name を持つ必要があります');
+    }
+  }
+
+  if (reasons.length > 0) return { ok: false, reasons };
+  return { ok: true, manifest };
+}
+
+/**
+ * `verify.definedIn` が指すファイルがすべて実在するかを検査する純関数。
+ *
+ * 実在確認は呼び出し側から渡す。テストでファイルシステムを触らずに済ませるため。
+ *
+ * @param {object} manifest
+ * @param {(p: string) => boolean} exists
+ * @returns {string[]} 理由の配列。空なら通過
+ */
+export function checkDefinedInExists(manifest, exists) {
+  return manifest.verify.definedIn
+    .filter((d) => !exists(d.path))
+    .map((d) => `verify.definedIn が指すファイルがありません: ${d.path}`);
+}
+
+/**
+ * リポジトリのマニフェストを読む。読めない・不正なら Error を投げる。
+ *
+ * @param {string} rootDir
+ * @returns {object}
+ */
+export function loadManifest(rootDir) {
+  const file = path.join(rootDir, MANIFEST_PATH);
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    throw new Error(
+      `マニフェストがありません: ${file}\n`
+      + '既定値では動かしません。ループの固有値はこのファイルが唯一の宣言です。\n'
+      + `原因: ${err.message}`,
+    );
+  }
+  const parsed = parseManifest(raw);
+  if (!parsed.ok) {
+    throw new Error(`マニフェストが不正です: ${file}\n  - ${parsed.reasons.join('\n  - ')}`);
+  }
+  const missing = checkDefinedInExists(parsed.manifest, (p) => fs.existsSync(path.join(rootDir, p)));
+  if (missing.length > 0) {
+    throw new Error(`マニフェストが不正です: ${file}\n  - ${missing.join('\n  - ')}`);
+  }
+  return parsed.manifest;
+}
+
+function main() {
+  const rootDir = process.argv[2] ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  try {
+    const manifest = loadManifest(rootDir);
+    console.log(`マニフェストは妥当です: ${path.join(rootDir, MANIFEST_PATH)}`);
+    console.log(`  検証コマンド: ${manifest.verify.command.join(' ')}`);
+    console.log(`  定義の所在: ${manifest.verify.definedIn.map((d) => d.path).join(', ')}`);
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
+if (process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href === import.meta.url) {
+  main();
+}

@@ -559,7 +559,10 @@ function readLabels() {
 export function validateManifestShape(manifest) {
   const reasons = [];
   const isStr = (v) => typeof v === 'string' && v !== '';
-  const isStrArray = (v) => Array.isArray(v) && v.every(isStr);
+  // **空配列を通さない。** 保護一覧を空にされたら、その保護は消えたのと同じである。
+  // `tools/loop-manifest.mjs` の `parseManifest` と同じ厳しさにする。
+  // 緩いほうが実際にガードを回す側、という逆転を作らない
+  const isStrArray = (v) => Array.isArray(v) && v.length > 0 && v.every(isStr);
   if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
     return ['最上位がオブジェクトではありません'];
   }
@@ -608,6 +611,34 @@ export function validateManifestShape(manifest) {
   if (!isStr(manifest.workId.pattern)) {
     reasons.push('workId.pattern は非空の文字列である必要があります');
   }
+  // ガード自身は条件付き工程を読まないが、**2 実装の厳しさを揃える。**
+  // 片方だけが緩いと、緩いほうを通る宣言が「検査済み」に見える
+  if (manifest.conditionalStages !== undefined) {
+    if (!Array.isArray(manifest.conditionalStages)) {
+      reasons.push('conditionalStages は省略するか、配列である必要があります');
+    } else {
+      manifest.conditionalStages.forEach((stage, i) => {
+        const at = `conditionalStages[${i}]`;
+        if (stage === null || typeof stage !== 'object') {
+          reasons.push(`${at} はオブジェクトである必要があります`);
+          return;
+        }
+        if (!isStr(stage.name)) reasons.push(`${at}.name は非空の文字列である必要があります`);
+        if (!isStrArray(stage.command)) reasons.push(`${at}.command は非空の文字列配列である必要があります`);
+        if (!isStr(stage.checker)) reasons.push(`${at}.checker は非空の文字列である必要があります`);
+        if (!isStrArray(stage.triggers)) reasons.push(`${at}.triggers は非空の文字列配列である必要があります`);
+      });
+    }
+  }
+  if (manifest.install !== undefined && !isStrArray(manifest.install)) {
+    reasons.push('install は省略するか、非空の文字列配列である必要があります');
+  }
+  if (manifest.complexityModels === null || typeof manifest.complexityModels !== 'object'
+    || Array.isArray(manifest.complexityModels)
+    || Object.values(manifest.complexityModels ?? {}).some((v) => !isStr(v))) {
+    reasons.push('complexityModels は文字列を値に持つオブジェクトである必要があります');
+  }
+  if (!isStr(pr.allowLabel)) reasons.push('protected.allowLabel は非空の文字列である必要があります');
   return reasons;
 }
 

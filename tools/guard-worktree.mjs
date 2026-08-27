@@ -51,7 +51,10 @@ export function implementationFrom(manifest) {
     dirs: manifest.implementation.dirs.map((d) => d.replace(/\/$/, '')),
     // ディレクトリに属さない実装（リポジトリ直下のスクリプト等）も数える。
     // prefix だけの判定では取りこぼす（0044 の実測）
-    files: manifest.implementation.files ?? [],
+    // 宣言そのものもプライマリでは触らせない。**このフックは宣言を読んで動く。**
+    // プライマリで宣言を書き換えれば、実装ディレクトリを空にしてフックを局所的に
+    // 無効化できる（CI の protected-paths は拾うが、その場では止まらない）
+    files: [...(manifest.implementation.files ?? []), manifest.protected.self],
   };
 }
 

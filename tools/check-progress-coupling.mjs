@@ -120,6 +120,10 @@ function config() {
 export function isWorkName(name) {
   if (typeof name !== 'string') return false;
   if (name !== name.trim()) return false;
+  // 宣言の `workId.pattern` は ID の形だけを定める。**区切り文字はここで排する。**
+  // `tools/archive.mjs` の `isWorkName` と同じ広さに揃える（片方だけ緩いと、
+  // アーカイブが弾く名前をこちらが受ける、という食い違いが生まれる）
+  if (name.includes('/') || name.includes('\\')) return false;
   return config().workNameRe.test(name);
 }
 
@@ -749,9 +753,13 @@ function onGitHubActions() {
 }
 
 /**
- * 指定した ref のマニフェストを読む。**base 側から読む。**
- * 候補側を読むと、実装ディレクトリの宣言を空にする変更と実装変更を同じ PR に入れる
- * だけで、この検査を迂回できる。base にも候補側にも無ければ失敗する。
+ * 指定した ref のマニフェストを読む。**base ブランチの先端から読む。merge-base ではない。**
+ *
+ * 差分を三点（`base...HEAD`）で取ることと、宣言をどこから読むかは別の話である。
+ * 分岐点はいくらでも古くできるので、merge-base から読むと、この仕組みの導入より前の
+ * コミットから branch するだけで候補側フォールバックに落ちる。実装ディレクトリの宣言を
+ * 空にすれば、実装 PR が `docs-only` として無条件に通る。
+ * **判定の根拠は、ガードがチェッカー本体を取るのと同じ ref から取る。**
  *
  * このファイルは単体実行されるので `tools/loop-manifest.mjs` を import できない。
  *
@@ -800,21 +808,22 @@ function main() {
     process.exit(1);
   }
 
-  let mergeBase;
+  // **差分が取れるかを先に見る。** 順番を逆にすると、shallow clone や git 管理外の
+  // 診断が「マニフェストが読めない」に化けて、直し方が分からなくなる
   try {
-    mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
+    execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    });
   } catch {
-    // 差分そのものが取れない。**宣言の読み取りより先にこちらを報告する。**
-    // 順番を逆にすると、shallow clone の診断が「マニフェストが読めない」に化ける
     console.error(`base (${baseRef}) との差分を取得できませんでした。`);
     console.error('shallow clone の場合は fetch-depth: 0 が要ります。');
     process.exit(1);
   }
+
+  // 宣言は **base の先端**から。存在確認・blob 比較・Branch の読み取りは merge-base のまま
   try {
-    useManifest(readManifest(mergeBase));
+    useManifest(readManifest(baseRef));
   } catch (err) {
     console.error(`マニフェストを読めませんでした: ${err.message}`);
     process.exit(1);

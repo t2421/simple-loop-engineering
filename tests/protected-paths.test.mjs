@@ -7,7 +7,7 @@ import {
 } from '../tools/check-protected-paths.mjs';
 // ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
 // テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
-import { repoManifest } from '../tools/loop-manifest.mjs';
+import { repoManifest, parseManifest } from '../tools/loop-manifest.mjs';
 import { useManifest, validateManifestShape } from '../tools/check-protected-paths.mjs';
 useManifest(repoManifest());
 
@@ -779,3 +779,44 @@ test('verify.invokedIn のファイルの変更は違反になる', () => {
     assert.equal(v.length, 1, p);
   }
 });
+
+// --- 2 つの検査実装の厳しさが一致していること ---
+// ガード側（validateManifestShape）は import を持てないので検査が重複する。
+// **緩いほうが実際にガードを回す側、という逆転を作らない。** 機械で固定する。
+
+const BROKEN_MANIFESTS = [
+  ['protected.gateHelpers = []', (m) => { m.protected.gateHelpers = []; }],
+  ['protected.templates = []', (m) => { m.protected.templates = []; }],
+  ['protected.appendOnlyDirs = []', (m) => { m.protected.appendOnlyDirs = []; }],
+  ['protected.appendOnlyDirs = [{}]', (m) => { m.protected.appendOnlyDirs = [{}]; }],
+  ['protected.checker = 42', (m) => { m.protected.checker = 42; }],
+  ['protected.allowLabel = 1', (m) => { m.protected.allowLabel = 1; }],
+  ['protected.self が別のパス', (m) => { m.protected.self = 'elsewhere.json'; }],
+  ['ledger.dir = 5', (m) => { m.ledger.dir = 5; }],
+  ['ledger.docs に specFile が無い', (m) => { m.ledger.docs = ['progress.md']; }],
+  ['complexityModels = "x"', (m) => { m.complexityModels = 'x'; }],
+  ['verify.definedIn = []', (m) => { m.verify.definedIn = []; }],
+  ['verify.invokedIn = "x"', (m) => { m.verify.invokedIn = 'x'; }],
+  ['workId.pattern = 1', (m) => { m.workId.pattern = 1; }],
+  ['install = "npm ci"', (m) => { m.install = 'npm ci'; }],
+  ['conditionalStages[0].triggers = [42]', (m) => { m.conditionalStages[0].triggers = [42]; }],
+  ['conditionalStages[0].triggers = []', (m) => { m.conditionalStages[0].triggers = []; }],
+  ['conditionalStages[0].command = 42', (m) => { m.conditionalStages[0].command = 42; }],
+  ['conditionalStages[0].checker = 1', (m) => { m.conditionalStages[0].checker = 1; }],
+];
+
+for (const [name, mutate] of BROKEN_MANIFESTS) {
+  test(`2 実装とも拒む — ${name}`, () => {
+    const broken = JSON.parse(JSON.stringify(repoManifest()));
+    mutate(broken);
+    assert.ok(
+      validateManifestShape(broken).length > 0,
+      `ガード側（validateManifestShape）が ${name} を通してしまう`,
+    );
+    assert.equal(
+      parseManifest(JSON.stringify(broken)).ok,
+      false,
+      `宣言の読み取り側（parseManifest）が ${name} を通してしまう`,
+    );
+  });
+}

@@ -164,8 +164,10 @@ function writeNeeded(needed) {
 /**
  * 指定した ref のマニフェストから、この工程の発火条件を読む。
  *
- * **base 側から読む。** 候補側を読むと、発火条件を空にする変更と実装変更を同じ PR に
- * 入れるだけで工程を間引ける。CI が base 版のこのファイルを実行するのと同じ理由である。
+ * **base ブランチの先端から読む。merge-base ではない。**
+ * 分岐点はいくらでも古くできるので、merge-base から読むと候補側フォールバックに落ち、
+ * `conditionalStages` から工程を落とすだけで `needed=false` にできる。
+ * CI が base 版のこのファイルを実行するのと同じ ref に揃える。
  *
  * 工程の宣言が無ければ「この移植先にこの工程は存在しない」。**空実装は置かない。**
  *
@@ -202,8 +204,7 @@ function main() {
   }
   let triggers;
   try {
-    const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], { encoding: 'utf8' }).trim();
-    triggers = readTriggers(mergeBase);
+    triggers = readTriggers(baseRef);
   } catch (err) {
     // 判定できないなら**間引かない**。工程を飛ばす側へ倒さない
     console.error(`発火条件を読めませんでした。e2e を間引かず回します: ${err.message}`);

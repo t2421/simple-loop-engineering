@@ -43,7 +43,7 @@
         "tests/calc-page.test.mjs",
         "tools/setup-playwright.mjs",
         "src/**",
-        "progress/calc-page.*",
+        "progress/**/calc-page.*",
         "task/**/calc-page.*"
       ]
     }

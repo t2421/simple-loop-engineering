@@ -133,6 +133,9 @@ export function parseManifest(raw) {
   if (!isStringArray(manifest.protected.gateHelpers)) {
     reasons.push('protected.gateHelpers は非空の文字列配列である必要があります');
   }
+  if (!isStringArray(manifest.protected.templates)) {
+    reasons.push('protected.templates は非空の文字列配列である必要があります');
+  }
   if (!Array.isArray(manifest.protected.appendOnlyDirs) || manifest.protected.appendOnlyDirs.length === 0) {
     reasons.push('protected.appendOnlyDirs は非空の配列である必要があります');
   } else {
@@ -145,9 +148,6 @@ export function parseManifest(raw) {
         reasons.push(`protected.appendOnlyDirs[${i}] は { prefix, label } を持つ必要があります`);
       }
     });
-  }
-  if (!isStringArray(manifest.protected.templates) && !(Array.isArray(manifest.protected.templates) && manifest.protected.templates.length === 0)) {
-    reasons.push('protected.templates は文字列配列である必要があります');
   }
   if (typeof manifest.protected.checker !== 'string' || manifest.protected.checker === '') {
     reasons.push('protected.checker は非空の文字列である必要があります');
@@ -180,8 +180,28 @@ export function parseManifest(raw) {
   if (manifest.conditionalStages !== undefined) {
     if (!Array.isArray(manifest.conditionalStages)) {
       reasons.push('conditionalStages は省略するか、配列である必要があります');
-    } else if (!manifest.conditionalStages.every((s) => s !== null && typeof s === 'object' && typeof s.name === 'string')) {
-      reasons.push('conditionalStages の各要素は name を持つ必要があります');
+    } else {
+      // **葉まで見る。** `triggers: [42]` を通すと `globToRegExp(42)` が `/^$/` になり、
+      // あらゆる変更パスが不一致になって工程が無音のまま間引かれる
+      manifest.conditionalStages.forEach((stage, i) => {
+        const at = `conditionalStages[${i}]`;
+        if (stage === null || typeof stage !== 'object') {
+          reasons.push(`${at} はオブジェクトである必要があります`);
+          return;
+        }
+        if (typeof stage.name !== 'string' || stage.name === '') {
+          reasons.push(`${at}.name は非空の文字列である必要があります`);
+        }
+        if (!isStringArray(stage.command)) {
+          reasons.push(`${at}.command は非空の文字列配列である必要があります`);
+        }
+        if (typeof stage.checker !== 'string' || stage.checker === '') {
+          reasons.push(`${at}.checker は非空の文字列である必要があります`);
+        }
+        if (!isStringArray(stage.triggers)) {
+          reasons.push(`${at}.triggers は非空の文字列配列である必要があります`);
+        }
+      });
     }
   }
 

@@ -84,3 +84,23 @@ test('差分が取れないときは間引かず needed=true', () => {
   });
   assert.deepEqual(result, { needed: true, error: 'diff' });
 });
+
+// --- progress/ 配下は階層を問わない（宣言を狭めたらここで落ちる） ---
+// 実体は task/ 側にあるが、progress/archive/ の symlink も追跡されている。
+// 移植前の述語は basename だけを見ており階層を問わなかった。
+
+test('progress/ 配下は階層を問わず e2e が要る', () => {
+  for (const p of [
+    'progress/calc-page.png',
+    'progress/archive/calc-page.png',
+    'progress/archive/calc-page.figma.json',
+  ]) {
+    assert.equal(matchesE2ePath(p), true, p);
+  }
+});
+
+test('関係のないパスでは e2e は要らない', () => {
+  for (const p of ['tools/archive.mjs', 'task/0099-x/spec.md', 'CLAUDE.md']) {
+    assert.equal(matchesE2ePath(p), false, p);
+  }
+});

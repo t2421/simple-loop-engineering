@@ -135,6 +135,38 @@ export function parseManifest(raw) {
   }
   if (!Array.isArray(manifest.protected.appendOnlyDirs) || manifest.protected.appendOnlyDirs.length === 0) {
     reasons.push('protected.appendOnlyDirs は非空の配列である必要があります');
+  } else {
+    // **要素の形まで見る。** `[{}]` を通すと、`covers()` が `startsWith(undefined)` で
+    // 常に false になり、追記専用ディレクトリの保護が丸ごと消える。
+    // 「あるか」だけの検査は、骨抜きの宣言を受け入れることと同じである
+    manifest.protected.appendOnlyDirs.forEach((d, i) => {
+      if (d === null || typeof d !== 'object' || typeof d.prefix !== 'string' || d.prefix === ''
+        || typeof d.label !== 'string' || d.label === '') {
+        reasons.push(`protected.appendOnlyDirs[${i}] は { prefix, label } を持つ必要があります`);
+      }
+    });
+  }
+  if (!isStringArray(manifest.protected.templates) && !(Array.isArray(manifest.protected.templates) && manifest.protected.templates.length === 0)) {
+    reasons.push('protected.templates は文字列配列である必要があります');
+  }
+  if (typeof manifest.protected.checker !== 'string' || manifest.protected.checker === '') {
+    reasons.push('protected.checker は非空の文字列である必要があります');
+  }
+  if (typeof manifest.protected.allowLabel !== 'string' || manifest.protected.allowLabel === '') {
+    reasons.push('protected.allowLabel は非空の文字列である必要があります');
+  }
+  if (manifest.complexityModels === null || typeof manifest.complexityModels !== 'object'
+    || Array.isArray(manifest.complexityModels)
+    || Object.values(manifest.complexityModels).some((v) => typeof v !== 'string' || v === '')) {
+    reasons.push('complexityModels は文字列を値に持つオブジェクトである必要があります');
+  }
+  for (const key of ['dir', 'specFile', 'progressFile']) {
+    if (typeof manifest.ledger[key] !== 'string' || manifest.ledger[key] === '') {
+      reasons.push(`ledger.${key} は非空の文字列である必要があります`);
+    }
+  }
+  if (manifest.verify.invokedIn !== undefined && !isStringArray(manifest.verify.invokedIn)) {
+    reasons.push('verify.invokedIn は省略するか、非空の文字列配列である必要があります');
   }
   // **自己保護。** マニフェスト自身が保護対象で無ければ、書き換え放題になる
   if (manifest.protected.self !== MANIFEST_PATH) {

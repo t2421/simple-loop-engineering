@@ -155,3 +155,25 @@ test('ledger.docs に specFile が含まれていなければ失敗する', () =
   assert.equal(result.ok, false);
   assert.ok(result.reasons.some((r) => r.includes('ledger.docs')));
 });
+
+// --- 失敗時 2（型不正）: 「あるか」ではなく「形が正しいか」まで見る ---
+// 骨抜きの宣言を受け入れることは、ガードを無効化することと同じである。
+
+const BROKEN_LEAVES = [
+  ['protected.appendOnlyDirs = [{}]', (m) => { m.protected.appendOnlyDirs = [{}]; }, 'appendOnlyDirs'],
+  ['protected.appendOnlyDirs = [{prefix:1}]', (m) => { m.protected.appendOnlyDirs = [{ prefix: 1 }]; }, 'appendOnlyDirs'],
+  ['protected.templates = "oops"', (m) => { m.protected.templates = 'oops'; }, 'templates'],
+  ['protected.checker = 42', (m) => { m.protected.checker = 42; }, 'checker'],
+  ['protected.allowLabel = 1', (m) => { m.protected.allowLabel = 1; }, 'allowLabel'],
+  ['complexityModels = "x"', (m) => { m.complexityModels = 'x'; }, 'complexityModels'],
+  ['ledger.dir = 5', (m) => { m.ledger.dir = 5; }, 'ledger.dir'],
+  ['verify.invokedIn = "x"', (m) => { m.verify.invokedIn = 'x'; }, 'invokedIn'],
+];
+
+for (const [name, mutate, key] of BROKEN_LEAVES) {
+  test(`失敗時2: 型不正を拒む — ${name}`, () => {
+    const result = parseManifest(mutated(mutate));
+    assert.equal(result.ok, false, `${name} が通ってしまう`);
+    assert.ok(result.reasons.some((r) => r.includes(key)), result.reasons.join(' / '));
+  });
+}

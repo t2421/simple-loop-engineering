@@ -8,7 +8,7 @@ import {
 // ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
 // テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
 import { repoManifest } from '../tools/loop-manifest.mjs';
-import { useManifest } from '../tools/check-protected-paths.mjs';
+import { useManifest, validateManifestShape } from '../tools/check-protected-paths.mjs';
 useManifest(repoManifest());
 
 
@@ -715,4 +715,67 @@ test('台帳の許可リストに無い直下の .md は別名 spec として違
 test('作業ディレクトリ直下でなければ別名 spec 判定に掛からない', () => {
   const v = findViolations({ ...empty, changes: [{ status: 'A', path: 'task/0099-x/notes/port-log.md' }] });
   assert.deepEqual(v, []);
+});
+
+// --- 検証コマンドの定義は「消す」のが最も強い書き換えである ---
+// 「読めないから比較しない」で通すと、定義ファイルごと消して検証を外せる。
+
+test('検証定義のファイルを削除した差分は違反になる（fail-closed）', () => {
+  const v = findViolations({
+    changes: [{ status: 'D', path: 'package.json' }],
+    baseScripts: { 'package.json': { ci: 'npm test' } },
+    headScripts: {},
+  });
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /検証コマンドの定義が失われている/);
+});
+
+test('検証定義のファイルを改名した差分も違反になる', () => {
+  const v = findViolations({
+    changes: [{ status: 'R', similarity: 100, path: 'foo.json', oldPath: 'package.json' }],
+    baseScripts: { 'package.json': { ci: 'npm test' } },
+    headScripts: {},
+  });
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /検証コマンドの定義が失われている/);
+});
+
+test('base に定義が無いなら判定しない（定義を導入する PR）', () => {
+  const v = findViolations({
+    changes: [{ status: 'A', path: 'package.json' }],
+    baseScripts: {},
+    headScripts: { 'package.json': { ci: 'npm test' } },
+  });
+  assert.deepEqual(v, []);
+});
+
+// --- 骨抜きの宣言は、判定に使う前に拒む ---
+
+test('骨抜きのマニフェストは validateManifestShape が拒む', () => {
+  const manifest = JSON.parse(JSON.stringify(repoManifest()));
+  manifest.protected.gateHelpers = [];
+  manifest.protected.templates = [];
+  manifest.protected.appendOnlyDirs = [];
+  const reasons = validateManifestShape(manifest);
+  assert.ok(reasons.length > 0, '空の保護一覧が通ってしまう');
+  assert.ok(reasons.some((r) => r.includes('appendOnlyDirs')));
+});
+
+test('実物のマニフェストは validateManifestShape を通る', () => {
+  assert.deepEqual(validateManifestShape(repoManifest()), []);
+});
+
+test('protected.self が自分自身でなければ拒む', () => {
+  const manifest = JSON.parse(JSON.stringify(repoManifest()));
+  manifest.protected.self = 'elsewhere.json';
+  assert.ok(validateManifestShape(manifest).some((r) => r.includes('自分自身')));
+});
+
+// --- 呼び出しの所在も守る ---
+
+test('verify.invokedIn のファイルの変更は違反になる', () => {
+  for (const p of repoManifest().verify.invokedIn) {
+    const v = findViolations({ ...empty, changes: [{ status: 'M', path: p }] });
+    assert.equal(v.length, 1, p);
+  }
 });

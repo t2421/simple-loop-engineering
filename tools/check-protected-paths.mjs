@@ -66,6 +66,10 @@ export function configFromManifest(manifest) {
     specFile: ledger.specFile,
     ledgerDocs: ledger.docs,
     verifyDefinedIn: manifest.verify.definedIn,
+    // **呼び出しの所在も守る。** 定義を守っても、呼ぶのをやめれば検証は消える。
+    // このリポジトリでは偶然 `appendOnlyDirs` と `gateHelpers` に重なっているが、
+    // 重ならない移植先では宣言だけあって保護が効かないことになる
+    verifyInvokedIn: manifest.verify.invokedIn ?? [],
     appendOnlyDirs: manifest.protected.appendOnlyDirs.map((d) => ({
       prefix: d.prefix,
       label: d.label,
@@ -203,6 +207,7 @@ function isProtectedPath(p) {
   return (
     p === config().checker
     || p === config().self
+    || config().verifyInvokedIn.includes(p)
     || isGateHelper(p)
     || config().templates.includes(p)
     || config().appendOnlyDirs.some((d) => covers(d, p))
@@ -379,6 +384,13 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
       continue;
     }
 
+    if (config().verifyInvokedIn.includes(path)) {
+      // 新規追加（導入 PR）だけ許可
+      if (kind === 'appeared' && from === undefined) continue;
+      violations.push({ path: render(e), reason: '検証コマンドの呼び出し元は変更も移動もできない' });
+      continue;
+    }
+
     if (isGateHelper(path)) {
       // 新規追加（導入 PR）だけ許可
       if (kind === 'appeared' && from === undefined) continue;
@@ -401,9 +413,17 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
     }
 
     if (config().verifyDefinedIn.some((d) => d.path === path)) {
-      // base 側が読めない＝導入 PR。比較対象が無いので判定しない
-      if (baseScripts === null || headScripts === null) continue;
-      if (scriptsChanged(baseScripts[path], headScripts[path])) {
+      const before = baseScripts?.[path] ?? null;
+      const after = headScripts?.[path] ?? null;
+      // base に無い＝この定義を導入する PR。比較対象が無いので判定しない
+      if (before === null) continue;
+      // **head に無い＝削除・改名。fail-closed にする。**
+      // 「読めないから比較しない」で通すと、定義ファイルごと消して検証を外せる
+      if (after === null) {
+        violations.push({ path: render(e), reason: '検証コマンドの定義が失われている' });
+        continue;
+      }
+      if (scriptsChanged(before, after)) {
         violations.push({ path, reason: '検証コマンドの定義が変わっている' });
       }
       continue;
@@ -512,12 +532,85 @@ function readLabels() {
  * 指定した ref の「検証コマンドの定義」を、マニフェストの `verify.definedIn` に従って読む。
  *
  * `jsonKey` があれば JSON のそのキーを、無ければファイルの内容そのものを採る。
- * どれか 1 つでも読めなければ null を返す（＝導入 PR。比較しない）。
+ *
+ * **読めなかったパスは `null` にする。全体を null にしない。**
+ * base 側で読めない＝そのファイルがまだ無い（導入 PR）は正当だが、
+ * head 側で読めない＝**削除・改名された**であり、検証定義の最も強い書き換えである。
+ * まとめて null にすると、後者が前者と同じ「比較しない」に化けて素通りする。
  *
  * @param {string} ref - `git show` に渡す ref
  * @param {Array<{path: string, jsonKey?: string}>} definedIn
- * @returns {Record<string, Record<string, string>> | null}
+ * @returns {Record<string, Record<string, string> | null>}
  */
+/**
+ * 判定に使う形として妥当かを確かめる純関数。理由の配列を返す。空なら通過。
+ *
+ * **「あるか」ではなく「形が正しいか」まで見る。** 存在だけを見ると、
+ * `protected.appendOnlyDirs: [{}]` のような宣言が通り、`covers()` が
+ * `startsWith(undefined)` で常に false になって追記専用の保護が丸ごと消える。
+ * 骨抜きの宣言を受け入れることは、ガードを無効化することと同じである。
+ *
+ * `tools/loop-manifest.mjs` の `parseManifest` と同じ厳しさをここにも置く。
+ * import できない（単体実行される）ので重複するが、**緩い側を残さない。**
+ *
+ * @param {unknown} manifest
+ * @returns {string[]}
+ */
+export function validateManifestShape(manifest) {
+  const reasons = [];
+  const isStr = (v) => typeof v === 'string' && v !== '';
+  const isStrArray = (v) => Array.isArray(v) && v.every(isStr);
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return ['最上位がオブジェクトではありません'];
+  }
+  for (const key of ['ledger', 'protected', 'verify', 'workId']) {
+    if (manifest[key] === null || typeof manifest[key] !== 'object') {
+      reasons.push(`必須項目がありません（またはオブジェクトではありません）: ${key}`);
+    }
+  }
+  if (reasons.length > 0) return reasons;
+
+  const pr = manifest.protected;
+  if (pr.self !== MANIFEST_PATH) {
+    reasons.push(`protected.self が自分自身（${MANIFEST_PATH}）を指していません: ${pr.self}`);
+  }
+  if (!isStr(pr.checker)) reasons.push('protected.checker は非空の文字列である必要があります');
+  if (!isStrArray(pr.gateHelpers)) reasons.push('protected.gateHelpers は文字列配列である必要があります');
+  if (!isStrArray(pr.templates)) reasons.push('protected.templates は文字列配列である必要があります');
+  if (!Array.isArray(pr.appendOnlyDirs) || pr.appendOnlyDirs.length === 0) {
+    reasons.push('protected.appendOnlyDirs は非空の配列である必要があります');
+  } else {
+    pr.appendOnlyDirs.forEach((d, i) => {
+      if (d === null || typeof d !== 'object' || !isStr(d.prefix) || !isStr(d.label)) {
+        reasons.push(`protected.appendOnlyDirs[${i}] は { prefix, label } を持つ必要があります`);
+      }
+    });
+  }
+
+  const led = manifest.ledger;
+  if (!isStr(led.dir)) reasons.push('ledger.dir は非空の文字列である必要があります');
+  if (!isStr(led.specFile)) reasons.push('ledger.specFile は非空の文字列である必要があります');
+  if (!isStr(led.progressFile)) reasons.push('ledger.progressFile は非空の文字列である必要があります');
+  if (!isStrArray(led.docs) || led.docs.length === 0) {
+    reasons.push('ledger.docs は非空の文字列配列である必要があります');
+  } else if (!led.docs.includes(led.specFile)) {
+    reasons.push('ledger.docs に ledger.specFile が含まれていません');
+  }
+
+  if (!Array.isArray(manifest.verify.definedIn) || manifest.verify.definedIn.length === 0) {
+    reasons.push('verify.definedIn は非空の配列である必要があります');
+  } else if (!manifest.verify.definedIn.every((d) => d !== null && typeof d === 'object' && isStr(d.path))) {
+    reasons.push('verify.definedIn の各要素は { path } を持つ必要があります');
+  }
+  if (manifest.verify.invokedIn !== undefined && !isStrArray(manifest.verify.invokedIn)) {
+    reasons.push('verify.invokedIn は省略するか、文字列配列である必要があります');
+  }
+  if (!isStr(manifest.workId.pattern)) {
+    reasons.push('workId.pattern は非空の文字列である必要があります');
+  }
+  return reasons;
+}
+
 function readVerifyDefinitions(ref, definedIn) {
   const out = {};
   for (const d of definedIn) {
@@ -528,7 +621,8 @@ function readVerifyDefinitions(ref, definedIn) {
         stdio: ['ignore', 'pipe', 'ignore'],
       });
     } catch {
-      return null;
+      out[d.path] = null;
+      continue;
     }
     if (d.jsonKey === undefined) {
       out[d.path] = { content: raw };
@@ -546,9 +640,15 @@ function readVerifyDefinitions(ref, definedIn) {
 /**
  * 指定した ref のマニフェストを読んで最小限の形を確かめる。
  *
- * **base 側から読む。** ディスク上（候補側）を読むと、保護パスを削るマニフェストの
- * 変更と保護パスの変更を同じ PR に入れるだけでガードを迂回できる。
- * このファイル自身を base 版で実行しているのと同じ理由である。
+ * **base ブランチの先端から読む。merge-base ではない。**
+ *
+ * `.github/workflows/guard.yml` はチェッカー本体を `origin/$BASE_REF`（base の先端）から
+ * 取る。先端は必ずチェッカーを持つので、その経路に穴は無い。
+ * ところがマニフェストを merge-base から読むと、**分岐点はいくらでも古くできる**。
+ * この仕組みの導入より前のコミットから branch すれば `git show <merge-base>:マニフェスト`
+ * は必ず失敗し、候補側（攻撃者が中身を混ぜられる側）へ落ちる。骨抜きの宣言を置けば
+ * ガード全体が無効になり、しかもその宣言は差分上「新規追加」なので導入 PR として
+ * 見逃される。**判定の根拠は、チェッカー本体と同じ ref から取る。**
  *
  * このファイルは単体実行されるので `tools/loop-manifest.mjs` を import できない。
  * ここでは**判定に要る形だけ**を確かめる（完全な検査はあちらが持つ）。
@@ -581,17 +681,9 @@ function readManifest(ref) {
     }
   }
   const manifest = JSON.parse(raw);
-  const missing = [
-    'ledger', 'protected', 'verify',
-  ].filter((k) => manifest[k] === undefined || manifest[k] === null);
-  if (missing.length > 0) {
-    throw new Error(`${ref}:${MANIFEST_PATH} に必須項目がありません: ${missing.join(', ')}`);
-  }
-  if (manifest.protected.self !== MANIFEST_PATH) {
-    throw new Error(
-      `${ref}:${MANIFEST_PATH} の protected.self が自分自身を指していません: ${manifest.protected.self}\n`
-      + 'マニフェストが自己保護していないと、書き換え放題になります。',
-    );
+  const reasons = validateManifestShape(manifest);
+  if (reasons.length > 0) {
+    throw new Error(`${ref}:${MANIFEST_PATH} が不正です:\n  - ${reasons.join('\n  - ')}`);
   }
   return manifest;
 }
@@ -663,7 +755,8 @@ function main() {
   try {
     changes = parseNameStatus(raw);
     // **base のマニフェストで判定する。** 候補側を読むと迂回できる
-    useManifest(readManifest(mergeBase));
+    // **base の先端から読む。** チェッカー本体を取るのと同じ ref に揃える
+    useManifest(readManifest(baseRef));
     baseScripts = readVerifyDefinitions(mergeBase, config().verifyDefinedIn);
     headScripts = readVerifyDefinitions('HEAD', config().verifyDefinedIn);
     // これを渡さないと PR をまたぐ ID 再利用を取り逃がす

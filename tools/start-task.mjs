@@ -160,11 +160,24 @@ export function selectNextTask(entries) {
  */
 export function nextIdFrom(names, workDirRegExp = workDirRe(repoManifest())) {
   let max = 0;
+  let width = 4;
   for (const name of names) {
     const m = workDirRegExp.exec(name);
-    if (m) max = Math.max(max, Number(m[1]));
+    if (!m) continue;
+    // **採番は数値 ID を前提にしている。** 宣言できるのは「照合の形」までで、
+    // 生成まで宣言に従わせるには archive・promote・lint も通す必要がある（0043 の範囲）。
+    // 数値でないものを黙って `NaN` にして `0NaN` を返さない。ここで落とす
+    if (!/^\d+$/.test(m[1])) {
+      throw new Error(
+        `作業 ID が数値ではないため採番できません: ${name}（ID 部分: ${m[1]}）\n`
+        + '採番は数値 ID を前提にしています。ID の形を変えるなら、採番・アーカイブ・lint を'
+        + '併せて宣言経由にする必要があります。',
+      );
+    }
+    width = Math.max(width, m[1].length);
+    max = Math.max(max, Number(m[1]));
   }
-  return String(max + 1).padStart(4, '0');
+  return String(max + 1).padStart(width, '0');
 }
 
 /**

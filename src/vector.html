@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ベクトル計算 ビジュアライザー</title>
+    <link rel="stylesheet" href="./vector.css" />
+  </head>
+  <body>
+    <header class="header-bar">
+      <div class="header-left">
+        <span class="logo" aria-hidden="true">
+          <img class="logo-icon" src="./assets/icons/axis-3d.svg" alt="" width="20" height="20" />
+        </span>
+        <span class="header-titles">
+          <span class="header-title">ベクトル計算 ビジュアライザー</span>
+          <span class="header-subtitle">2D Vector Mathematics Tool</span>
+        </span>
+      </div>
+      <div class="header-right">
+        <span class="status-badge">デモモード稼働中</span>
+      </div>
+    </header>
+
+    <main class="content-wrapper">
+      <div class="left-column">
+        <form class="card input-card" id="vector-form" aria-labelledby="input-card-title">
+          <div class="card-header">
+            <h1 class="card-title" id="input-card-title">ベクトル入力</h1>
+            <p class="card-hint">2D coordinates input</p>
+          </div>
+
+          <div class="vector-group">
+            <div class="vector-group-header">
+              <span class="vector-dot vector-dot-a" aria-hidden="true"></span>
+              <span class="vector-name">ベクトル A</span>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="vec-a-x">X 成分</label>
+                <input
+                  class="field-input"
+                  type="number"
+                  id="vec-a-x"
+                  inputmode="decimal"
+                  step="any"
+                  value="3"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" for="vec-a-y">Y 成分</label>
+                <input
+                  class="field-input"
+                  type="number"
+                  id="vec-a-y"
+                  inputmode="decimal"
+                  step="any"
+                  value="4"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="vector-group">
+            <div class="vector-group-header">
+              <span class="vector-dot vector-dot-b" aria-hidden="true"></span>
+              <span class="vector-name">ベクトル B</span>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="vec-b-x">X 成分</label>
+                <input
+                  class="field-input"
+                  type="number"
+                  id="vec-b-x"
+                  inputmode="decimal"
+                  step="any"
+                  value="-1"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" for="vec-b-y">Y 成分</label>
+                <input
+                  class="field-input"
+                  type="number"
+                  id="vec-b-y"
+                  inputmode="decimal"
+                  step="any"
+                  value="2"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="calc-button" id="vec-add-calculate">計算する</button>
+        </form>
+
+        <section class="card results-card" aria-labelledby="results-card-title">
+          <h2 class="card-title" id="results-card-title">計算結果</h2>
+          <div class="result-rows">
+            <div class="result-row">
+              <p class="result-label">A + B（加算）</p>
+              <p
+                class="result-value"
+                id="vec-add-result"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                —
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="right-column">
+        <section class="card graph-card" aria-labelledby="graph-card-title">
+          <div class="card-header">
+            <h2 class="card-title" id="graph-card-title">グラフ表示</h2>
+            <p class="card-hint">可視化領域（-6 〜 6）</p>
+          </div>
+          <div class="graph-workspace-row">
+            <div class="grid-container">
+              <svg
+                class="graph-canvas"
+                id="vec-add-canvas"
+                width="500"
+                height="500"
+                viewBox="0 0 500 500"
+                role="img"
+                aria-label="ベクトル A、ベクトル B、その和を表す 2 次元グラフ"
+              >
+                <defs>
+                  <marker
+                    id="arrowhead-a"
+                    class="arrowhead"
+                    viewBox="0 0 15 17.3205"
+                    refX="15"
+                    refY="8.66025"
+                    markerWidth="15"
+                    markerHeight="17.3205"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0 L15 8.66025 L0 17.3205 Z" fill="var(--color-vector-a)" />
+                  </marker>
+                  <marker
+                    id="arrowhead-b"
+                    class="arrowhead"
+                    viewBox="0 0 15 17.3205"
+                    refX="15"
+                    refY="8.66025"
+                    markerWidth="15"
+                    markerHeight="17.3205"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0 L15 8.66025 L0 17.3205 Z" fill="var(--color-vector-b)" />
+                  </marker>
+                  <marker
+                    id="arrowhead-sum"
+                    class="arrowhead"
+                    viewBox="0 0 15 17.3205"
+                    refX="15"
+                    refY="8.66025"
+                    markerWidth="15"
+                    markerHeight="17.3205"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0 L15 8.66025 L0 17.3205 Z" fill="var(--color-vector-sum)" />
+                  </marker>
+                </defs>
+                <rect
+                  class="grid-frame"
+                  x="0.5"
+                  y="0.5"
+                  width="499"
+                  height="499"
+                  rx="8"
+                />
+                <g id="grid-lines" class="grid-lines"></g>
+                <!-- 軸の 2px ストロークが載る位置は抽出 PNG の実測に合わせる。
+                     縦軸のインクは列 250-251、横軸のインクは行 248-249 にある。 -->
+                <g id="axes" class="axes">
+                  <line class="axis" x1="251" y1="0" x2="251" y2="500" />
+                  <line class="axis" x1="0" y1="249" x2="500" y2="249" />
+                </g>
+                <g id="tick-labels" class="tick-labels"></g>
+                <g id="vector-arrows" class="vector-arrows"></g>
+              </svg>
+              <div class="floating-legend">
+                <div class="legend-row">
+                  <span class="legend-swatch legend-swatch-a" aria-hidden="true"></span>
+                  <span class="legend-label" id="legend-a">ベクトル A (3, 4)</span>
+                </div>
+                <div class="legend-row">
+                  <span class="legend-swatch legend-swatch-b" aria-hidden="true"></span>
+                  <span class="legend-label" id="legend-b">ベクトル B (-1, 2)</span>
+                </div>
+                <div class="legend-row">
+                  <span class="legend-swatch legend-swatch-sum" aria-hidden="true">
+                    <span class="legend-dash"></span>
+                    <span class="legend-dash"></span>
+                    <span class="legend-dash"></span>
+                  </span>
+                  <span class="legend-label legend-label-sum" id="legend-sum">A + B (2, 6)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./vector.mjs"></script>
+  </body>
+</html>

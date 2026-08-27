@@ -8,7 +8,7 @@
   "scripts": {
     "pretest:e2e": "node tools/setup-playwright.mjs",
     "test:unit": "node tools/run-unit-tests.mjs",
-    "test:e2e": "node --test tests/calc-page.test.mjs",
+    "test:e2e": "node --test tests/calc-page.test.mjs tests/calc-vec-add.e2e.mjs",
     "test": "npm run test:unit && npm run test:e2e",
     "lint": "eslint .",
     "lint:docs": "node tools/lint-docs.mjs",

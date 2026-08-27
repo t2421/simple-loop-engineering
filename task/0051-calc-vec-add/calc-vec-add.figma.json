@@ -1,0 +1,457 @@
+{
+  "source": {
+    "fileKey": "ftGcQpbvknoosfpy3aP1FQ",
+    "nodeId": "2:5",
+    "nodeName": "vector-calculator-ui",
+    "extractedAt": "2026-08-27"
+  },
+  "canvas": {
+    "nodeId": "2:5",
+    "width": 1440,
+    "height": 1024,
+    "fill": "#f8fafc"
+  },
+  "_note": "width と height は、値がその要素の CSS で明示的に固定されるトークン、または flex の等分割から一意に決まる幾何値のみを載せる。フォントの行送りに依存して決まる文字要素の見た目上の幅・高さは載せない(残差としてスクショレビューで見る)。lineHeight は Figma のテキストノードの高さで、レイアウトを決めるフォントトークンとして載せる。card.strokeAlign は Figma の内側ストローク(内寸を減らさない)を表す。pixelRegions は 完了条件 6 のピクセル比較の対象領域で、calc-vec-add.png 上の絶対座標である。",
+  "fonts": {
+    "sans": {
+      "family": "Noto Sans JP",
+      "weights": [
+        400,
+        500,
+        700
+      ],
+      "file": "src/assets/fonts/noto-sans-jp-subset.woff2"
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "weights": [
+        400,
+        700
+      ],
+      "file": "src/assets/fonts/jetbrains-mono-latin.woff2"
+    }
+  },
+  "pixelRegions": {
+    "headerBar": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 72
+    },
+    "inputCard": {
+      "x": 40,
+      "y": 112,
+      "width": 500,
+      "height": 386
+    },
+    "graphCard": {
+      "x": 572,
+      "y": 112,
+      "width": 828,
+      "height": 622
+    }
+  },
+  "elements": {
+    "headerBar": {
+      "nodeId": "2:6",
+      "name": "header-bar",
+      "width": 1440,
+      "height": 72,
+      "fill": "#0f172a",
+      "padding": {
+        "top": 0,
+        "right": 40,
+        "bottom": 0,
+        "left": 40
+      },
+      "headerLeft": {
+        "nodeId": "2:7",
+        "gap": 16
+      },
+      "logo": {
+        "nodeId": "2:8",
+        "width": 36,
+        "height": 36,
+        "fill": "#38bdf8",
+        "borderRadius": 8,
+        "icon": {
+          "nodeId": "2:167",
+          "width": 20,
+          "height": 20,
+          "stroke": "#0f172a",
+          "strokeWidth": 2
+        }
+      },
+      "titleBlock": {
+        "nodeId": "2:10",
+        "gap": 2
+      },
+      "title": {
+        "nodeId": "2:11",
+        "text": "ベクトル計算 ビジュアライザー",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 18,
+        "color": "#ffffff",
+        "lineHeight": 22
+      },
+      "subtitle": {
+        "nodeId": "2:12",
+        "text": "2D Vector Mathematics Tool",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Regular",
+        "fontWeight": 400,
+        "fontSize": 11,
+        "color": "#94a3b8",
+        "lineHeight": 13
+      },
+      "statusBadge": {
+        "nodeId": "2:14",
+        "fill": "#1e293b",
+        "borderRadius": 100,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "label": {
+          "nodeId": "2:15",
+          "text": "デモモード稼働中",
+          "fontFamily": "Noto Sans JP",
+          "fontWeightName": "Medium",
+          "fontWeight": 500,
+          "fontSize": 12,
+          "color": "#38bdf8",
+          "lineHeight": 14
+        }
+      }
+    },
+    "layout": {
+      "nodeId": "2:16",
+      "name": "content-wrapper",
+      "padding": {
+        "top": 40,
+        "right": 40,
+        "bottom": 40,
+        "left": 40
+      },
+      "columnGap": 32,
+      "leftColumnWidth": 500,
+      "rightColumnWidth": 828,
+      "leftColumnGap": 24
+    },
+    "card": {
+      "nodeId": "2:18",
+      "name": "input-card / results-card / graph-card 共通のカード",
+      "fill": "#ffffff",
+      "border": {
+        "width": 1,
+        "style": "solid",
+        "color": "#e2e8f0"
+      },
+      "borderRadius": 16,
+      "padding": {
+        "top": 28,
+        "right": 28,
+        "bottom": 28,
+        "left": 28
+      },
+      "boxShadow": "inset 0 0 0 1px #e2e8f0, 0px 4px 10px rgba(0, 0, 0, 0.02)",
+      "strokeAlign": "inside"
+    },
+    "inputCard": {
+      "nodeId": "2:18",
+      "width": 500,
+      "height": 386,
+      "gap": 24,
+      "cardTitle": {
+        "nodeId": "2:20",
+        "text": "ベクトル入力",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 18,
+        "color": "#0f172a",
+        "lineHeight": 22
+      },
+      "cardHint": {
+        "nodeId": "2:21",
+        "text": "2D coordinates input",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Regular",
+        "fontWeight": 400,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "lineHeight": 14
+      },
+      "vectorGroup": {
+        "nodeId": "2:22",
+        "gap": 12
+      },
+      "vectorGroupHeader": {
+        "nodeId": "2:23",
+        "gap": 8
+      },
+      "vectorDot": {
+        "nodeId": "2:24",
+        "width": 12,
+        "height": 12
+      },
+      "vectorName": {
+        "nodeId": "2:25",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 15,
+        "color": "#0f172a",
+        "lineHeight": 18
+      },
+      "fieldRow": {
+        "nodeId": "2:26",
+        "gap": 16
+      },
+      "field": {
+        "nodeId": "2:27",
+        "gap": 6
+      },
+      "fieldLabel": {
+        "nodeId": "2:28",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Regular",
+        "fontWeight": 400,
+        "fontSize": 12,
+        "color": "#475569",
+        "lineHeight": 14
+      },
+      "fieldInput": {
+        "nodeId": "2:29",
+        "width": 214,
+        "height": 44,
+        "fill": "#f1f5f9",
+        "borderRadius": 8,
+        "padding": {
+          "top": 0,
+          "right": 14,
+          "bottom": 0,
+          "left": 14
+        },
+        "fontFamily": "JetBrains Mono",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 14,
+        "color": "#0f172a",
+        "lineHeight": 18
+      },
+      "calcButton": {
+        "nodeId": "2:48",
+        "width": 444,
+        "height": 48,
+        "fill": "#1e293b",
+        "borderRadius": 8,
+        "label": {
+          "nodeId": "2:49",
+          "text": "計算する",
+          "fontFamily": "Noto Sans JP",
+          "fontWeightName": "Bold",
+          "fontWeight": 700,
+          "fontSize": 15,
+          "color": "#ffffff",
+          "lineHeight": 18
+        }
+      }
+    },
+    "resultsCard": {
+      "nodeId": "2:50",
+      "width": 500,
+      "gap": 16,
+      "cardTitle": {
+        "nodeId": "2:51",
+        "text": "計算結果",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 18,
+        "color": "#0f172a",
+        "lineHeight": 22
+      },
+      "resultRow": {
+        "nodeId": "2:53",
+        "height": 45,
+        "padding": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
+        "borderBottom": {
+          "width": 1,
+          "style": "solid",
+          "color": "#e2e8f0"
+        }
+      },
+      "resultLabel": {
+        "nodeId": "2:54",
+        "text": "A + B（加算）",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Medium",
+        "fontWeight": 500,
+        "fontSize": 14,
+        "color": "#475569",
+        "lineHeight": 17
+      },
+      "resultValue": {
+        "nodeId": "2:55",
+        "fontFamily": "JetBrains Mono",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 16,
+        "color": "#0f172a",
+        "lineHeight": 21
+      }
+    },
+    "graphCard": {
+      "nodeId": "2:69",
+      "width": 828,
+      "height": 622,
+      "gap": 24,
+      "cardTitle": {
+        "nodeId": "2:71",
+        "text": "グラフ表示",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Bold",
+        "fontWeight": 700,
+        "fontSize": 18,
+        "color": "#0f172a",
+        "lineHeight": 22
+      },
+      "cardHint": {
+        "nodeId": "2:72",
+        "text": "可視化領域（-6 〜 6）",
+        "fontFamily": "Noto Sans JP",
+        "fontWeightName": "Regular",
+        "fontWeight": 400,
+        "fontSize": 12,
+        "color": "#475569",
+        "lineHeight": 14
+      },
+      "workspaceRow": {
+        "nodeId": "2:73",
+        "width": 772,
+        "height": 520
+      },
+      "grid": {
+        "nodeId": "2:74",
+        "width": 500,
+        "height": 500,
+        "offsetLeft": 136,
+        "offsetTop": 10,
+        "originX": 250,
+        "originY": 250,
+        "unitPx": 35,
+        "axisRange": 6,
+        "gridLine": {
+          "nodeId": "2:76",
+          "stroke": "#e2e8f0",
+          "strokeWidth": 1
+        },
+        "axis": {
+          "nodeId": "2:112",
+          "stroke": "#475569",
+          "strokeWidth": 2
+        },
+        "tickLabel": {
+          "nodeId": "2:115",
+          "fontFamily": "JetBrains Mono",
+          "fontWeightName": "Regular",
+          "fontWeight": 400,
+          "fontSize": 10,
+          "color": "#475569",
+          "xOffsetFromGridLine": -12,
+          "xBaselineTop": 254,
+          "yRightEdge": 244
+        }
+      },
+      "vectors": {
+        "a": {
+          "nodeId": "2:150",
+          "stroke": "#2563eb",
+          "strokeWidth": 3,
+          "dash": null
+        },
+        "b": {
+          "nodeId": "2:151",
+          "stroke": "#ea580c",
+          "strokeWidth": 3,
+          "dash": null
+        },
+        "sum": {
+          "nodeId": "2:152",
+          "stroke": "#10b981",
+          "strokeWidth": 3,
+          "dash": [
+            6,
+            4
+          ]
+        }
+      },
+      "arrowHead": {
+        "length": 15,
+        "width": 17.3205,
+        "bothEnds": true
+      },
+      "legend": {
+        "nodeId": "2:153",
+        "offsetLeft": 16,
+        "offsetTop": 16,
+        "fill": "rgba(255, 255, 255, 0.8)",
+        "backdropBlur": 2,
+        "border": {
+          "width": 1,
+          "style": "solid",
+          "color": "#e2e8f0"
+        },
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "gap": 8,
+        "rowGap": 8,
+        "swatch": {
+          "nodeId": "2:155",
+          "width": 14,
+          "height": 4,
+          "borderRadius": 2
+        },
+        "swatchDashSquare": {
+          "nodeId": "2:162",
+          "width": 4,
+          "height": 4,
+          "gap": 2
+        },
+        "label": {
+          "nodeId": "2:156",
+          "fontFamily": "Noto Sans JP",
+          "fontWeightName": "Medium",
+          "fontWeight": 500,
+          "fontSize": 11,
+          "color": "#0f172a",
+          "lineHeight": 13
+        },
+        "sumLabel": {
+          "nodeId": "2:165",
+          "fontFamily": "Noto Sans JP",
+          "fontWeightName": "Bold",
+          "fontWeight": 700,
+          "fontSize": 11,
+          "color": "#10b981",
+          "lineHeight": 13
+        }
+      }
+    }
+  }
+}

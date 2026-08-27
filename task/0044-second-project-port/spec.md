@@ -50,7 +50,8 @@ backlog の時点では「Swift か Python」を想定していたが、**移植
 ### 凍結改訂（2026-08-27、着手後の spec 変更）
 
 **改訂の内容**: 記録の置き場を `task/0044-second-project-port/port-log.md` から
-`task/0044-second-project-port/notes/port-log.md` へ移す。
+`task/0044-second-project-port/notes/port-log.md` へ移す。「対象」「例」「完了条件 5・6・7」の
+経路名をすべて追随させる。**完了条件は 1 つも削らず、緩めない**（「失敗時」はむしろ 1 行増える）。
 
 **理由**: 起草時に指定した置き場が、このリポジトリ自身の凍結ガードに触れる。
 `tools/check-protected-paths.mjs` の `isAliasSpec` は、作業ディレクトリ**直下**の
@@ -115,13 +116,13 @@ Target Spec を別名の spec へ付け替えて凍結を迂回する経路を�
 
 | 操作または入力 | 期待結果 |
 |---|---|
-| 移植後、`port-log.md` を背景の分類と突き合わせる | ヒット 0 の 4 ツール（`archive.mjs`・`check-actions.mjs`・`check-progress-coupling.mjs`・`guard-worktree.mjs`）は無変更で動く、または外れた場合その理由が記録にある |
+| 移植後、`notes/port-log.md` を背景の分類と突き合わせる | ヒット 0 の 4 ツール（`archive.mjs`・`check-actions.mjs`・`check-progress-coupling.mjs`・`guard-worktree.mjs`）は無変更で動く、または外れた場合その理由が記録にある |
 | `check-protected-paths.mjs` 相当の移植 | 検証コマンドの定義の所在（P ではワークフロー YAML）が記録にあり、それを凍結できたか否かが書いてある |
 | `start-task.mjs` 相当の移植 | `npm ci` の対応物が無いことと、その扱い（呼び出しごと落とす）が記録にある |
 | `run-unit-tests.mjs` 相当の移植 | 移植先で要るか要らないかの判断と理由が記録にある |
 | e2e・見た目の工程 | 省略してループが回るか（破綻箇所の有無）が記録にある |
 | `CLAUDE.md` の移植 | 書き換え不要だった記述と書き換えた記述の一覧が記録にある。既存 `CLAUDE.md` との衝突箇所も含む |
-| `port-log.md` を `grep` する | 移植先を特定できる識別子が 1 件も出ない |
+| `notes/port-log.md` を `grep` する | 移植先を特定できる識別子が 1 件も出ない |
 
 ## 完了条件
 

@@ -764,6 +764,19 @@ test('抽出 PNG との領域ごとのピクセル不一致率が 0.5% 以下で
     return out;
   };
 
+  // TEMP-DIAG: CI(ubuntu)の実測値を採るための一時計測。値が決まったら消す。
+  for (const t of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]) {
+    const row = [];
+    for (const [name, region] of Object.entries(figma.pixelRegions)) {
+      const a = cropRegion(actual, region);
+      const b = cropRegion(expected, region);
+      const d = new PNG({ width: region.width, height: region.height });
+      const n = pixelmatch(a.data, b.data, d.data, region.width, region.height, { threshold: t });
+      row.push(`${name}=${((n / (region.width * region.height)) * 100).toFixed(3)}%`);
+    }
+    console.error(`TEMP-DIAG threshold=${t} ${row.join(' ')}`);
+  }
+
   const failures = [];
   for (const [name, region] of Object.entries(figma.pixelRegions)) {
     const a = cropRegion(actual, region);

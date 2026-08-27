@@ -398,3 +398,35 @@ test('task/ の archive と TEMPLATE は選択対象にしない', () => {
     /選択可能な作業がありません/,
   );
 });
+
+// --- 台帳の構成は宣言に従う（`task/` `spec.md` `progress.md` を決め打ちしない） ---
+
+test('宣言した台帳の場所とファイル名で作業を選ぶ', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-ledger-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  writeManifest(root);
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'loop.manifest.json'), 'utf8'));
+  manifest.ledger = {
+    dir: 'docs/workflow/',
+    specFile: 'design.md',
+    progressFile: 'QG_log.md',
+    docs: ['design.md', 'QG_log.md'],
+  };
+  fs.writeFileSync(path.join(root, 'loop.manifest.json'), JSON.stringify(manifest));
+
+  const workDir = path.join(root, 'docs/workflow/0007-x');
+  fs.mkdirSync(workDir, { recursive: true });
+  fs.writeFileSync(path.join(workDir, 'design.md'), '# 仕様\n');
+  fs.writeFileSync(
+    path.join(workDir, 'QG_log.md'),
+    '- **Branch:** `feat/0007-x`\n- **Status:** `Not Started`\n- **Complexity:** `S`\n',
+  );
+
+  // git は実際に叩かない（ここで確かめたいのは「宣言した台帳から作業を選べるか」）
+  const calls = [];
+  const out = startTask({ rootDir: root, exec: (cmd, args, opts) => { calls.push({ cmd, args, cwd: opts?.cwd }); return ''; } });
+  assert.equal(out.dirName, '0007-x');
+  assert.equal(out.branch, 'feat/0007-x');
+  assert.equal(out.model, 'haiku');
+});

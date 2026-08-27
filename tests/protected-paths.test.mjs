@@ -8,7 +8,7 @@ import {
 // ループの固有値はマニフェストが唯一の宣言である。テストも**実物のマニフェスト**を使う。
 // テスト用の別表を持つと、宣言を変えてもテストが緑のままになる。
 import { repoManifest, parseManifest } from '../tools/loop-manifest.mjs';
-import { useManifest, validateManifestShape } from '../tools/check-protected-paths.mjs';
+import { useManifest, validateManifestShape, scriptsChanged } from '../tools/check-protected-paths.mjs';
 useManifest(repoManifest());
 
 
@@ -813,6 +813,9 @@ const BROKEN_MANIFESTS = [
   ['implementation.dirs = ["src/", 7]', (m) => { m.implementation.dirs = ['src/', 7]; }],
   ['implementation.dirs = [] かつ files = []', (m) => { m.implementation.dirs = []; m.implementation.files = []; }],
   ['implementation.files = [42]', (m) => { m.implementation.files = [42]; }],
+  // **欠落も型不正と同じく拒む。** 空配列で補うと、呼び出し元が無保護になる
+  ['verify.invokedIn 欠落', (m) => { delete m.verify.invokedIn; }],
+  ['verify.invokedIn = []', (m) => { m.verify.invokedIn = []; }],
 ];
 
 for (const [name, mutate] of BROKEN_MANIFESTS) {
@@ -843,4 +846,29 @@ test('verify.definedIn の jsonKey が実在しなければ、宣言の読み取
   });
   assert.equal(v.length, 1);
   assert.match(v[0].reason, /検証コマンドの定義が変わっている/);
+});
+
+// --- 検証定義の比較は「選ばれた値そのもの」を深く見る ---
+// 1 段の `!==` 比較では、スカラーで常に false（凍結が空洞化）、
+// 入れ子オブジェクトで常に true（常に落ちる）へ倒れる。
+
+test('scriptsChanged: スカラーの変更を検知する', () => {
+  assert.equal(scriptsChanged(1, 2), true);
+  assert.equal(scriptsChanged('x', 'y'), true);
+  assert.equal(scriptsChanged(1, 1), false);
+});
+
+test('scriptsChanged: 入れ子オブジェクトは中身で比べる（参照比較にしない）', () => {
+  assert.equal(scriptsChanged({ a: { b: 1 } }, { a: { b: 1 } }), false);
+  assert.equal(scriptsChanged({ a: { b: 1 } }, { a: { b: 2 } }), true);
+});
+
+test('scriptsChanged: キーの順番は結果を変えない', () => {
+  assert.equal(scriptsChanged({ a: 1, b: 2 }, { b: 2, a: 1 }), false);
+});
+
+test('scriptsChanged: 平坦な文字列マップは従来どおり判定する', () => {
+  assert.equal(scriptsChanged({ ci: 'npm test' }, { ci: 'npm test' }), false);
+  assert.equal(scriptsChanged({ ci: 'npm test' }, { ci: 'true' }), true);
+  assert.equal(scriptsChanged({ ci: 'x' }, { ci: 'x', extra: 'y' }), true);
 });

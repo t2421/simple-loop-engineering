@@ -879,7 +879,7 @@ function main() {
   } else if (result.reason === 'foreign') {
     console.error(`更新された ${config().progressFile} がこの PR の作業のものではありません: ${result.works[0]}`);
     console.error(
-      `  task/${result.works[0]}/progress.md の Branch（base 側）: ${result.branch ?? '（行がありません）'}`,
+      `  ${config().taskDir}${result.works[0]}/${config().progressFile} の Branch（base 側）: ${result.branch ?? '（行がありません）'}`,
     );
     console.error(`  この PR の head ブランチ: ${result.headBranch}`);
     console.error(`この PR のブランチで進めている作業の ${config().progressFile} を更新してください。`);

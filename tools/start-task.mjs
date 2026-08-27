@@ -199,21 +199,21 @@ export function isValidBranchName(name) {
  * @param {string} rootDir
  * @returns {Array<{id: string, dirName: string, status: string, branch: string | null}>}
  */
-function readTaskEntries(rootDir, workDirRegExp) {
-  const taskDir = path.join(rootDir, 'task');
+function readTaskEntries(rootDir, workDirRegExp, ledger) {
+  const taskDir = path.join(rootDir, ledger.dir);
   if (!fs.existsSync(taskDir)) return [];
   const entries = [];
   for (const dirent of fs.readdirSync(taskDir, { withFileTypes: true })) {
     const m = workDirRegExp.exec(dirent.name);
     if (!dirent.isDirectory() || !m) continue;
     const workDir = path.join(taskDir, dirent.name);
-    const progressPath = path.join(workDir, 'progress.md');
+    const progressPath = path.join(workDir, ledger.progressFile);
     if (!fs.existsSync(progressPath)) {
       // `--claim` が確保しただけのディレクトリ（spec も progress もまだ無い）は
       // 「確保中」であって壊れた作業ではない。ここで失敗にすると、起草側が
       // progress を置くまでの間、開発ループの手順 1 が全員分ハードに落ちる。
       // spec があるのに progress が無いのは従来どおり書式の破損として失敗させる
-      if (!fs.existsSync(path.join(workDir, 'spec.md'))) continue;
+      if (!fs.existsSync(path.join(workDir, ledger.specFile))) continue;
       throw new Error(`task/${dirent.name}/progress.md がありません`);
     }
     const markdown = fs.readFileSync(progressPath, 'utf8');
@@ -258,7 +258,7 @@ function defaultExec(cmd, args, opts = {}) {
  */
 export function startTask({ rootDir, exec = defaultExec, manifest = loadManifest(rootDir) }) {
   const install = manifest.install;
-  const picked = selectNextTask(readTaskEntries(rootDir, workDirRe(manifest)));
+  const picked = selectNextTask(readTaskEntries(rootDir, workDirRe(manifest), manifest.ledger));
   if (picked === null) {
     throw new Error('選択可能な作業がありません（task/ の archive 以外に Blocked / Done でない作業が無い）');
   }

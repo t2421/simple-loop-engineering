@@ -69,7 +69,7 @@ export function configFromManifest(manifest) {
     // **呼び出しの所在も守る。** 定義を守っても、呼ぶのをやめれば検証は消える。
     // このリポジトリでは偶然 `appendOnlyDirs` と `gateHelpers` に重なっているが、
     // 重ならない移植先では宣言だけあって保護が効かないことになる
-    verifyInvokedIn: manifest.verify.invokedIn ?? [],
+    verifyInvokedIn: manifest.verify.invokedIn,
     appendOnlyDirs: manifest.protected.appendOnlyDirs.map((d) => ({
       prefix: d.prefix,
       label: d.label,
@@ -331,13 +331,26 @@ export function decompose(changes) {
  * @returns {boolean} 変わっていれば true
  */
 export function scriptsChanged(baseScripts, headScripts) {
-  const base = baseScripts ?? {};
-  const head = headScripts ?? {};
-  const keys = new Set([...Object.keys(base), ...Object.keys(head)]);
-  for (const key of keys) {
-    if (base[key] !== head[key]) return true;
-  }
-  return false;
+  return stableStringify(baseScripts) !== stableStringify(headScripts);
+}
+
+/**
+ * キーの順番に依存しない形で JSON 値を文字列にする純関数。
+ *
+ * **1 段の `!==` 比較では足りない。** `jsonKey` が選ぶ値は平坦な文字列マップとは限らない。
+ * スカラーだと `Object.keys(5)` が空になって「常に変わっていない」（凍結が空洞化する側）、
+ * 入れ子オブジェクトだと参照比較になって「常に変わっている」（常に落ちる側）へ倒れる。
+ * どちらも検証の意味論を壊す。
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function stableStringify(value) {
+  if (value === undefined) return '\u0000undefined';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
 }
 
 /**
@@ -611,8 +624,11 @@ export function validateManifestShape(manifest) {
   } else if (!manifest.verify.definedIn.every((d) => d !== null && typeof d === 'object' && isStr(d.path))) {
     reasons.push('verify.definedIn の各要素は { path } を持つ必要があります');
   }
-  if (manifest.verify.invokedIn !== undefined && !isStrArray(manifest.verify.invokedIn)) {
-    reasons.push('verify.invokedIn は省略するか、文字列配列である必要があります');
+  // **必須である。省略を空配列で補わない。** 定義を守っても、呼ぶのをやめれば検証は消える。
+  // 「重ならない移植先では宣言だけあって保護が効かない」を理由に新設した項目を、
+  // 欠落したときに黙って無保護へ倒すのでは意味がない
+  if (!isStrArray(manifest.verify.invokedIn)) {
+    reasons.push('verify.invokedIn は非空の文字列配列である必要があります');
   }
   const impl = manifest.implementation;
   if (impl === null || typeof impl !== 'object') {

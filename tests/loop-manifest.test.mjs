@@ -168,6 +168,9 @@ const BROKEN_LEAVES = [
   ['complexityModels = "x"', (m) => { m.complexityModels = 'x'; }, 'complexityModels'],
   ['ledger.dir = 5', (m) => { m.ledger.dir = 5; }, 'ledger.dir'],
   ['verify.invokedIn = "x"', (m) => { m.verify.invokedIn = 'x'; }, 'invokedIn'],
+  ['verify.invokedIn 欠落', (m) => { delete m.verify.invokedIn; }, 'invokedIn'],
+  ['implementation.dirs = [42]', (m) => { m.implementation.dirs = [42]; }, 'implementation.dirs'],
+  ['implementation が両方空', (m) => { m.implementation.dirs = []; m.implementation.files = []; }, 'implementation'],
 ];
 
 for (const [name, mutate, key] of BROKEN_LEAVES) {

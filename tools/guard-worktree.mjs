@@ -70,7 +70,9 @@ export const BLOCK_EXIT_CODE = 2;
 export function blockMessage(filePath) {
   return [
     `プライマリチェックアウトの実装ファイルは編集できません: ${filePath}`,
-    '実装は worktree で行う。`node tools/start-task.mjs` で開始する。',
+    // **特定のツール名を書かない。** 移植先はそのツールを持たないことがある
+    // （0044 の実測。`start-task` は移植しなかった）。案内は「どこで作業するか」に留める
+    '実装は worktree で行う。プライマリチェックアウトでは編集しない。',
   ].join('\n');
 }
 

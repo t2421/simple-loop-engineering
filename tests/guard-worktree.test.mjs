@@ -147,7 +147,9 @@ test('git-common-dir からプライマリチェックアウトを求める', ()
 test('ブロックメッセージは worktree での開始手順を示す', () => {
   const message = blockMessage('/repo/src/math.mjs');
   assert.match(message, /worktree/);
-  assert.match(message, /tools\/start-task\.mjs/);
+  // 特定のツール名は求めない（移植先はそのツールを持たないことがある）。
+  // 案内が「プライマリでは編集しない」ことを述べているかは引き続き固定する
+  assert.match(message, /プライマリチェックアウトでは編集しない/);
   assert.match(message, /\/repo\/src\/math\.mjs/);
 });
 
@@ -165,7 +167,7 @@ test('CLI: プライマリチェックアウトの実装ファイルは終了コ
   );
   assert.equal(result.status, 2);
   assert.match(result.stderr, /worktree/);
-  assert.match(result.stderr, /tools\/start-task\.mjs/);
+  assert.match(result.stderr, /プライマリチェックアウトでは編集しない/);
 });
 
 test('CLI: .worktrees 配下の実装ファイルは終了コード 0 で通過させる', () => {

@@ -36,6 +36,7 @@ export const REQUIRED_KEYS = Object.freeze([
   'workId.pattern',
   'verify.command',
   'verify.definedIn',
+  'verify.invokedIn',
   'implementation.dirs',
   'ledger.dir',
   'ledger.specFile',
@@ -183,8 +184,9 @@ export function parseManifest(raw) {
       reasons.push(`ledger.${key} は非空の文字列である必要があります`);
     }
   }
-  if (manifest.verify.invokedIn !== undefined && !isStringArray(manifest.verify.invokedIn)) {
-    reasons.push('verify.invokedIn は省略するか、非空の文字列配列である必要があります');
+  // **必須である。省略を空配列で補わない**（→ tools/check-protected-paths.mjs の同項目）
+  if (!isStringArray(manifest.verify.invokedIn)) {
+    reasons.push('verify.invokedIn は非空の文字列配列である必要があります');
   }
   // **自己保護。** マニフェスト自身が保護対象で無ければ、書き換え放題になる
   if (manifest.protected.self !== MANIFEST_PATH) {

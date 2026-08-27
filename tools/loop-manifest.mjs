@@ -119,11 +119,20 @@ export function parseManifest(raw) {
   } else if (!manifest.verify.definedIn.every((d) => d !== null && typeof d === 'object' && typeof d.path === 'string' && d.path !== '')) {
     reasons.push('verify.definedIn の各要素は { path } を持つ必要があります');
   }
-  if (!Array.isArray(manifest.implementation.dirs)) {
-    reasons.push('implementation.dirs は配列である必要があります');
+  // **要素の型まで見る。** `[42]` を通すと `filePath.startsWith(42)` が `"42"` に
+  // 強制され、実装の変更が全部 docs-only に落ちて進捗結合が無言で消える
+  const isPathArray = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '');
+  if (!isPathArray(manifest.implementation.dirs)) {
+    reasons.push('implementation.dirs は文字列の配列である必要があります');
   }
-  if (manifest.implementation.files !== undefined && !Array.isArray(manifest.implementation.files)) {
-    reasons.push('implementation.files は配列である必要があります');
+  if (manifest.implementation.files !== undefined && !isPathArray(manifest.implementation.files)) {
+    reasons.push('implementation.files は文字列の配列である必要があります');
+  }
+  // 両方空なら「実装が存在しない」ことになり、進捗結合はあらゆる差分を素通りさせる。
+  // 空の宣言は、ゲートを外したのと同じである
+  if (isPathArray(manifest.implementation.dirs)
+    && (manifest.implementation.dirs.length + (manifest.implementation.files ?? []).length) === 0) {
+    reasons.push('implementation は dirs か files のどちらかに 1 件以上必要です');
   }
   if (!isStringArray(manifest.ledger.docs)) {
     reasons.push('ledger.docs は非空の文字列配列である必要があります');
@@ -146,6 +155,15 @@ export function parseManifest(raw) {
       if (d === null || typeof d !== 'object' || typeof d.prefix !== 'string' || d.prefix === ''
         || typeof d.label !== 'string' || d.label === '') {
         reasons.push(`protected.appendOnlyDirs[${i}] は { prefix, label } を持つ必要があります`);
+        return;
+      }
+      // **真偽値のフラグも型を見る。** `"ledger": "true"` は `=== true` で false に落ち、
+      // 別名 spec の禁止とアーカイブ済み ID の再利用検知が無言で消える。
+      // 三項式で既定値へ倒すのは「型不正を既定値で補う」ことである
+      for (const flag of ['archiveMove', 'ledger']) {
+        if (d[flag] !== undefined && typeof d[flag] !== 'boolean') {
+          reasons.push(`protected.appendOnlyDirs[${i}].${flag} は真偽値である必要があります`);
+        }
       }
     });
   }

@@ -586,6 +586,12 @@ export function validateManifestShape(manifest) {
     pr.appendOnlyDirs.forEach((d, i) => {
       if (d === null || typeof d !== 'object' || !isStr(d.prefix) || !isStr(d.label)) {
         reasons.push(`protected.appendOnlyDirs[${i}] は { prefix, label } を持つ必要があります`);
+        return;
+      }
+      for (const flag of ['archiveMove', 'ledger']) {
+        if (d[flag] !== undefined && typeof d[flag] !== 'boolean') {
+          reasons.push(`protected.appendOnlyDirs[${i}].${flag} は真偽値である必要があります`);
+        }
       }
     });
   }
@@ -607,6 +613,19 @@ export function validateManifestShape(manifest) {
   }
   if (manifest.verify.invokedIn !== undefined && !isStrArray(manifest.verify.invokedIn)) {
     reasons.push('verify.invokedIn は省略するか、文字列配列である必要があります');
+  }
+  const impl = manifest.implementation;
+  if (impl === null || typeof impl !== 'object') {
+    reasons.push('implementation はオブジェクトである必要があります');
+  } else {
+    const isPathArray = (v) => Array.isArray(v) && v.every(isStr);
+    if (!isPathArray(impl.dirs)) reasons.push('implementation.dirs は文字列の配列である必要があります');
+    if (impl.files !== undefined && !isPathArray(impl.files)) {
+      reasons.push('implementation.files は文字列の配列である必要があります');
+    }
+    if (isPathArray(impl.dirs) && (impl.dirs.length + (impl.files ?? []).length) === 0) {
+      reasons.push('implementation は dirs か files のどちらかに 1 件以上必要です');
+    }
   }
   if (!isStr(manifest.workId.pattern)) {
     reasons.push('workId.pattern は非空の文字列である必要があります');
@@ -659,11 +678,22 @@ function readVerifyDefinitions(ref, definedIn) {
       out[d.path] = { content: raw };
       continue;
     }
+    let parsed;
     try {
-      out[d.path] = JSON.parse(raw)[d.jsonKey] ?? {};
+      parsed = JSON.parse(raw);
     } catch (err) {
       throw new Error(`${ref}:${d.path} を JSON として読めません: ${err.message}`, { cause: err });
     }
+    // **宣言したキーが無いなら既定値（`{}`）で補わない。**
+    // 補うと base も head も `{}` になり、`scriptsChanged` が常に false を返す。
+    // `jsonKey` の綴り違い 1 つで、検証定義の変更検知が無言で消える
+    if (!Object.hasOwn(parsed, d.jsonKey)) {
+      throw new Error(
+        `${ref}:${d.path} に verify.definedIn が宣言したキーがありません: ${d.jsonKey}\n`
+        + '宣言したキーが無いまま判定すると、検証コマンドの定義の変更を検知できません。',
+      );
+    }
+    out[d.path] = parsed[d.jsonKey];
   }
   return out;
 }

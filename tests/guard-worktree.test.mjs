@@ -192,3 +192,26 @@ test('CLI: 解析できない stdin はブロックしない（fail-open）', ()
   const result = runGuard('not json');
   assert.equal(result.status, 0);
 });
+
+// --- 宣言は入れ子のパスも表せる（先頭セグメントだけで照合しない） ---
+// 同じ宣言を読む進捗結合の検査は prefix 一致で入れ子を扱う。2 実装で意味を食い違わせない。
+
+test('入れ子のディレクトリ・ファイルを宣言してもプライマリではブロックする', () => {
+  const nested = { dirs: ['app/src'], files: ['config/tool.mjs'] };
+  assert.equal(
+    classifyEdit({ filePath: at('app/src/x.mjs'), rootDir: ROOT, implementation: nested }).blocked,
+    true,
+  );
+  assert.equal(
+    classifyEdit({ filePath: at('config/tool.mjs'), rootDir: ROOT, implementation: nested }).blocked,
+    true,
+  );
+  assert.equal(
+    classifyEdit({ filePath: at('app/docs/x.md'), rootDir: ROOT, implementation: nested }).blocked,
+    false,
+  );
+});
+
+test('宣言そのもの（マニフェスト）もプライマリではブロックする', () => {
+  assert.equal(classifyEdit({ filePath: at('loop.manifest.json'), rootDir: ROOT, implementation: IMPL }).blocked, true);
+});

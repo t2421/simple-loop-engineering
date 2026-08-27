@@ -803,6 +803,16 @@ const BROKEN_MANIFESTS = [
   ['conditionalStages[0].triggers = []', (m) => { m.conditionalStages[0].triggers = []; }],
   ['conditionalStages[0].command = 42', (m) => { m.conditionalStages[0].command = 42; }],
   ['conditionalStages[0].checker = 1', (m) => { m.conditionalStages[0].checker = 1; }],
+  // 真偽値のフラグを既定値へ倒さない（"true" は `=== true` で false に落ちる）
+  ['appendOnlyDirs[0].ledger = "true"', (m) => { m.protected.appendOnlyDirs[0].ledger = 'true'; }],
+  ['appendOnlyDirs[0].ledger = 1', (m) => { m.protected.appendOnlyDirs[0].ledger = 1; }],
+  ['appendOnlyDirs[0].ledger = null', (m) => { m.protected.appendOnlyDirs[0].ledger = null; }],
+  ['appendOnlyDirs[0].archiveMove = "true"', (m) => { m.protected.appendOnlyDirs[0].archiveMove = 'true'; }],
+  // 実装の宣言の要素型と、空の宣言
+  ['implementation.dirs = [42]', (m) => { m.implementation.dirs = [42]; }],
+  ['implementation.dirs = ["src/", 7]', (m) => { m.implementation.dirs = ['src/', 7]; }],
+  ['implementation.dirs = [] かつ files = []', (m) => { m.implementation.dirs = []; m.implementation.files = []; }],
+  ['implementation.files = [42]', (m) => { m.implementation.files = [42]; }],
 ];
 
 for (const [name, mutate] of BROKEN_MANIFESTS) {
@@ -820,3 +830,17 @@ for (const [name, mutate] of BROKEN_MANIFESTS) {
     );
   });
 }
+
+// --- 宣言したキーが対象 JSON に無ければ、既定値で補わない ---
+
+test('verify.definedIn の jsonKey が実在しなければ、宣言の読み取りが失敗する', () => {
+  // `readVerifyDefinitions` は非 export（単体実行されるファイルなので入口を増やさない）。
+  // ここでは「補われた結果」が違反を隠さないことを、判定側から固定する
+  const v = findViolations({
+    changes: [{ status: 'M', path: 'package.json' }],
+    baseScripts: { 'package.json': { ci: 'npm run ci' } },
+    headScripts: { 'package.json': { ci: 'true' } },
+  });
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /検証コマンドの定義が変わっている/);
+});

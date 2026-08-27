@@ -138,10 +138,16 @@ export function classifyEdit({
 
   const segments = relative.split(path.sep);
   if (segments[0] === WORKTREES_DIR) return { blocked: false, reason: 'worktree' };
-  if (segments.length === 1 && implementation.files.includes(segments[0])) {
+
+  // **相対パス全体で照合する。** 先頭セグメントだけを見ると、`app/src/` のような
+  // 入れ子ディレクトリや `config/tool.mjs` のような入れ子ファイルを宣言しても止まらない。
+  // 同じ宣言を読む `tools/check-progress-coupling.mjs` は prefix 一致で入れ子を扱うので、
+  // 先頭セグメント照合のままだと 2 実装で宣言の意味が食い違う
+  const rel = segments.join('/');
+  if (implementation.files.includes(rel)) {
     return { blocked: true, reason: 'implementation-in-primary' };
   }
-  if (implementation.dirs.includes(segments[0])) {
+  if (implementation.dirs.some((dir) => rel === dir || rel.startsWith(`${dir}/`))) {
     return { blocked: true, reason: 'implementation-in-primary' };
   }
   return { blocked: false, reason: 'not-implementation' };

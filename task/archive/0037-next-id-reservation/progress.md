@@ -1,9 +1,9 @@
 # Progress: `0037-next-id-reservation`
 
-- **Target Spec:** `task/0037-next-id-reservation/spec.md`
+- **Target Spec:** `task/archive/0037-next-id-reservation/spec.md`
 - **Branch:** `feat/0037-next-id-reservation`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/70`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`tools/start-task.mjs` に `--claim <slug> [--in <task|backlog>]` を追加)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

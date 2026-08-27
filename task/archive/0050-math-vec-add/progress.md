@@ -1,9 +1,9 @@
 # Progress: `0050-math-vec-add`
 
-- **Target Spec:** `task/0050-math-vec-add/spec.md`
+- **Target Spec:** `task/archive/0050-math-vec-add/spec.md`
 - **Branch:** `feat/0050-math-vec-add`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/67
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`src/math.mjs` に `addVec` を追加。既存関数は変えない)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。算術のみなのでスクリーンキャプチャは不要）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

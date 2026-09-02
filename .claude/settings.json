@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=\"$(cat)\" && CI_DIR=\"$(printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/stop-hook-ci-dir.mjs\")\" && cd \"$CI_DIR\" && npm run ci 1>&2 && printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\"",
+            "command": "INPUT=\"$(cat)\" && CI_DIR=\"$(printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/stop-hook-ci-dir.mjs\")\" && cd \"$CI_DIR\" && { npm run ci 1>&2 || exit 2; } && printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\"",
             "timeout": 900
           }
         ]

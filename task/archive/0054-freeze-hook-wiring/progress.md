@@ -1,9 +1,9 @@
 # Progress: `0054-freeze-hook-wiring`
 
-- **Target Spec:** `task/0054-freeze-hook-wiring/spec.md`
+- **Target Spec:** `task/archive/0054-freeze-hook-wiring/spec.md`
 - **Branch:** `feat/0054-freeze-hook-wiring`
-- **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Record`)
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/80`
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -17,8 +17,8 @@
 - [x] 実装 (`CLAUDE.md`「変えてはいけないもの」に 2 行追加。spec「例」の grep が `2` を出すこと)
 - [x] spec「例」のローカル再現（`tmp/0054-probe` でラベル無し `exit=1`・`PR_LABELS` 付き `exit=0`）を実行し、出力を会話に貼る
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。ラベル無しで `protected-paths` が失敗し、ラベル付きで成功することを Actions の結果で確認する）
-- [ ] PRマージ後のアーカイブ
+- [x] PR作成（進捗の **PR** に URL を書く。`allow-protected-change` ラベルを付ける。ラベル無しで `protected-paths` が失敗し、ラベル付きで成功することを Actions の結果で確認する）
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 
@@ -114,3 +114,37 @@ not ok 8 - hook から呼ばれるファイルは 1 つ残らず凍結対象に�
 docs の形式違反はありません（53 件の作業ディレクトリを確認）。
 # tests 484  # pass 484  # fail 0
 ```
+- `10:50` - PR #80 を作成した。**完了条件 11 を実測するため、あえて `allow-protected-change` ラベル無しで作成した**
+- `11:00` - 完了条件 11(a)。ラベル無しの CI で `protected-paths` だけが失敗し、spec が予告した**ちょうど 2 件**が違反として出た（`tests/hook-wiring.test.mjs` と `CLAUDE.md` は出ない）
+
+```
+=== run 33675478673（ラベル無し）→ failure ===
+保護パスの変更を 2 件検知しました:
+  - tests/gate-helpers.test.mjs: 既存のテストの内容が変わっている
+  - tools/check-protected-paths.mjs: ガードの判定ロジック自体は変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+##[error]Process completed with exit code 1.
+```
+
+  他の 4 チェック（verify / progress-coupling / e2e / preview）は緑
+- `11:10` - 完了条件 11(b)。人間がラベルを付けた再実行で成功した。**同じ差分・同じチェッカーで、ラベルの有無だけが判定を分けている**
+
+```
+=== run 33675657443（allow-protected-change あり）→ success ===
+保護パスの変更を 2 件検知しました:
+  - tests/gate-helpers.test.mjs: 既存のテストの内容が変わっている
+  - tools/check-protected-paths.mjs: ガードの判定ロジック自体は変更も移動もできない
+ラベル allow-protected-change があるため通過させます（人間による明示承認）。
+
+protected-paths: success
+progress-coupling: success
+```
+- `11:15` - **Record 工程の抜けを `archive.mjs` が捕まえた。** PR の URL を進捗に書かないままアーカイブしようとして拒否された
+
+```
+アーカイブしませんでした: task/0054-freeze-hook-wiring/progress.md の PR が 未作成 です。PR を作ってマージしてから実行してください
+exit=1
+```
+
+  ツールが「PR がマージ済みで、この作業のものである」ことを確かめる設計なので、記録の抜けがそのまま止まる形になった。URL を記録してから再実行する

@@ -154,3 +154,107 @@ test('tools/setup-playwright.mjs は委譲先ではないので変更しても�
   });
   assert.deepEqual(v, []);
 });
+
+// --- hook の配線（0054-freeze-hook-wiring で足した 2 件） ---
+//
+// 判定コードをすべて凍結しても、呼び出し側（.claude/settings.json）を落とせば
+// ガードは呼ばれない。配線の網羅は tests/hook-wiring.test.mjs が実物から検証する。
+// ここは「その 2 件が GATE_HELPERS の規則どおりに扱われるか」を固定する。
+
+test('.claude/settings.json の内容変更は違反になる（hook の配線）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: '.claude/settings.json' }],
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, '.claude/settings.json');
+  assert.equal(v[0].reason, '検証の委譲先は変更も移動もできない');
+});
+
+test('.claude/settings.json の削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: '.claude/settings.json' }],
+  });
+  assert.equal(deleted.length, 1);
+
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'docs/settings.json',
+        oldPath: '.claude/settings.json',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('保護外からのリネームで .claude/settings.json を上書きするのも違反になる', () => {
+  // 中身を差し替える経路は「変更」と同じ効果を持つ。oldPath 側だけを見ると素通りする
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'R', path: '.claude/settings.json', oldPath: 'docs/outside.json', similarity: 90 },
+    ],
+  });
+  assert.equal(v.length, 1);
+});
+
+test('tools/guard-worktree.mjs の内容変更は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'tools/guard-worktree.mjs' }],
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, 'tools/guard-worktree.mjs');
+});
+
+test('tools/guard-worktree.mjs の削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'tools/guard-worktree.mjs' }],
+  });
+  assert.equal(deleted.length, 1);
+
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'lib/guard-worktree.mjs',
+        oldPath: 'tools/guard-worktree.mjs',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('hook の配線 2 件の新規追加は違反にならない（導入 PR）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [
+      { status: 'A', path: '.claude/settings.json' },
+      { status: 'A', path: 'tools/guard-worktree.mjs' },
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('.claude/settings.local.json は保護しない（未追跡の個人設定）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: '.claude/settings.local.json' }],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('.claude/agents/ と .claude/skills/ は保護しない（配線ではない。範囲外）', () => {
+  for (const path of ['.claude/agents/codex-reviewer.md', '.claude/skills/loop-port/SKILL.md']) {
+    const v = findViolations({ ...empty, changes: [{ status: 'M', path }] });
+    assert.deepEqual(v, [], path);
+  }
+});

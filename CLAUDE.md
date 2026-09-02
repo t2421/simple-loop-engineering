@@ -221,6 +221,8 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `tools/check-progress-coupling.mjs`（実装 PR と progress 更新の結合の判定。CI は base リビジョンを実行する）
 - `tools/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
 - `tools/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
+- `tools/guard-worktree.mjs`（プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。骨抜きにすると worktree の規律が消え、実装が進捗の記録なしに入る）
+- `.claude/settings.json`（**hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく呼び出しの所在も守る）
 
 この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
 

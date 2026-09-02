@@ -1,9 +1,9 @@
 # Progress: `0053-stop-hook-block-exit-code`
 
-- **Target Spec:** `task/0053-stop-hook-block-exit-code/spec.md`
+- **Target Spec:** `task/archive/0053-stop-hook-block-exit-code/spec.md`
 - **Branch:** `feat/0053-stop-hook-block-exit-code`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/79`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -18,7 +18,7 @@
 - [x] 凍結対象の無変更確認（`git diff --stat main -- tests/stop-hook-ci-dir.test.mjs tools/check-actions.mjs tools/stop-hook-ci-dir.mjs` が空であることを試行ログに貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

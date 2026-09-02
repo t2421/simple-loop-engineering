@@ -64,6 +64,14 @@ const GATE_HELPERS = [
   // push した HEAD の GitHub Actions の結果の判定。Stop hook が委譲する。
   // 書き換えれば、赤い・未確定の Actions のまま会話を終えられる
   'tools/check-actions.mjs',
+  // プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。
+  // 骨抜きにすれば worktree の規律が消え、実装が進捗の記録なしに main へ入る
+  'tools/guard-worktree.mjs',
+  // **hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を
+  // 消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく
+  // 呼び出しの所在も守る（検証コマンドの definedIn と同じ構造）。
+  // 配線の網羅は tests/hook-wiring.test.mjs が実物から機械検証する
+  '.claude/settings.json',
 ];
 
 function isGateHelper(filePath) {

@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0053-stop-hook-block-exit-code/spec.md`
 - **Branch:** `feat/0053-stop-hook-block-exit-code`
-- **PR:** `未作成`
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/79`
 - **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `M`
 
@@ -17,7 +17,7 @@
 - [x] 修正後の実リポジトリでの実測（spec「例」の 6・7 行目。健全時 `exit=0` と `check-actions:` 行、検証を壊したとき `exit=2` と `check-actions:` 行なし。出力を試行ログに貼り、一時的な破壊は戻す）
 - [x] 凍結対象の無変更確認（`git diff --stat main -- tests/stop-hook-ci-dir.test.mjs tools/check-actions.mjs tools/stop-hook-ci-dir.mjs` が空であることを試行ログに貼る）
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -80,3 +80,4 @@ ok 6 - 例5: 修正前のコマンドでは終了コード 1 になる（この�
 # tests 6  # pass 6  # fail 0
 ```
 - `17:30` - この差分を、新設した `grok-reviewer`（Cursor CLI 経由の Grok 4.6、別 PR #78）でも独立にレビューさせた。**判定は一致（Critical 0 / High 0 で承認）。** レビュアーを指名するのは進捗であり、この作業は `codex-reviewer` を指名しているので、承認の根拠は `codex-reviewer` の側である。Grok の実行は新しいレビュアー定義の動作確認を兼ねたもので、この作業の承認要件を増やすものではない
+- `17:40` - PR #79 を作成。`0054-freeze-hook-wiring` より先にマージする前提（逆順だとこの PR にも `allow-protected-change` が要る）。現時点で `protected-paths` が緑であることがラベル不要の根拠である

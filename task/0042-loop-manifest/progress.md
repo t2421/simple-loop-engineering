@@ -8,7 +8,7 @@
 
 ## タスクチェックリスト
 
-構文チェックとテスト実行はここに書ない。`npm run ci` が強制する。
+構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。
 
 - [x] Specの要件・受け入れ条件の確認
 - [x] `task/archive/0044-second-project-port/notes/port-log.md` を読み、想定項目表の各項目を採用 / 不採用に確定する（チェックリストの旧パス `task/0044-second-project-port/port-log.md` はアーカイブ後の実体。読むだけ）
@@ -126,3 +126,33 @@ exit=0
 
 - `12:09` - 閉じて未マージの PR #76（同じブランチ名、レビュー往復 5 回上限で Blocked）は、0044 申し送りをマニフェスト項目にほぼ全部載せた結果レビューが収束しなかった。本実装は想定項目表に対する採用 / 不採用を試行ログに置き、構造付きの台帳・実装パスは項目にしない。#76 から残す知見は 1 つ: ガードはマニフェストを **base と HEAD の和集合**で読む。HEAD だけだと、同じ PR で `definedIn` から定義ファイルを外して検証を空にできる。
 - `12:10` - PR https://github.com/t2421/simple-loop-engineering/pull/85 を作成。`allow-protected-change` ラベルを付けた。外部レビューは GitHub Copilot（親が依頼）。Status は In Progress。アーカイブしない。
+- `12:12` - GitHub Actions（HEAD `7f7b8cf`）。ラベル付け前の Guard は `PR_LABELS: []` で落ち、付けたあとは通過。HEAD の 5 チェックは全部 pass。
+
+```
+$ gh pr checks 85
+e2e	pass	8s
+preview	pass	29s
+progress-coupling	pass	7s
+protected-paths	pass	7s
+verify	pass	17s
+```
+
+ラベル無し（run 33753702162、`PR_LABELS: []`）:
+
+```
+保護パスの変更を 9 件検知しました:
+  - tests/gate-helpers.test.mjs: 既存のテストの内容が変わっている
+  - tests/guard-stderr.test.mjs: 既存のテストの内容が変わっている
+  - tests/hook-wiring.test.mjs: 既存のテストの内容が変わっている
+  - tests/progress-coupling.test.mjs: 既存のテストの内容が変わっている
+  - tests/protected-paths.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task-claim.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task.test.mjs: 既存のテストの内容が変わっている
+  - tests/stop-hook-ci-dir.test.mjs: 既存のテストの内容が変わっている
+  - tools/check-protected-paths.mjs: ガードの判定ロジック自体は変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+##[error]Process completed with exit code 1.
+```
+
+ラベル付き（run 33753746516）: 同じ 9 件のあと `ラベル allow-protected-change があるため通過させます（人間による明示承認）。`

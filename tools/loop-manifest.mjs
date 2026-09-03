@@ -35,21 +35,23 @@ function isNonEmptyString(value) {
 }
 
 /**
- * マニフェストに書ける相対パスか。絶対パスと `..` は拒否する。
+ * マニフェストに書ける相対パスか。すでに正規形の posix 相対パスだけを受け付ける。
+ * `..` / `.` / バックスラッシュ / 絶対パス / 正規化で変わる表記は拒否する。
  *
  * @param {unknown} value
  * @returns {value is string}
  */
 function isRelativeRepoPath(value) {
   if (!isNonEmptyString(value)) return false;
-  if (path.isAbsolute(value)) return false;
-  const normalized = path.posix.normalize(value.replaceAll('\\', '/'));
-  if (normalized === '..' || normalized.startsWith('../')) return false;
+  if (value.includes('\\')) return false;
+  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return false;
+  const normalized = path.posix.normalize(value);
+  if (normalized !== value) return false;
+  if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) return false;
   return true;
 }
 
 /**
- * @param {unknown} data
  * @param {string} manifestPath
  * @param {string} field
  * @returns {never}
@@ -171,7 +173,7 @@ export function validateManifest(data, { manifestPath, fileExists = () => true }
         !isNonEmptyString(s.name)
         || !isNonEmptyString(s.command)
         || !Array.isArray(s.paths)
-        || !s.paths.every(isNonEmptyString)
+        || !s.paths.every(isRelativeRepoPath)
       ) {
         throw new ManifestError(`${manifestPath}: stages[${index}] の型が不正です`);
       }

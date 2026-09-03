@@ -710,6 +710,12 @@ test('verifyDefinitionSignature: JSON の scripts だけを見る', () => {
   assert.notEqual(verifyDefinitionSignature(base), verifyDefinitionSignature(changedScripts));
 });
 
+test('verifyDefinitionSignature: scripts のキー順だけでは変わらない', () => {
+  const a = '{"scripts":{"b":"1","a":"1"}}';
+  const b = '{"scripts":{"a":"1","b":"1"}}';
+  assert.equal(verifyDefinitionSignature(a), verifyDefinitionSignature(b));
+});
+
 test('verifyDefinitionSignature: JSON でなければ内容の同一性', () => {
   assert.equal(verifyDefinitionSignature('ci:\n  script: test\n'), 'ci:\n  script: test\n');
   assert.notEqual(verifyDefinitionSignature('a'), 'b');

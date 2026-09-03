@@ -14,7 +14,7 @@
       "name": "e2e",
       "command": "npm run test:e2e",
       "paths": [
-        "src/",
+        "src",
         "tests/calc-page.test.mjs",
         "tests/calc-vec-add.e2e.mjs",
         "tools/setup-playwright.mjs",

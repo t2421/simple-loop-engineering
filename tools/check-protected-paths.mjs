@@ -330,7 +330,11 @@ export function verifyDefinitionSignature(raw) {
       && typeof parsed.scripts === 'object'
       && !Array.isArray(parsed.scripts)
     ) {
-      return JSON.stringify(parsed.scripts);
+      const scripts = parsed.scripts;
+      const sorted = Object.fromEntries(
+        Object.keys(scripts).sort().map((key) => [key, scripts[key]]),
+      );
+      return JSON.stringify(sorted);
     }
   } catch {
     // 形式非依存。JSON でなければ内容そのもの
@@ -589,15 +593,19 @@ function readManifestFieldsAt(ref) {
  * そのファイルの検証コマンドを空にできる。base 側に載っていたパスも
  * 凍らせる。導入 PR（base にマニフェストが無い）は HEAD だけを使う。
  *
- * @param {string} mergeBase
+ * base 側は merge-base ではなく base 先端（例: origin/main）から読む。
+ * 分岐後に main へ追加された definedIn / protectedPaths を、古いブランチが
+ * 取り込まないまま回避できないようにする。
+ *
+ * @param {string} baseRef
  * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] }}
  */
-function readMergedManifestFields(mergeBase) {
+function readMergedManifestFields(baseRef) {
   const head = readManifestFieldsAt('HEAD');
   if (head === null) {
     throw new Error(`マニフェストが無い: ${MANIFEST}`);
   }
-  const base = readManifestFieldsAt(mergeBase);
+  const base = readManifestFieldsAt(baseRef);
   if (base === null) return head;
   return {
     definedInPaths: [...new Set([...base.definedInPaths, ...head.definedInPaths])],
@@ -679,8 +687,9 @@ function main() {
   let raw;
   let mergeBase;
   try {
-    // 差分は base...HEAD（三点）なので、比較対象も分岐点（merge-base）に揃える。
-    // base の先端を見ると、分岐後に main 側で定義が変わった場合に誤検知する。
+    // 内容比較（definedIn の定義シグネチャ・archived ID）は分岐点（merge-base）に揃える。
+    // 差分は base...HEAD（三点）なので、base 先端を見ると分岐後に main 側で
+    // scripts が変わったときに誤検知する。宣言の和集合だけは base 先端から読む。
     mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
       encoding: 'utf8',
     }).trim();
@@ -698,7 +707,7 @@ function main() {
 
   try {
     changes = parseNameStatus(raw);
-    ({ definedInPaths, extraProtectedPaths } = readMergedManifestFields(mergeBase));
+    ({ definedInPaths, extraProtectedPaths } = readMergedManifestFields(baseRef));
     definedInChanged = buildDefinedInChanged(mergeBase, definedInPaths);
     // これを渡さないと PR をまたぐ ID 再利用を取り逃がす
     baseArchivedIds = readBaseArchivedIds(mergeBase);

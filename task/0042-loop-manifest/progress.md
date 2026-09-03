@@ -156,3 +156,10 @@ verify	pass	17s
 ```
 
 ラベル付き（run 33753746516）: 同じ 9 件のあと `ラベル allow-protected-change があるため通過させます（人間による明示承認）。`
+
+- `12:24` - Copilot review on PR #85: Changes recommended（https://github.com/t2421/simple-loop-engineering/pull/85#pullrequestreview-5101767239）。Critical 表記は無いがガード / セキュリティ項目は blocking として扱う。誤字「書ない」は既に解消済み（thread resolved）。
+  1. `readMergedManifestFields` が merge-base からマニフェストを読んでいた。分岐後に main へ追加された `definedIn` / `protectedPaths` を古いブランチが取り込まないまま回避できる。**base 側の宣言は `baseRef` 先端（例: origin/main）から読む。** 内容比較（`buildDefinedInChanged`）と archived ID は従来どおり merge-base（分岐後の main 側 scripts 変更による誤検知を避ける）。
+  2. `verifyDefinitionSignature` が `JSON.stringify(parsed.scripts)` のままなので、キー順だけの差で「定義が変わった」と誤検知する。**キーをソートしてから stringify。**
+  3. `isRelativeRepoPath` が `a/../b`・`./x`・`a/..`（正規化後 `.`）を許可し、戻り値に非正規形が残る。後段の git パス比較で取りこぼす。**相対・すでに正規形の posix パスだけ受け付け、`..` / `.` / バックスラッシュ / 正規化で変わる表記を拒否。** `stages[*].paths` も同じ検査（以前は非空文字列だけ）。マニフェストの e2e paths は正規化で変わる `"src/"` を `"src"` に直した。
+  4. `typeError` の JSDoc に未使用の `data` があった。シグネチャに合わせた。
+  ユニットテスト: パス拒否（definedIn / stages.paths）と scripts キー順の署名安定。レビュー再依頼は親が push 後に行う。Status は In Progress のまま。アーカイブしない。

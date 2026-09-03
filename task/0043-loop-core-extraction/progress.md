@@ -16,7 +16,7 @@
 - [x] このリポジトリを CLI 経由へ置き換え、置き換え前と同じ検証結果になることを確認する
 - [x] `CLAUDE.md` テンプレートの作成（不変の原則と穴の分離。穴の未記入を lint で落とす）
 - [x] コアのバージョン指定を保護パスへ追加 (`.claude/skills/add-protected-path` に従う)
-- [ ] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 9）
+- [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 9）
 - [x] Core とエージェント定義・Skill のバージョン不整合の検知手段の決定（→ 完了条件 10）
 - [ ] レビュー（GitHub Copilot。親が PR 作成後に依頼する）
 - [ ] PR作成（進捗の **PR** に URL を書く）
@@ -66,4 +66,28 @@ TAP 本体は 542 件。末尾:
 # skipped 0
 # todo 0
 # duration_ms 120422.08871
+```
+
+- `20:24` - 完了条件 9。実装コミット `04a2d6d` の上で `loop-core/VERSION` を `1.0.0` → `1.0.1` にした一時コミット `64d1208` に対し、親 `04a2d6d` を base として新チェッカーを実行。終わったら `git reset --hard 04a2d6d` で戻した。
+
+ラベル無し:
+
+```
+$ node loop-core/bin/loop.mjs check-protected-paths 04a2d6dcb826c2956ba2954926e1ebe4c51a967b
+保護パスの変更を 1 件検知しました:
+  - loop-core/VERSION: コアのバージョン指定は変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+exit:1
+```
+
+ラベル付き:
+
+```
+$ PR_LABELS='["allow-protected-change"]' node loop-core/bin/loop.mjs check-protected-paths 04a2d6dcb826c2956ba2954926e1ebe4c51a967b
+保護パスの変更を 1 件検知しました:
+  - loop-core/VERSION: コアのバージョン指定は変更も移動もできない
+
+ラベル allow-protected-change があるため通過させます（人間による明示承認）。
+exit:0
 ```

@@ -101,3 +101,4 @@ exit:0
   - preview / preview https://github.com/t2421/simple-loop-engineering/actions/runs/33801989682/job/100803479239
   - copilot-pull-request-reviewer https://github.com/t2421/simple-loop-engineering/actions/runs/33802087572/job/100803771271
 - `20:30` - Copilot レビュー（#87、Changes recommended）の 3 件を直した: `check-compat` の git 失敗時 cwd フォールバック、`run-unit-tests` の optional ディレクトリ stat、`loop-core/templates/TEMPLATE-progress.md` の CLI パス。あわせて Core 各ファイルの実行例コメントを `node loop-core/bin/loop.mjs` に揃えた。親依頼の再レビューは待っている。Status は In Progress のまま。
+- `20:32` - HEAD `9d9cba4` の GitHub Actions は 5 件 success（verify / e2e / protected-paths / progress-coupling / preview）。copilot-pull-request-reviewer は再キュー中。

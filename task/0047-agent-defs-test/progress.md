@@ -96,3 +96,59 @@ ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
 - `21:44` - `git diff main -- .claude/agents/` と `git diff main -- tools/run-unit-tests.mjs` は空。`tests/` の差分は未追跡の `tests/agent-defs.test.mjs` のみ。
 - `21:48` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/89 。Status は `In Progress` のまま。アーカイブしない。
 - `21:50` - `node loop-core/bin/loop.mjs check-actions`: `check-actions: HEAD のチェックはすべて成功しています。`
+- `21:48` - Copilot が Changes recommended。live 本文への完全一致 `.replace` と `assert.notEqual(reworded, live)` が微修正で脆い、と指摘。該当 3 テスト（現行ファイルの微修正 / 見出し依存の節削除 / 1 文完全一致の非承認削除）を削除した。例・失敗時は `validMarkdown` への本文渡しで残している。
+- `21:52` - 再実行 `node --test tests/agent-defs.test.mjs`:
+
+```
+TAP version 13
+# Subtest: 現状の .claude/agents/codex-reviewer.md で pass する
+ok 1 - 現状の .claude/agents/codex-reviewer.md で pass する
+  ---
+  duration_ms: 1.35448
+  ...
+# Subtest: テストが読むパスに codex-reviewer.md が無いと失敗する（skip しない）
+ok 2 - テストが読むパスに codex-reviewer.md が無いと失敗する（skip しない）
+  ---
+  duration_ms: 1.132521
+  ...
+# Subtest: 再実行禁止と実測なし非承認の事実が残る文言の微修正は pass する
+ok 3 - 再実行禁止と実測なし非承認の事実が残る文言の微修正は pass する
+  ---
+  duration_ms: 0.143036
+  ...
+# Subtest: 再実行禁止の節を削除した本文は fail する
+ok 4 - 再実行禁止の節を削除した本文は fail する
+  ---
+  duration_ms: 0.222168
+  ...
+# Subtest: 必須 4 項目名をこの順で含む本文は pass する
+ok 5 - 必須 4 項目名をこの順で含む本文は pass する
+  ---
+  duration_ms: 0.107351
+  ...
+# Subtest: 4 項目名のうち 1 つを欠いた本文は fail する
+ok 6 - 4 項目名のうち 1 つを欠いた本文は fail する
+  ---
+  duration_ms: 0.213322
+  ...
+# Subtest: 4 項目名の順番を入れ替えた本文は fail する
+ok 7 - 4 項目名の順番を入れ替えた本文は fail する
+  ---
+  duration_ms: 0.111635
+  ...
+# Subtest: 親が実測 CI 結果を渡していないときの非承認ルールが消えていると fail する
+ok 8 - 親が実測 CI 結果を渡していないときの非承認ルールが消えていると fail する
+  ---
+  duration_ms: 0.201299
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 46.552361
+```
+

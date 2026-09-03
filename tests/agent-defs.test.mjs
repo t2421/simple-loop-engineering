@@ -152,30 +152,7 @@ test('再実行禁止と実測なし非承認の事実が残る文言の微修�
   assert.deepEqual(checkCodexReviewerConventions(markdown), []);
 });
 
-test('現行ファイル相当の本文を微修正しても pass する', () => {
-  const live = loadCodexReviewerMarkdown(CODEX_REVIEWER_PATH);
-  const reworded = live
-    .replace('## テスト結果の扱い', '## テスト結果について')
-    .replace(
-      'サンドボックス内で `npm run ci`・ユニットテスト・e2e を再実行しない。',
-      'サンドボックスのなかで `npm run ci`、ユニットテスト、e2e を改めて実行しない。',
-    )
-    .replace(
-      '親が実測の CI 結果を渡していないときは承認しない。',
-      '親が実測の CI 結果を貼っていない場合は承認しない。',
-    );
-  assert.notEqual(reworded, live);
-  assert.deepEqual(checkCodexReviewerConventions(reworded), []);
-});
-
 test('再実行禁止の節を削除した本文は fail する', () => {
-  const live = loadCodexReviewerMarkdown(CODEX_REVIEWER_PATH);
-  const deleted = live.replace(/## テスト結果の扱い[\s\S]*?(?=\n## )/, '');
-  const reasons = checkCodexReviewerConventions(deleted);
-  assert.ok(reasons.includes(REASON_RERUN), reasons.join('\n'));
-});
-
-test('再実行禁止の文だけを消した本文は fail する', () => {
   const markdown = validMarkdown({ rerun: '' });
   const reasons = checkCodexReviewerConventions(markdown);
   assert.ok(reasons.includes(REASON_RERUN), reasons.join('\n'));
@@ -209,15 +186,5 @@ test('4 項目名の順番を入れ替えた本文は fail する', () => {
 test('親が実測 CI 結果を渡していないときの非承認ルールが消えていると fail する', () => {
   const markdown = validMarkdown({ approval: '' });
   const reasons = checkCodexReviewerConventions(markdown);
-  assert.ok(reasons.includes(REASON_APPROVAL), reasons.join('\n'));
-});
-
-test('現行ファイルから非承認ルールだけを消すと fail する', () => {
-  const live = loadCodexReviewerMarkdown(CODEX_REVIEWER_PATH);
-  const deleted = live.replace(
-    /親が実測の CI 結果を渡していないときは承認しない。[^\n]*/g,
-    '',
-  );
-  const reasons = checkCodexReviewerConventions(deleted);
   assert.ok(reasons.includes(REASON_APPROVAL), reasons.join('\n'));
 });

@@ -46,7 +46,14 @@ jobs:
             node "$CHECKER" "$BASE"
           else
             echo "::warning::base にチェッカーが無いため候補側で判定します（ガード導入 PR のみ想定）。"
-            node loop-core/bin/loop.mjs check-protected-paths "$BASE"
+            if [ -f loop-core/bin/loop.mjs ]; then
+              node loop-core/bin/loop.mjs check-protected-paths "$BASE"
+            elif [ -f tools/check-protected-paths.mjs ]; then
+              node tools/check-protected-paths.mjs "$BASE"
+            else
+              echo "候補側にもチェッカーがありません。"
+              exit 1
+            fi
           fi
 
   progress-coupling:
@@ -82,5 +89,12 @@ jobs:
             node "$CHECKER" "$BASE"
           else
             echo "::warning::base にチェッカーが無いため候補側で判定します（導入 PR のみ想定）。"
-            node loop-core/bin/loop.mjs check-progress-coupling "$BASE"
+            if [ -f loop-core/bin/loop.mjs ]; then
+              node loop-core/bin/loop.mjs check-progress-coupling "$BASE"
+            elif [ -f tools/check-progress-coupling.mjs ]; then
+              node tools/check-progress-coupling.mjs "$BASE"
+            else
+              echo "候補側にもチェッカーがありません。"
+              exit 1
+            fi
           fi

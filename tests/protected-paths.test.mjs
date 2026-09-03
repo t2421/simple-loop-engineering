@@ -4,10 +4,12 @@ import {
   parseNameStatus,
   findViolations,
   hasAllowLabel,
+  verifyDefinitionSignature,
+  manifestGuardFields,
 } from '../tools/check-protected-paths.mjs';
 
 /** 差分もラベルも無い、素の入力 */
-const empty = { changes: [], baseScripts: {}, headScripts: {} };
+const empty = { changes: [] };
 
 test('parseNameStatus: 追加・変更・削除を読む', () => {
   const out = parseNameStatus('A\0src/new.mjs\0M\0src/math.mjs\0D\0src/old.mjs\0');
@@ -38,23 +40,55 @@ test('既存 tests/ の期待値を変更した差分は違反になる', () => 
   assert.equal(v[0].path, 'tests/add.test.mjs');
 });
 
-test('package.json の scripts を変更した差分は違反になる', () => {
+test('検証コマンドの定義（definedIn）が変わった差分は違反になる', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test', ci: 'npm test' },
-    headScripts: { test: 'node --test', ci: 'echo ok' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': true },
   });
   assert.equal(v.length, 1);
   assert.equal(v[0].path, 'package.json');
 });
 
-test('package.json の scripts 以外だけの変更は違反にならない', () => {
+test('definedIn ファイルでも定義シグネチャが同じなら違反にならない', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test' },
-    headScripts: { test: 'node --test' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': false },
   });
   assert.deepEqual(v, []);
+});
+
+test('definedInChanged の既定辞書は prototype 由来のキーを違反にしない', () => {
+  const v = findViolations({
+    changes: [
+      { status: 'M', path: 'constructor' },
+      { status: 'M', path: '__proto__' },
+    ],
+    definedInPaths: ['constructor', '__proto__'],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('definedInChanged は boolean の true だけを違反にする', () => {
+  const v = findViolations({
+    changes: [{ status: 'M', path: 'package.json' }],
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': 1 },
+  });
+  assert.deepEqual(v, []);
+});
+
+test('definedInChanged の __proto__ キーは null-prototype なら true で違反になる', () => {
+  const definedInChanged = Object.create(null);
+  definedInChanged['__proto__'] = true;
+  const v = findViolations({
+    changes: [{ status: 'M', path: '__proto__' }],
+    definedInPaths: ['__proto__'],
+    definedInChanged,
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, '__proto__');
 });
 
 test('specs/TEMPLATE.md を変更した差分は違反になる', () => {
@@ -155,8 +189,8 @@ test('複数の違反をすべて報告する', () => {
       { status: 'M', path: 'package.json' },
       { status: 'A', path: 'src/new.mjs' },
     ],
-    baseScripts: { ci: 'npm test' },
-    headScripts: { ci: 'true' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': true },
   });
   assert.equal(v.length, 3);
 });
@@ -666,3 +700,96 @@ for (const c of INBOUND_CASES) {
     });
   }
 }
+
+test('loop.manifest.json の内容変更は違反になる', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'M', path: 'loop.manifest.json' }] });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, 'loop.manifest.json');
+});
+
+test('loop.manifest.json の削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'loop.manifest.json' }],
+  });
+  assert.equal(deleted.length, 1);
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'other.json',
+        oldPath: 'loop.manifest.json',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('loop.manifest.json の新規追加は違反にならない（導入 PR）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'A', path: 'loop.manifest.json' }],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('verifyDefinitionSignature: JSON の scripts だけを見る', () => {
+  const base = '{"name":"a","scripts":{"ci":"true"}}';
+  const sameScripts = '{"name":"b","scripts":{"ci":"true"}}';
+  const changedScripts = '{"name":"a","scripts":{"ci":"false"}}';
+  assert.equal(verifyDefinitionSignature(base), verifyDefinitionSignature(sameScripts));
+  assert.notEqual(verifyDefinitionSignature(base), verifyDefinitionSignature(changedScripts));
+});
+
+test('verifyDefinitionSignature: scripts のキー順だけでは変わらない', () => {
+  const a = '{"scripts":{"b":"1","a":"1"}}';
+  const b = '{"scripts":{"a":"1","b":"1"}}';
+  assert.equal(verifyDefinitionSignature(a), verifyDefinitionSignature(b));
+});
+
+test('verifyDefinitionSignature: scripts の __proto__ キーで Object.prototype を汚染しない', () => {
+  const proto = Object.prototype;
+  try {
+    const raw = '{"scripts":{"b":"1","__proto__":{"polluted":true},"a":"1"}}';
+    const sig = verifyDefinitionSignature(raw);
+    assert.equal(Object.hasOwn(proto, 'polluted'), false);
+    assert.equal({}.polluted, undefined);
+    const reordered = '{"scripts":{"a":"1","__proto__":{"polluted":true},"b":"1"}}';
+    assert.equal(verifyDefinitionSignature(reordered), sig);
+  } finally {
+    delete proto.polluted;
+  }
+});
+
+test('manifestGuardFields: 相対正規形のパスを返す', () => {
+  const out = manifestGuardFields({
+    verify: { definedIn: ['package.json'] },
+    protectedPaths: ['loop.manifest.json', 'tools/loop-manifest.mjs'],
+  });
+  assert.deepEqual(out.definedInPaths, ['package.json']);
+  assert.deepEqual(out.extraProtectedPaths, ['loop.manifest.json', 'tools/loop-manifest.mjs']);
+});
+
+test('manifestGuardFields: 非正規パスは拒否する', () => {
+  assert.throws(
+    () => manifestGuardFields({
+      verify: { definedIn: ['../secret'] },
+      protectedPaths: ['loop.manifest.json'],
+    }),
+    /verify\.definedIn のパスが不正です/,
+  );
+  assert.throws(
+    () => manifestGuardFields({
+      verify: { definedIn: ['package.json'] },
+      protectedPaths: ['loop.manifest.json', 'a/../b'],
+    }),
+    /protectedPaths のパスが不正です/,
+  );
+});
+
+test('verifyDefinitionSignature: JSON でなければ内容の同一性', () => {
+  assert.equal(verifyDefinitionSignature('ci:\n  script: test\n'), 'ci:\n  script: test\n');
+  assert.notEqual(verifyDefinitionSignature('a'), 'b');
+});

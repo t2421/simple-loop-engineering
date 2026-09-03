@@ -212,11 +212,12 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 
 停止条件を満たすために、以下を書き換えない。書き換えれば大抵の条件は「達成」できてしまう。
 
+- `loop.manifest.json`（ループの固有値の宣言。検証コマンド・依存導入・保護対象の参照先。書き換えれば凍結の根拠を差し替えられる）
 - `task/` 配下のファイル全部（`task/archive/` を含む）。完了条件・例の期待値・トークン表・Figma 抽出物などの期待値がここにある。**除外は各作業ディレクトリ直下の `progress.md` だけ**
 - `task/TEMPLATE-spec.md` と `task/TEMPLATE-progress.md`
 - `specs/` の完了条件と例の期待値（移行前の資産）、`specs/TEMPLATE.md` と `progress/TEMPLATE.md`
 - `tests/` 配下のテストコードと期待値（存在するようになったら）
-- `package.json` の `scripts`（検証コマンド）
+- `package.json` の `scripts`（検証コマンド。マニフェスト `verify.definedIn` が指す）
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
 - `tools/run-unit-tests.mjs`（ユニットテストの列挙。`ci` が委譲する）
 - `tools/e2e-needed.mjs`（e2e を回すかの判定。CI は base リビジョンを実行する）
@@ -224,6 +225,7 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `tools/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
 - `tools/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
 - `tools/guard-worktree.mjs`（プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。骨抜きにすると worktree の規律が消え、実装が進捗の記録なしに入る）
+- `tools/loop-manifest.mjs`（マニフェストの読み取り・検証。既定値で補う・自己保護を外す改変を止める）
 - `.claude/settings.json`（**hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく呼び出しの所在も守る）
 
 この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。

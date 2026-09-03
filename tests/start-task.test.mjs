@@ -14,6 +14,20 @@ import {
   startTask,
 } from '../tools/start-task.mjs';
 
+const MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fable' });
+
+/** 一時ディレクトリにマニフェストと definedIn 先を置く */
+function writeLoopManifest(root) {
+  const manifest = {
+    install: { argv: ['npm', 'ci'] },
+    verify: { command: 'npm run ci', definedIn: ['package.json'] },
+    protectedPaths: ['loop.manifest.json'],
+    complexityModels: MODELS,
+  };
+  fs.writeFileSync(path.join(root, 'loop.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, 'package.json'), '{"scripts":{"ci":"true"}}\n');
+}
+
 /** 一時ディレクトリに task/ レイアウトを作る */
 function makeLayout(dirs) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-task-'));
@@ -23,6 +37,7 @@ function makeLayout(dirs) {
       fs.writeFileSync(path.join(root, dir, 'progress.md'), progress);
     }
   }
+  writeLoopManifest(root);
   return root;
 }
 
@@ -246,6 +261,33 @@ test('npm ci が失敗したら worktree は残したまま失敗する（再実
   assert.equal(retry.created, false);
 });
 
+test('install が無いマニフェストでは依存導入を呼ばない', () => {
+  const root = makeRepo({
+    'task/0020-a': progressMd({ branch: 'feature/a' }),
+  });
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'loop.manifest.json'), 'utf8'));
+  delete manifest.install;
+  fs.writeFileSync(path.join(root, 'loop.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  const calls = [];
+  const out = startTask({ rootDir: root, exec: recordingExec(calls) });
+  assert.equal(out.created, true);
+  assert.equal(calls.some((c) => c.cmd === 'npm'), false);
+});
+
+test('マニフェストが無ければ worktree を作らず失敗する', () => {
+  const root = makeRepo({
+    'task/0020-a': progressMd({ branch: 'feature/a' }),
+  });
+  fs.rmSync(path.join(root, 'loop.manifest.json'));
+  const calls = [];
+  assert.throws(
+    () => startTask({ rootDir: root, exec: recordingExec(calls) }),
+    /マニフェストが無い/,
+  );
+  assert.equal(calls.some((c) => c.cmd === 'git'), false);
+  assert.equal(fs.existsSync(path.join(root, '.worktrees')), false);
+});
+
 // --- parseComplexity / modelForComplexity ---
 
 test('parseComplexity: バッククォート付きの等級を読む', () => {
@@ -261,13 +303,13 @@ test('parseComplexity: **Complexity** が無ければ null（既存の進捗）'
 });
 
 test('modelForComplexity: 対応表どおりに引く', () => {
-  assert.equal(modelForComplexity('S'), 'haiku');
-  assert.equal(modelForComplexity('M'), 'sonnet');
-  assert.equal(modelForComplexity('L'), 'fable');
+  assert.equal(modelForComplexity('S', MODELS), 'haiku');
+  assert.equal(modelForComplexity('M', MODELS), 'sonnet');
+  assert.equal(modelForComplexity('L', MODELS), 'fable');
 });
 
 test('modelForComplexity: 未記載（null）は M とみなす', () => {
-  assert.equal(modelForComplexity(null), 'sonnet');
+  assert.equal(modelForComplexity(null, MODELS), 'sonnet');
 });
 
 test('parseComplexity: コードフェンスの中の Complexity 行は読まない', () => {
@@ -303,13 +345,13 @@ test('parseComplexity: フェンスの外にあれば読む（フェンスの後
 });
 
 test('modelForComplexity: 表に無い等級は失敗する', () => {
-  assert.throws(() => modelForComplexity('XL'), /Complexity/);
+  assert.throws(() => modelForComplexity('XL', MODELS), /Complexity/);
 });
 
 test('modelForComplexity: Object.prototype の継承プロパティは表に無い等級として失敗する', () => {
   for (const grade of ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty']) {
     assert.throws(
-      () => modelForComplexity(grade),
+      () => modelForComplexity(grade, MODELS),
       /Complexity/,
       `${grade} が表引きを素通りしている`,
     );

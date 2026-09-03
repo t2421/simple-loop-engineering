@@ -110,7 +110,7 @@ test('readCwd は文字列以外・空文字列・非オブジェクトを undef
 
 // --- ガードの 2 行: gate-helpers と同じ判定で固定する ---
 
-const emptyDiff = { changes: [], baseScripts: {}, headScripts: {} };
+const emptyDiff = { changes: [] };
 
 test('tools/stop-hook-ci-dir.mjs を変更した差分はガードが違反として検知する', () => {
   const v = findViolations({

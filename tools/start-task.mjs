@@ -1,12 +1,13 @@
 /**
  * 作業開始を 1 コマンドにする。
  *
- * 開始は「タスクを選ぶ → ブランチ名を決める → worktree を作る → npm ci」という
+ * 開始は「タスクを選ぶ → ブランチ名を決める → worktree を作る → 依存導入」という
  * 複数手順の連なりで、手順である限り一部の省略が起こる（実際に worktree の
  * 作成が飛ばされる事故が繰り返された）。選択と採番を計算に置き換え、開始を
- * このコマンドに畳む。
+ * このコマンドに畳む。依存導入コマンドはマニフェストの `install` から読む。
  *
- * 選んだ作業の **Complexity** から、実装に使うモデルも併せて出力する（`COMPLEXITY_MODELS`）。
+ * 選んだ作業の **Complexity** から、実装に使うモデルも併せて出力する。
+ * 対応表はマニフェストの `complexityModels`。
  *
  * 使い方:
  *   node tools/start-task.mjs            次の作業を選び、worktree を用意する
@@ -22,21 +23,10 @@ import { pathToFileURL } from 'node:url';
 // フェンスの解釈は lint と 1 つにする。複製すると「lint は未記載と見るのに
 // start-task は貼った出力の中の値を読む」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
+import { loadManifest } from './loop-manifest.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
-
-/**
- * 作業の等級（**Complexity**）から、実装に使うモデルを引く対応表。
- *
- * 等級付けは spec 起草時に 1 回だけ行い（`spec-author` が付与し docs PR で人間が
- * 直せる）、以後のルーティングはこの表引きにする。確率論的な判断を 1 点に隔離し、
- * 表そのものの変更はコード変更として PR レビューを通す。
- *
- * 実装をサブエージェントへ委任するときは、ここで引いたモデル名を
- * Agent 呼び出しの model に渡す。
- */
-export const COMPLEXITY_MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fable' });
 
 /**
  * **Complexity** を持たない progress（この項目より前に書かれた既存分）の既定の等級。
@@ -106,20 +96,24 @@ export function parseComplexity(markdown) {
  * 等級から実装に使うモデル名を引く純関数。
  * null（未記載）は `DEFAULT_COMPLEXITY` とみなす。表に無い等級は失敗させる。
  *
- * 表引きは `Object.hasOwn` で行う。素の `COMPLEXITY_MODELS[grade]` だと
+ * 表引きは `Object.hasOwn` で行う。素の `models[grade]` だと
  * `constructor`・`toString`・`valueOf`・`__proto__` などの `Object.prototype`
  * 継承プロパティが「表にある」と判定され、worktree を作ったうえでモデル名として
- * 関数を渡してしまう。**自分で書いた 3 つの鍵だけ**を表とみなす。
+ * 関数を渡してしまう。**マニフェストに書いた鍵だけ**を表とみなす。
  *
  * @param {string | null | undefined} complexity
+ * @param {Record<string, string> | undefined} models - マニフェストの `complexityModels`
  * @returns {string}
  */
-export function modelForComplexity(complexity) {
-  const grade = complexity ?? DEFAULT_COMPLEXITY;
-  if (!Object.hasOwn(COMPLEXITY_MODELS, grade)) {
-    throw new Error(`Complexity が不正: ${grade}（${Object.keys(COMPLEXITY_MODELS).join(' | ')}）`);
+export function modelForComplexity(complexity, models) {
+  if (models === null || models === undefined || typeof models !== 'object' || Array.isArray(models)) {
+    throw new Error('Complexity の対応表がありません（マニフェストの complexityModels）');
   }
-  return COMPLEXITY_MODELS[grade];
+  const grade = complexity ?? DEFAULT_COMPLEXITY;
+  if (!Object.hasOwn(models, grade)) {
+    throw new Error(`Complexity が不正: ${grade}（${Object.keys(models).join(' | ')}）`);
+  }
+  return models[grade];
 }
 
 /**
@@ -220,8 +214,9 @@ function defaultExec(cmd, args, opts = {}) {
 /**
  * 次の作業を選び、worktree を用意する。
  *
- * - worktree が既にあれば作成と `npm ci` をスキップする（再入可能）
- * - `npm ci` が失敗したら worktree は残したまま失敗する（再実行で再入する）
+ * - worktree が既にあれば作成と依存導入をスキップする（再入可能）
+ * - 依存導入が失敗したら worktree は残したまま失敗する（再実行で再入する）
+ * - マニフェストに `install` が無ければ依存導入は呼ばない（空コマンドは置かない）
  *
  * @param {object} input
  * @param {string} input.rootDir - リポジトリのルート
@@ -240,10 +235,11 @@ export function startTask({ rootDir, exec = defaultExec }) {
     throw new Error(`task/${picked.dirName}/progress.md の **Branch** がブランチ名として不正: ${picked.branch}`);
   }
 
-  // 等級の確認は worktree に触る前に済ませる（不正なら何も作らずに終わる）
+  // マニフェストと等級の確認は worktree に触る前に済ませる（不正なら何も作らずに終わる）
+  const manifest = loadManifest(rootDir);
   let model;
   try {
-    model = modelForComplexity(picked.complexity);
+    model = modelForComplexity(picked.complexity, manifest.complexityModels);
   } catch (err) {
     throw new Error(`task/${picked.dirName}/progress.md の ${err.message}`, { cause: err });
   }
@@ -265,13 +261,16 @@ export function startTask({ rootDir, exec = defaultExec }) {
   // git が失敗したときは部分状態を残さない（worktree add 自体がアトミック）
   exec('git', ['worktree', 'add', worktreePath, '-b', picked.branch, 'main'], { cwd: rootDir });
 
-  try {
-    exec('npm', ['ci'], { cwd: worktreePath });
-  } catch (err) {
-    throw new Error(
-      `npm ci が失敗しました（worktree は残してあります。再実行で再入します）: ${err.message}`,
-      { cause: err },
-    );
+  if (manifest.install !== undefined) {
+    const [command, ...args] = manifest.install.argv;
+    try {
+      exec(command, args, { cwd: worktreePath });
+    } catch (err) {
+      throw new Error(
+        `${manifest.install.argv.join(' ')} が失敗しました（worktree は残してあります。再実行で再入します）: ${err.message}`,
+        { cause: err },
+      );
+    }
   }
 
   return { ...base, created: true };

@@ -371,15 +371,15 @@ worktree を `main` から切ろうとすると、開始が毎回失敗する。
 
 | 場所 | 現在の値 |
 |---|---|
-| `.claude/settings.json` の Stop hook | `… && npm run ci 1>&2 && …` の形。検証失敗時は exit 1 |
+| `.claude/settings.json` の Stop hook | `{ npm run ci 1>&2 || exit 2; }` の形。検証失敗時は exit 2 |
 | `tools/check-actions.mjs:198,344` | 止めるときに exit 2 |
 
 **方針。** セッションを止めるのは **exit 2** だけであり、exit 1 は非ブロッキング
 （表示はされるが止まらない）。移植先では検証失敗の経路を exit 2 にする
 （記録の移植先の形: `{ <検証コマンド> 1>&2 || exit 2; }`）。hook の登録
 （`settings.json` 相当）が無ければ exit 2 を返しても何も起きないので、登録まで含めて
-1 セットとする。移植元自身にこの穴が残っている（`.claude/settings.json` の Stop hook は
-今も検証失敗時に exit 1 で終わる）。
+1 セットとする。移植元の Stop hook は既にこの形である（`.claude/settings.json` は
+`{ npm run ci 1>&2 || exit 2; }`）。
 
 出典: task/archive/0044-second-project-port/notes/port-log.md 4 節 (c)
 

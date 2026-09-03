@@ -1,9 +1,9 @@
 # Progress: `0052-loop-port-catalog-revision`
 
-- **Target Spec:** `task/0052-loop-port-catalog-revision/spec.md`
+- **Target Spec:** `task/archive/0052-loop-port-catalog-revision/spec.md`
 - **Branch:** `feat/0052-loop-port-catalog-revision`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/84`
-- **Status:** `In Progress` (Phase: `Copilot Changes recommended — progress meta only; skill body clear`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -17,7 +17,7 @@
 - [x] spec「例」の grep・`git diff` をすべて実行し、出力を会話に貼る（削除行 0・変更ファイル 2 件を含む）
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得（spec「仕様」の節ごとの必須命題と本文の 1 対 1 照合を依頼する。差分・spec・「例」の実測出力だけを渡す）
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

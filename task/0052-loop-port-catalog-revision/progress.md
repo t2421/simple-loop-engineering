@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0052-loop-port-catalog-revision/spec.md`
 - **Branch:** `feat/0052-loop-port-catalog-revision`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/84`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)` — `codex review` 401)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -24,3 +24,4 @@
 - `--:--` - spec・progress を起草（`spec-author`）。Complexity は `M`: 変更ファイルは 1 つだが、記録 5 節の申し送り 4 件と未記録の 5 件目を既存カタログの書式へ書き換える判断を含み、定型作業ではない。凍結対象には触れないので `allow-protected-change` は不要。移植元の Stop hook（`.claude/settings.json`）が今も検証失敗時に exit 1 を返すことを実測し、spec「背景」に現在の値として記録した（修正は範囲外）。
 - `11:18` - Plan。`node tools/start-task.mjs` で worktree `.worktrees/feat/0052-loop-port-catalog-revision` を main から切った。記録 2.6 (a)(c)・2.7「新規項目」・4 節 (c)・5 節と spec「背景」の 5 件目を読んで照合した。SKILL.md に 2.14〜2.18 と 4 章アンチパターン 1 項目を追加のみで足した（既存行は削除していない）。
 - `11:19` - Verify (自己)。spec「例」の grep / `git diff` はすべて期待どおり。`npm run ci` は lint・lint:docs 緑、`# tests 490` `# pass 490` `# fail 0`。PR: https://github.com/t2421/simple-loop-engineering/pull/84
+- `11:21` - Verify (外部) 1 回目。`codex-reviewer` が spec 命題と本文の 1 対 1 照合を実施し、2.14〜2.18・4 章・完了条件 1–9 は欠落ゼロ、Critical 0 / High 0 と報告。ただし `codex` バイナリは無く、`npx @openai/codex review --base main` は `401 Unauthorized`（Missing bearer or basic authentication）。エージェント定義どおり **承認しない**。Status を `Blocked` にし、人間の Codex ログインまたは照合結果の扱い判断を待つ。実装差分は直していない。GitHub Actions（実装コミット `4b93619`）: verify / protected-paths / progress-coupling / e2e / preview はすべて `success`。

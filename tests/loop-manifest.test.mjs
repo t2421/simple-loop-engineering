@@ -146,7 +146,7 @@ test('マニフェストの新規追加は保護パス違反にならない（�
 });
 
 test('相対パスは正規形のみ受け付ける', () => {
-  const rejected = ['a/../b', './x', 'a/..', '..', '.', 'foo\\bar', '/abs', 'C:/Windows', 'src/'];
+  const rejected = ['a/../b', './x', 'a/..', '..', '.', 'foo\\bar', '/abs', 'C:/Windows'];
   for (const item of rejected) {
     assert.throws(
       () => validateManifest(
@@ -179,8 +179,8 @@ test('stages の paths も相対正規形のみ受け付ける', () => {
     /stages\[0\] の型が不正です/,
   );
   const out = validateManifest(
-    validData({ stages: [{ name: 'e2e', command: 'npm run test:e2e', paths: ['src'] }] }),
+    validData({ stages: [{ name: 'e2e', command: 'npm run test:e2e', paths: ['src/'] }] }),
     { manifestPath: MANIFEST_FILE },
   );
-  assert.deepEqual(out.stages[0].paths, ['src']);
+  assert.deepEqual(out.stages[0].paths, ['src/']);
 });

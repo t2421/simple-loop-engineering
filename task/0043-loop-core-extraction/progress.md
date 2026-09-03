@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0043-loop-core-extraction/spec.md`
 - **Branch:** `feat/0043-loop-core-extraction`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/87
 - **Status:** `In Progress` (Phase: `Implement`)
 - **Complexity:** `L`
 
@@ -19,7 +19,7 @@
 - [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 9）
 - [x] Core とエージェント定義・Skill のバージョン不整合の検知手段の決定（→ 完了条件 10）
 - [ ] レビュー（GitHub Copilot。親が PR 作成後に依頼する）
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -91,3 +91,5 @@ $ PR_LABELS='["allow-protected-change"]' node loop-core/bin/loop.mjs check-prote
 ラベル allow-protected-change があるため通過させます（人間による明示承認）。
 exit:0
 ```
+
+- `20:26` - PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/87 。ラベル `allow-protected-change` を付けた。Status は In Progress のまま。アーカイブしない。

@@ -14,6 +14,7 @@
 ## 背景
 
 この項目は backlog。着手しない。progress は作らない。完了条件は未確定。
+実測: 2026-08-23 — `tools/setup-playwright.mjs` は今も `npx playwright install chromium` を無条件に実行し、影響範囲は `pretest:e2e` を走らせる経路（`npm run test:e2e` と `npm test`）で、`npm run ci` は e2e を呼ばない。据え置き理由は e2e を回す Cloud 環境の `PLAYWRIGHT_BROWSERS_PATH`（read-only か・中身が揃っているか）の実測待ちで、対象環境をまだ測れていない。
 
 `scripts-freeze-procedure`（PR #16）で、テスト内にあった Chromium の自己インストール分岐を `tools/setup-playwright.mjs` へ移した。当初は `chromium.executablePath()` の存在で導入済みを判定していたが、それが指すのはフル Chromium で、`chromium.launch()` が実際に使うのは `chromium_headless_shell` である。shell だけ欠けた部分キャッシュを「導入済み」と誤判定して素通りする穴があったため、自前判定をやめて `npx playwright install chromium` を無条件に実行する形にした。
 

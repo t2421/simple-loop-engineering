@@ -35,6 +35,16 @@ function makeLayout(dirs) {
       fs.writeFileSync(path.join(root, dir, 'progress.md'), progress);
     }
   }
+  fs.writeFileSync(
+    path.join(root, 'loop.manifest.json'),
+    `${JSON.stringify({
+      install: { argv: ['npm', 'ci'] },
+      verify: { command: 'npm run ci', definedIn: ['package.json'] },
+      protectedPaths: ['loop.manifest.json'],
+      complexityModels: { S: 'haiku', M: 'sonnet', L: 'fable' },
+    }, null, 2)}\n`,
+  );
+  fs.writeFileSync(path.join(root, 'package.json'), '{"scripts":{"ci":"true"}}\n');
   return root;
 }
 

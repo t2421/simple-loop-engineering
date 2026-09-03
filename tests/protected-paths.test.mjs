@@ -4,10 +4,11 @@ import {
   parseNameStatus,
   findViolations,
   hasAllowLabel,
+  verifyDefinitionSignature,
 } from '../tools/check-protected-paths.mjs';
 
 /** 差分もラベルも無い、素の入力 */
-const empty = { changes: [], baseScripts: {}, headScripts: {} };
+const empty = { changes: [] };
 
 test('parseNameStatus: 追加・変更・削除を読む', () => {
   const out = parseNameStatus('A\0src/new.mjs\0M\0src/math.mjs\0D\0src/old.mjs\0');
@@ -38,21 +39,21 @@ test('既存 tests/ の期待値を変更した差分は違反になる', () => 
   assert.equal(v[0].path, 'tests/add.test.mjs');
 });
 
-test('package.json の scripts を変更した差分は違反になる', () => {
+test('検証コマンドの定義（definedIn）が変わった差分は違反になる', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test', ci: 'npm test' },
-    headScripts: { test: 'node --test', ci: 'echo ok' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': true },
   });
   assert.equal(v.length, 1);
   assert.equal(v[0].path, 'package.json');
 });
 
-test('package.json の scripts 以外だけの変更は違反にならない', () => {
+test('definedIn ファイルでも定義シグネチャが同じなら違反にならない', () => {
   const v = findViolations({
     changes: [{ status: 'M', path: 'package.json' }],
-    baseScripts: { test: 'node --test' },
-    headScripts: { test: 'node --test' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': false },
   });
   assert.deepEqual(v, []);
 });
@@ -155,8 +156,8 @@ test('複数の違反をすべて報告する', () => {
       { status: 'M', path: 'package.json' },
       { status: 'A', path: 'src/new.mjs' },
     ],
-    baseScripts: { ci: 'npm test' },
-    headScripts: { ci: 'true' },
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': true },
   });
   assert.equal(v.length, 3);
 });
@@ -666,3 +667,50 @@ for (const c of INBOUND_CASES) {
     });
   }
 }
+
+test('loop.manifest.json の内容変更は違反になる', () => {
+  const v = findViolations({ ...empty, changes: [{ status: 'M', path: 'loop.manifest.json' }] });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, 'loop.manifest.json');
+});
+
+test('loop.manifest.json の削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'loop.manifest.json' }],
+  });
+  assert.equal(deleted.length, 1);
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'other.json',
+        oldPath: 'loop.manifest.json',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(renamed.length, 1);
+});
+
+test('loop.manifest.json の新規追加は違反にならない（導入 PR）', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'A', path: 'loop.manifest.json' }],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('verifyDefinitionSignature: JSON の scripts だけを見る', () => {
+  const base = '{"name":"a","scripts":{"ci":"true"}}';
+  const sameScripts = '{"name":"b","scripts":{"ci":"true"}}';
+  const changedScripts = '{"name":"a","scripts":{"ci":"false"}}';
+  assert.equal(verifyDefinitionSignature(base), verifyDefinitionSignature(sameScripts));
+  assert.notEqual(verifyDefinitionSignature(base), verifyDefinitionSignature(changedScripts));
+});
+
+test('verifyDefinitionSignature: JSON でなければ内容の同一性', () => {
+  assert.equal(verifyDefinitionSignature('ci:\n  script: test\n'), 'ci:\n  script: test\n');
+  assert.notEqual(verifyDefinitionSignature('a'), 'b');
+});

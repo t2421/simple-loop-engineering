@@ -27,6 +27,9 @@ import { pathToFileURL } from 'node:url';
 /** 人間による明示承認の経路。この PR ラベルが付いていればガードを通過させる */
 export const ALLOW_LABEL = 'allow-protected-change';
 
+/** ループの固有値を宣言するマニフェスト。ツールが固有値を探す場所の契約 */
+const MANIFEST = 'loop.manifest.json';
+
 /** 見出し・順番を固定した型。移動しても中身を変えてもいけない */
 const TEMPLATES = [
   'task/TEMPLATE-spec.md',
@@ -67,6 +70,8 @@ const GATE_HELPERS = [
   // プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。
   // 骨抜きにすれば worktree の規律が消え、実装が進捗の記録なしに main へ入る
   'tools/guard-worktree.mjs',
+  // マニフェストの読み取り・検証。既定値で補う・自己保護を外す改変を止める
+  'tools/loop-manifest.mjs',
   // **hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を
   // 消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく
   // 呼び出しの所在も守る（検証コマンドの definedIn と同じ構造）。
@@ -76,6 +81,17 @@ const GATE_HELPERS = [
 
 function isGateHelper(filePath) {
   return GATE_HELPERS.includes(filePath);
+}
+
+/**
+ * マニフェスト由来の単一ファイル保護（マニフェスト自身を含む）。
+ *
+ * @param {string} filePath
+ * @param {string[]} extraProtectedPaths
+ * @returns {boolean}
+ */
+function isManifestProtected(filePath, extraProtectedPaths) {
+  return filePath === MANIFEST || extraProtectedPaths.includes(filePath);
 }
 
 /**
@@ -176,12 +192,16 @@ function covers(dir, p) {
  * 何らかの保護（単一ファイル・型・保護ディレクトリ）の対象かを判定する純関数。
  *
  * @param {string} p
+ * @param {string[]} [extraProtectedPaths]
+ * @param {string[]} [definedInPaths]
  * @returns {boolean}
  */
-function isProtectedPath(p) {
+function isProtectedPath(p, extraProtectedPaths = [], definedInPaths = []) {
   return (
     p === CHECKER
     || isGateHelper(p)
+    || isManifestProtected(p, extraProtectedPaths)
+    || definedInPaths.includes(p)
     || TEMPLATES.includes(p)
     || APPEND_ONLY_DIRS.some((d) => covers(d, p))
   );
@@ -290,11 +310,40 @@ export function decompose(changes) {
 }
 
 /**
- * `package.json` の `scripts` が変わったかを判定する純関数。
+ * 検証コマンド定義の比較用シグネチャ。
+ *
+ * JSON で `scripts` オブジェクトを持つファイルは、そのオブジェクトだけを見る
+ * （依存の増減で検証が弱まるわけではない）。それ以外の形式は内容の同一性。
+ * 形式名は問わない。JSON パースを前提にしない。
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+export function verifyDefinitionSignature(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed !== null
+      && typeof parsed === 'object'
+      && !Array.isArray(parsed)
+      && parsed.scripts !== null
+      && typeof parsed.scripts === 'object'
+      && !Array.isArray(parsed.scripts)
+    ) {
+      return JSON.stringify(parsed.scripts);
+    }
+  } catch {
+    // 形式非依存。JSON でなければ内容そのもの
+  }
+  return raw;
+}
+
+/**
+ * 2 つの scripts オブジェクトが変わったかを判定する純関数。
  * キーの増減と値の変更の両方を見る。
  *
- * @param {Record<string, string>} baseScripts - base 側の scripts
- * @param {Record<string, string>} headScripts - head 側の scripts
+ * @param {Record<string, string>} baseScripts
+ * @param {Record<string, string>} headScripts
  * @returns {boolean} 変わっていれば true
  */
 export function scriptsChanged(baseScripts, headScripts) {
@@ -312,13 +361,20 @@ export function scriptsChanged(baseScripts, headScripts) {
  *
  * @param {object} input
  * @param {Array<{status: string, path: string, oldPath?: string, similarity?: number}>} input.changes
- * @param {Record<string, string>} [input.baseScripts] - base 側の package.json の scripts
- * @param {Record<string, string>} [input.headScripts] - head 側の package.json の scripts
+ * @param {string[]} [input.definedInPaths] - マニフェスト `verify.definedIn` のパス
+ * @param {Record<string, boolean>} [input.definedInChanged] - 定義シグネチャが変わったか
+ * @param {string[]} [input.extraProtectedPaths] - マニフェスト `protectedPaths`（自身を含む）
  * @param {Set<string>} [input.baseArchivedIds] - base の `archive/` にある作業の ID。
  *   **`main()` は必ず渡すこと。** 渡さないと PR をまたぐ ID 再利用を検知できない
  * @returns {Array<{path: string, reason: string}>} 違反の一覧。空なら通過
  */
-export function findViolations({ changes, baseScripts, headScripts, baseArchivedIds = new Set() }) {
+export function findViolations({
+  changes,
+  definedInPaths = [],
+  definedInChanged = {},
+  extraProtectedPaths = [],
+  baseArchivedIds = new Set(),
+}) {
   const events = decompose(changes);
   const violations = [];
 
@@ -340,7 +396,7 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
 
     // リネームの片割れの二重判定を避ける。移動元が保護対象なら removed 側の
     // 規則がそのリネームを代表する（免除するのも違反にするのも removed 側）
-    if (kind === 'appeared' && from !== undefined && isProtectedPath(from)) continue;
+    if (kind === 'appeared' && from !== undefined && isProtectedPath(from, extraProtectedPaths, definedInPaths)) continue;
 
     // --- 単一ファイルの規則 ---
 
@@ -358,15 +414,26 @@ export function findViolations({ changes, baseScripts, headScripts, baseArchived
       continue;
     }
 
+    if (isManifestProtected(path, extraProtectedPaths)) {
+      if (kind === 'appeared' && from === undefined) continue;
+      violations.push({ path: render(e), reason: 'ループマニフェストは変更も移動もできない' });
+      continue;
+    }
+
     if (TEMPLATES.includes(path)) {
       violations.push({ path: render(e), reason: '型（TEMPLATE）は変更も移動もできない' });
       continue;
     }
 
-    if (path === 'package.json') {
-      if (scriptsChanged(baseScripts, headScripts)) {
-        violations.push({ path: 'package.json', reason: '検証コマンド（scripts）が変わっている' });
+    if (definedInPaths.includes(path)) {
+      if (kind === 'appeared' && from === undefined) continue;
+      if (kind === 'modified') {
+        if (definedInChanged[path]) {
+          violations.push({ path, reason: '検証コマンドの定義が変わっている' });
+        }
+        continue;
       }
+      violations.push({ path: render(e), reason: '検証コマンドの定義ファイルは削除も移動もできない' });
       continue;
     }
 
@@ -470,14 +537,76 @@ function readLabels() {
 }
 
 /**
- * 指定した ref の package.json の scripts を読む。ref が読めなければ例外を投げる。
+ * 指定した ref のファイル内容を読む。無ければ null。
  *
- * @param {string} ref - `git show` に渡す ref
- * @returns {Record<string, string>}
+ * @param {string} ref
+ * @param {string} filePath
+ * @returns {string | null}
  */
-function readScripts(ref) {
-  const raw = execFileSync('git', ['show', `${ref}:package.json`], { encoding: 'utf8' });
-  return JSON.parse(raw).scripts ?? {};
+function tryGitShow(ref, filePath) {
+  try {
+    return execFileSync('git', ['show', `${ref}:${filePath}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * HEAD のマニフェストから definedIn と protectedPaths を読む。
+ * 無い・壊れているときは例外（既定値で補わない）。
+ *
+ * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] }}
+ */
+function readHeadManifestFields() {
+  const raw = tryGitShow('HEAD', MANIFEST);
+  if (raw === null) {
+    throw new Error(`マニフェストが無い: ${MANIFEST}`);
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${MANIFEST}: JSON として読めない: ${err.message}`, { cause: err });
+  }
+  let definedIn = data?.verify?.definedIn;
+  if (typeof definedIn === 'string') definedIn = [definedIn];
+  if (!Array.isArray(definedIn) || definedIn.length === 0) {
+    throw new Error(`${MANIFEST}: 必須項目 verify.definedIn がありません`);
+  }
+  const extraProtectedPaths = Array.isArray(data?.protectedPaths) ? data.protectedPaths : [];
+  if (!extraProtectedPaths.includes(MANIFEST)) {
+    throw new Error(`${MANIFEST}: マニフェストが保護パス一覧に自分自身を含んでいない`);
+  }
+  return { definedInPaths: definedIn, extraProtectedPaths };
+}
+
+/**
+ * definedIn 各ファイルの検証定義シグネチャが base と HEAD で違うか。
+ *
+ * @param {string} mergeBase
+ * @param {string[]} definedInPaths
+ * @returns {Record<string, boolean>}
+ */
+function buildDefinedInChanged(mergeBase, definedInPaths) {
+  /** @type {Record<string, boolean>} */
+  const definedInChanged = {};
+  for (const filePath of definedInPaths) {
+    const headRaw = tryGitShow('HEAD', filePath);
+    if (headRaw === null) {
+      throw new Error(`verify.definedIn が指すファイルが存在しない: ${filePath}`);
+    }
+    const baseRaw = tryGitShow(mergeBase, filePath);
+    if (baseRaw === null) {
+      definedInChanged[filePath] = true;
+      continue;
+    }
+    definedInChanged[filePath] =
+      verifyDefinitionSignature(baseRaw) !== verifyDefinitionSignature(headRaw);
+  }
+  return definedInChanged;
 }
 
 /**
@@ -521,14 +650,15 @@ function main() {
   }
 
   let changes;
-  let baseScripts;
-  let headScripts;
+  let definedInPaths;
+  let definedInChanged;
+  let extraProtectedPaths;
   let baseArchivedIds;
   let raw;
   let mergeBase;
   try {
     // 差分は base...HEAD（三点）なので、比較対象も分岐点（merge-base）に揃える。
-    // base の先端を見ると、分岐後に main 側で scripts が変わった場合に誤検知する。
+    // base の先端を見ると、分岐後に main 側で定義が変わった場合に誤検知する。
     mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
       encoding: 'utf8',
     }).trim();
@@ -546,8 +676,8 @@ function main() {
 
   try {
     changes = parseNameStatus(raw);
-    baseScripts = readScripts(mergeBase);
-    headScripts = readScripts('HEAD');
+    ({ definedInPaths, extraProtectedPaths } = readHeadManifestFields());
+    definedInChanged = buildDefinedInChanged(mergeBase, definedInPaths);
     // これを渡さないと PR をまたぐ ID 再利用を取り逃がす
     baseArchivedIds = readBaseArchivedIds(mergeBase);
   } catch (err) {
@@ -556,7 +686,13 @@ function main() {
     process.exit(1);
   }
 
-  const violations = findViolations({ changes, baseScripts, headScripts, baseArchivedIds });
+  const violations = findViolations({
+    changes,
+    definedInPaths,
+    definedInChanged,
+    extraProtectedPaths,
+    baseArchivedIds,
+  });
 
   if (violations.length === 0) {
     console.log(`保護パスの変更はありません（${changes.length} 件の差分を確認）。`);

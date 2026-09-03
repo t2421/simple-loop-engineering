@@ -34,6 +34,13 @@ function makeRepoWithoutArchive(t) {
   git(dir, 'config', 'user.email', 'test@example.test');
   git(dir, 'config', 'user.name', 'test');
   fs.writeFileSync(path.join(dir, 'package.json'), '{"scripts":{"ci":"echo ci"}}\n');
+  fs.writeFileSync(
+    path.join(dir, 'loop.manifest.json'),
+    `${JSON.stringify({
+      verify: { command: 'echo ci', definedIn: ['package.json'] },
+      protectedPaths: ['loop.manifest.json'],
+    })}\n`,
+  );
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'base');
   git(dir, 'branch', '-M', 'main');

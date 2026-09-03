@@ -31,7 +31,7 @@ const SETTINGS = path.join(rootDir, '.claude', 'settings.json');
 /** hook の配線そのもの。判定コードを守っても、ここを落とせばガードは呼ばれない */
 const WIRING = '.claude/settings.json';
 
-const empty = { changes: [], baseScripts: {}, headScripts: {} };
+const empty = { changes: [] };
 
 /**
  * `.claude/settings.json` を読む純関数。

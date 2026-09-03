@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findViolations } from '../tools/check-protected-paths.mjs';
 
-const empty = { changes: [], baseScripts: {}, headScripts: {} };
+const empty = { changes: [] };
 
 test('tools/run-unit-tests.mjs の内容変更は違反になる', () => {
   const v = findViolations({
@@ -142,6 +142,7 @@ test('検証の委譲先の新規追加は違反にならない（導入 PR）',
       { status: 'A', path: 'tools/check-progress-coupling.mjs' },
       { status: 'A', path: 'tools/stop-hook-ci-dir.mjs' },
       { status: 'A', path: 'tools/check-actions.mjs' },
+      { status: 'A', path: 'tools/loop-manifest.mjs' },
     ],
   });
   assert.deepEqual(v, []);
@@ -257,4 +258,34 @@ test('.claude/agents/ と .claude/skills/ は保護しない（配線ではな�
     const v = findViolations({ ...empty, changes: [{ status: 'M', path }] });
     assert.deepEqual(v, [], path);
   }
+});
+
+test('tools/loop-manifest.mjs の内容変更は違反になる', () => {
+  const v = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'tools/loop-manifest.mjs' }],
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, 'tools/loop-manifest.mjs');
+});
+
+test('tools/loop-manifest.mjs の削除・リネームも違反になる', () => {
+  const deleted = findViolations({
+    ...empty,
+    changes: [{ status: 'D', path: 'tools/loop-manifest.mjs' }],
+  });
+  assert.equal(deleted.length, 1);
+
+  const renamed = findViolations({
+    ...empty,
+    changes: [
+      {
+        status: 'R',
+        path: 'tools/x.mjs',
+        oldPath: 'tools/loop-manifest.mjs',
+        similarity: 100,
+      },
+    ],
+  });
+  assert.equal(renamed.length, 1);
 });

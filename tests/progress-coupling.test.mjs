@@ -1386,7 +1386,7 @@ test('CLI: GITHUB_ACTIONS で head ブランチ名が空なら fail-closed', (t)
 
 // --- ガードによる自己保護（`.claude/skills/add-protected-path` の手順 4） ---
 
-const noScripts = { changes: [], baseScripts: {}, headScripts: {} };
+const noScripts = { changes: [] };
 
 test('ガードは tools/check-progress-coupling.mjs の変更を違反として検知する', () => {
   const changed = findViolations({

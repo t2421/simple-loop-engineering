@@ -1,0 +1,38 @@
+{
+  "install": {
+    "argv": ["npm", "ci"]
+  },
+  "verify": {
+    "command": "npm run ci",
+    "definedIn": [
+      "package.json",
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "stages": [
+    {
+      "name": "e2e",
+      "command": "npm run test:e2e",
+      "paths": [
+        "src/",
+        "tests/calc-page.test.mjs",
+        "tests/calc-vec-add.e2e.mjs",
+        "tools/setup-playwright.mjs",
+        "package.json",
+        "package-lock.json"
+      ]
+    }
+  ],
+  "protectedPaths": [
+    "loop.manifest.json"
+  ],
+  "complexityModels": {
+    "S": "haiku",
+    "M": "sonnet",
+    "L": "fable"
+  },
+  "reviewers": {
+    "code": "codex-reviewer",
+    "visual": "visual-design-reviewer"
+  }
+}

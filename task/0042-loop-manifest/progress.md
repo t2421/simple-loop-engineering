@@ -16,7 +16,7 @@
 - [x] テストの作成 (`tests/loop-manifest.test.mjs`。「失敗時」の 5 ケースを覆う)
 - [x] 実装（マニフェストの読み取り・検証。固有値を参照する `tools/*.mjs` の置き換え）
 - [x] マニフェスト自身を保護パスへ追加 (`.claude/skills/add-protected-path` に従う)
-- [ ] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 8）
+- [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 8）
 - [ ] レビュー（GitHub Copilot。進捗のレビュアー名を `codex-reviewer` から差し替え。親が PR 作成後に依頼する）
 - [ ] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
@@ -56,3 +56,58 @@ $ grep -rn "'npm'" tools/
 $ grep -rn "package.json" tools/check-protected-paths.mjs
 (0 hits)
 ```
+
+- `12:08` - 凍結改訂の確認（この PR 対 `origin/main`）。base 版チェッカー（GitHub が実行する経路）:
+
+```
+$ git show origin/main:tools/check-protected-paths.mjs > /tmp/check-protected-paths-base.mjs
+$ node /tmp/check-protected-paths-base.mjs origin/main
+保護パスの変更を 9 件検知しました:
+  - tests/gate-helpers.test.mjs: 既存のテストの内容が変わっている
+  - tests/guard-stderr.test.mjs: 既存のテストの内容が変わっている
+  - tests/hook-wiring.test.mjs: 既存のテストの内容が変わっている
+  - tests/progress-coupling.test.mjs: 既存のテストの内容が変わっている
+  - tests/protected-paths.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task-claim.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task.test.mjs: 既存のテストの内容が変わっている
+  - tests/stop-hook-ci-dir.test.mjs: 既存のテストの内容が変わっている
+  - tools/check-protected-paths.mjs: ガードの判定ロジック自体は変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+exit=1
+
+$ PR_LABELS='["allow-protected-change"]' node /tmp/check-protected-paths-base.mjs origin/main
+保護パスの変更を 9 件検知しました:
+  - tests/gate-helpers.test.mjs: 既存のテストの内容が変わっている
+  - tests/guard-stderr.test.mjs: 既存のテストの内容が変わっている
+  - tests/hook-wiring.test.mjs: 既存のテストの内容が変わっている
+  - tests/progress-coupling.test.mjs: 既存のテストの内容が変わっている
+  - tests/protected-paths.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task-claim.test.mjs: 既存のテストの内容が変わっている
+  - tests/start-task.test.mjs: 既存のテストの内容が変わっている
+  - tests/stop-hook-ci-dir.test.mjs: 既存のテストの内容が変わっている
+  - tools/check-protected-paths.mjs: ガードの判定ロジック自体は変更も移動もできない
+
+ラベル allow-protected-change があるため通過させます（人間による明示承認）。
+exit=0
+```
+
+- `12:08` - 完了条件 8（マニフェストを 1 行変える。base はマニフェスト導入後の `f627794`。一時コミットで測り、`git reset --hard` で捨てた）:
+
+```
+$ node tools/check-protected-paths.mjs f627794
+保護パスの変更を 1 件検知しました:
+  - loop.manifest.json: ループマニフェストは変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+exit=1
+
+$ PR_LABELS='["allow-protected-change"]' node tools/check-protected-paths.mjs f627794
+保護パスの変更を 1 件検知しました:
+  - loop.manifest.json: ループマニフェストは変更も移動もできない
+
+ラベル allow-protected-change があるため通過させます（人間による明示承認）。
+exit=0
+```
+
+導入 PR 自身に対する base 版チェッカーは `loop.manifest.json` の新規追加をまだ保護しない（add-protected-path: 効き始めるのはマージ後）。1 行変更の検知は HEAD チェッカーで測った。

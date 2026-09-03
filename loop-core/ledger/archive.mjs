@@ -1,7 +1,7 @@
 /**
  * PR マージ後のアーカイブ（Status 更新・ファイル移動・パス書き換え）を 1 コマンドで行う。
  *
- * 使い方: node tools/archive.mjs <id>-<slug>
+ * 使い方: node loop-core/bin/loop.mjs archive <id>-<slug>
  *
  * 条件を満たさないときはファイルを一切変更せず、終了コード非 0 で理由を表示する。
  * 移動ロジックは PR 確認部と分離してあり、`checkPr` を注入すればテストできる。

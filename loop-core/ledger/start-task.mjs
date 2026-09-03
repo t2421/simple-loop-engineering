@@ -10,9 +10,9 @@
  * 対応表はマニフェストの `complexityModels`。
  *
  * 使い方:
- *   node tools/start-task.mjs            次の作業を選び、worktree を用意する
- *   node tools/start-task.mjs --next-id  新規作業に使う次の ID を出す
- *   node tools/start-task.mjs --claim <slug> [--in <task|backlog>]
+ *   node loop-core/bin/loop.mjs start-task            次の作業を選び、worktree を用意する
+ *   node loop-core/bin/loop.mjs start-task --next-id  新規作業に使う次の ID を出す
+ *   node loop-core/bin/loop.mjs start-task --claim <slug> [--in <task|backlog>]
  *                                        次の ID を採り、その場でディレクトリを作って確保する
  */
 

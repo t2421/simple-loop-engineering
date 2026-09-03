@@ -24,7 +24,7 @@
  * フォールバックするときは理由を stderr に 1 行出す。対象がすり替わったことに
  * 気づけないのが、いちばん悪い失敗の仕方である。
  *
- * 手動実行: `echo '{"cwd":"/path/to/checkout"}' | node tools/stop-hook-ci-dir.mjs`
+ * 手動実行: `echo '{"cwd":"/path/to/checkout"}' | node loop-core/bin/loop.mjs stop-hook-ci-dir`
  */
 
 import fs from 'node:fs';

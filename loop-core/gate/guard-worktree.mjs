@@ -25,7 +25,7 @@
  * ただし**黙って**無効化はしない。想定外で素通りしたときは理由を stderr に 1 行出す。
  * ガードが効いていないことに気づけないのが、いちばん悪い失敗の仕方である。
  *
- * 手動実行: `echo '{"tool_input":{"file_path":"..."}}' | node tools/guard-worktree.mjs`
+ * 手動実行: `echo '{"tool_input":{"file_path":"..."}}' | node loop-core/bin/loop.mjs guard-worktree`
  */
 
 import fs from 'node:fs';

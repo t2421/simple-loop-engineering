@@ -29,7 +29,11 @@ export function listUnitTestFiles(testsDir) {
 }
 
 function listOptionalUnitTestFiles(testsDir) {
-  if (!fs.existsSync(testsDir)) return [];
+  try {
+    if (!fs.statSync(testsDir).isDirectory()) return [];
+  } catch {
+    return [];
+  }
   return listUnitTestFiles(testsDir);
 }
 

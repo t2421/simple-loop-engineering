@@ -43,8 +43,8 @@
  *   を含むならリマインドを出して終了コード 2（PostToolUse では停止ではなく、
  *   stderr がセッションへ戻る）。含まなければ何も出さず 0
  *
- * 手動実行: `node tools/check-actions.mjs`
- *           `echo '{"tool_input":{"command":"git push"}}' | node tools/check-actions.mjs --on-bash-post`
+ * 手動実行: `node loop-core/bin/loop.mjs check-actions`
+ *           `echo '{"tool_input":{"command":"git push"}}' | node loop-core/bin/loop.mjs check-actions --on-bash-post`
  */
 
 import fs from 'node:fs';

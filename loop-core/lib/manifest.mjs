@@ -4,7 +4,7 @@
  * プラグイン実行機構ではない。名前・コマンド・パスの宣言だけを扱う。
  * 既定値では補わない。欠けていればパスと理由を出して失敗する。
  *
- * CLI: `node tools/loop-manifest.mjs [ルート]` で検証し、正規化済み JSON を出す。
+ * CLI: `node loop-core/bin/loop.mjs` 経由ではなく、読取は `lib/manifest.mjs` を import する。検証は消費リポジトリのマニフェスト契約（0042）。
  */
 
 import fs from 'node:fs';

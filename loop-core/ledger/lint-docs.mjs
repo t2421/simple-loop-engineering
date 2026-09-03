@@ -1,7 +1,7 @@
 /**
  * spec / progress / backlog がテンプレートに準拠しているかを機械検証する。
  *
- * CLI としては `node tools/lint-docs.mjs [ルート]`（`npm run lint:docs`）で実行する。
+ * CLI としては `node loop-core/bin/loop.mjs lint-docs [ルート]`（`npm run lint:docs`）で実行する。
  * 違反があればパスと理由をすべて列挙し、終了コード 1 で終わる。違反なしなら 0。
  *
  * ## 構造: 読み取りと判定を分ける

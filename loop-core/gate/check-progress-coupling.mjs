@@ -38,7 +38,7 @@
  * （自己申告の照合になる。`makeBranchOf()` の注記を見よ）。
  *
  * 判定ロジックは純関数として公開し、差分リストとラベルを注入してテストできる。
- * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
+ * CLI としては `node loop-core/bin/loop.mjs check-progress-coupling <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
  *
  * GitHub Actions は BASE の loop-core/ 一式を展開してから CLI 経由で実行する。

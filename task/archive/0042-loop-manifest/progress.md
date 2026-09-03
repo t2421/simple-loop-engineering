@@ -1,9 +1,9 @@
 # Progress: `0042-loop-manifest`
 
-- **Target Spec:** `task/0042-loop-manifest/spec.md`
+- **Target Spec:** `task/archive/0042-loop-manifest/spec.md`
 - **Branch:** `feat/0042-loop-manifest`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/85`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -19,7 +19,7 @@
 - [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 8）
 - [ ] レビュー（GitHub Copilot。進捗のレビュアー名を `codex-reviewer` から差し替え。親が PR 作成後に依頼する）
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

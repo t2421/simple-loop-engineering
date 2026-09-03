@@ -123,3 +123,5 @@ ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
 # todo 0
 # duration_ms 52.413915
 ```
+
+- `22:19` - GitHub Actions on `fd92246`（PR #92）: verify / e2e / protected-paths / progress-coupling / preview はすべて `success`。Status は `In Progress` のまま。Done / アーカイブはしない。

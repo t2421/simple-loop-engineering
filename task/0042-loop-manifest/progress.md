@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0042-loop-manifest/spec.md`
 - **Branch:** `feat/0042-loop-manifest`
-- **PR:** `未作成`
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/85`
 - **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `L`
 
@@ -18,7 +18,7 @@
 - [x] マニフェスト自身を保護パスへ追加 (`.claude/skills/add-protected-path` に従う)
 - [x] ラベル無し / ラベル付きの `protected-paths` 実行結果を進捗に貼る（→ 完了条件 8）
 - [ ] レビュー（GitHub Copilot。進捗のレビュアー名を `codex-reviewer` から差し替え。親が PR 作成後に依頼する）
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -125,3 +125,4 @@ exit=0
 ```
 
 - `12:09` - 閉じて未マージの PR #76（同じブランチ名、レビュー往復 5 回上限で Blocked）は、0044 申し送りをマニフェスト項目にほぼ全部載せた結果レビューが収束しなかった。本実装は想定項目表に対する採用 / 不採用を試行ログに置き、構造付きの台帳・実装パスは項目にしない。#76 から残す知見は 1 つ: ガードはマニフェストを **base と HEAD の和集合**で読む。HEAD だけだと、同じ PR で `definedIn` から定義ファイルを外して検証を空にできる。
+- `12:10` - PR https://github.com/t2421/simple-loop-engineering/pull/85 を作成。`allow-protected-change` ラベルを付けた。外部レビューは GitHub Copilot（親が依頼）。Status は In Progress。アーカイブしない。

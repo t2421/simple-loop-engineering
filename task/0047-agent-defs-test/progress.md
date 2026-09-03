@@ -20,3 +20,4 @@
 ## 試行ログ・エラー履歴
 
 - `21:03` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0047-agent-defs-test`）。完了条件 5〜9・失敗時・例を確定し、Complexity を `S` にした。**この PR は昇格（docs）だけ。実装はしない。** 実装 PR の予約ブランチは `feat/0047-agent-defs-test`。進捗の **PR** は実装 PR 用なので `未作成` のまま。
+- `21:04` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/88 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。

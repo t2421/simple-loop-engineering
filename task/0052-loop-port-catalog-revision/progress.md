@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0052-loop-port-catalog-revision/spec.md`
 - **Branch:** `feat/0052-loop-port-catalog-revision`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/84`
-- **Status:** `In Progress` (Phase: `Copilot review awaited`)
+- **Status:** `In Progress` (Phase: `Copilot Changes recommended — progress meta only; skill body clear`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -27,3 +27,4 @@
 - `11:21` - Verify (外部) 1 回目。`codex-reviewer` が spec 命題と本文の 1 対 1 照合を実施し、2.14〜2.18・4 章・完了条件 1–9 は欠落ゼロ、Critical 0 / High 0 と報告。ただし `codex` バイナリは無く、`npx @openai/codex review --base main` は `401 Unauthorized`（Missing bearer or basic authentication）。エージェント定義どおり **承認しない**。Status を `Blocked` にし、人間の Codex ログインまたは照合結果の扱い判断を待つ。実装差分は直していない。GitHub Actions（実装コミット `4b93619`）: verify / protected-paths / progress-coupling / e2e / preview はすべて `success`。
 - `11:25` - 正式レビューは `codex-reviewer` ではない。この経路では Codex が使えない（401）。GitHub Copilot code review を PR #84 に依頼済み。Status を `In Progress`（Phase: `Copilot review awaited`）に戻す。Done にしない。アーカイブしない。
 - `11:34` - Copilot review（PR #84）指摘 1 件（Critical 0）: 2.17 が「移植元 Stop hook は今も検証失敗時に exit 1」と書いていたが、現行 `.claude/settings.json` は `{ npm run ci 1>&2 || exit 2; }`。2.17 の「現在の値」と方針末尾だけを現行に合わせて直した。SKILL の他節・tools / CLAUDE.md / settings.json / archive/0044 は触っていない。Status は `In Progress` のまま。
+- `11:47` - Copilot 再レビュー（PR #84、2.17 修正後の HEAD）: Changes recommended。Critical 0。前回の 2.17 指摘は outdated / 解消済み。残 nit は Status/Phase と試行ログのずれ（discussion r3924110617）。このコミットでメタだけ合わせる。正式レビュー経路は Copilot であり `codex-reviewer` ではない。Done にしない。アーカイブしない。SKILL.md は触らない。

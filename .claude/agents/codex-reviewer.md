@@ -14,7 +14,16 @@ description: このリポジトリのコードレビュー役。Verify (外部) 
 codex review --base main
 ```
 
-`--base` と `--uncommitted` は同時に使えない。`--base main` はコミット済み（vs main）を読む。未コミットがあるときは、そのあと未コミット分も読む（`git status` / `git diff`、必要なら補足として `codex review --uncommitted`）。**未コミットだけを見て実装を飛ばしてはいけない。**
+`--base` と `--uncommitted` は同時に使えない。`--base main` はコミット済み（vs main）を読む。
+
+未コミット（staged / unstaged）があるときは、`--base main` のあと次を実行し、**それらの出力もそのまま返す**（`--base main` の出力だけを貼って未コミットを省略してはいけない）。
+
+```
+git status
+git diff HEAD
+```
+
+`git diff HEAD` は staged と unstaged の両方を含む。`git diff` だけは staged を落とすので、それだけを使ってはいけない。代わりに `git diff` と `git diff --cached` を両方走らせてもよい。必要なら補足として `codex review --uncommitted` も走らせ、その出力も貼る。**未コミットだけを見て実装を飛ばしてはいけない。**
 
 `codex review --uncommitted` を黙って走らせてはいけない:
 

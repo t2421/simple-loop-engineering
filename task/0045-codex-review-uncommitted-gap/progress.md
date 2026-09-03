@@ -125,3 +125,96 @@ ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
 ```
 
 - `22:19` - GitHub Actions on `fd92246`（PR #92）: verify / e2e / protected-paths / progress-coupling / preview はすべて `success`。Status は `In Progress` のまま。Done / アーカイブはしない。
+- `22:30` - Copilot 指摘（discussion_r3929196896）: 未コミットの読み方と出力貼付が曖昧、`git diff` だけだと staged が抜ける。同じブランチで「手順」を直した。未コミット（staged / unstaged）があるときは `git status` と `git diff HEAD`（または `git diff` + `git diff --cached`）を必須とし、それらの出力もそのまま返すと書いた。`git diff` だけの使用を禁じた。空差分・base 解決失敗の非承認と、クリーンツリー＋コミットありで `--uncommitted` を黙って走らせない規則は残した。0047 の 3 事実は残した。Status は `In Progress`（Phase: `Verify`）。Done / アーカイブはしない。
+- `22:30` - `grep -n "codex review --base main" .claude/agents/codex-reviewer.md`:
+
+```
+14:codex review --base main
+```
+
+- `22:30` - `grep -n "codex review --uncommitted" .claude/agents/codex-reviewer.md`:
+
+```
+26:`git diff HEAD` は staged と unstaged の両方を含む。`git diff` だけは staged を落とすので、それだけを使ってはいけない。代わりに `git diff` と `git diff --cached` を両方走らせてもよい。必要なら補足として `codex review --uncommitted` も走らせ、その出力も貼る。**未コミットだけを見て実装を飛ばしてはいけない。**
+28:`codex review --uncommitted` を黙って走らせてはいけない:
+```
+
+- `22:30` - `grep -n "承認しない" .claude/agents/codex-reviewer.md`:
+
+```
+31:- base（main）の解決に失敗したとき。黙って `--uncommitted` にフォールバックせず、明示的に失敗して承認しない。差分が取れない旨を報告する。「指摘ゼロ」とは書かない。
+33:解決した差分が 0 件（空／取得失敗）のとき、承認しない。差分が取れない／空である旨を報告する。「指摘が無い」とは書かない。
+49:親が実測の CI 結果を渡していないときは承認しない。実測結果の提示を求める。
+100:`codex` が無い、未ログイン、失敗したときは承認しない。進捗を Blocked にし、コマンド出力を残す。
+108:同じレビュアーへの不承認が試行ログ上すでに 5 回ある、または今回が 5 回目でまだ Critical / High が残るときは承認しない。追加の Fix を指示せず、進捗を `Blocked` にする。人間の判断を待つ。
+```
+
+- `22:30` - `node --test tests/agent-defs.test.mjs` の出力:
+
+```
+TAP version 13
+# Subtest: 現状の .claude/agents/codex-reviewer.md で pass する
+ok 1 - 現状の .claude/agents/codex-reviewer.md で pass する
+  ---
+  duration_ms: 2.264655
+  ...
+# Subtest: テストが読むパスに codex-reviewer.md が無いと失敗する（skip しない）
+ok 2 - テストが読むパスに codex-reviewer.md が無いと失敗する（skip しない）
+  ---
+  duration_ms: 1.147764
+  ...
+# Subtest: 再実行禁止と実測なし非承認の事実が残る文言の微修正は pass する
+ok 3 - 再実行禁止と実測なし非承認の事実が残る文言の微修正は pass する
+  ---
+  duration_ms: 0.14997
+  ...
+# Subtest: 現行ファイル相当の本文を微修正しても pass する
+ok 4 - 現行ファイル相当の本文を微修正しても pass する
+  ---
+  duration_ms: 0.279321
+  ...
+# Subtest: 再実行禁止の節を削除した本文は fail する
+ok 5 - 再実行禁止の節を削除した本文は fail する
+  ---
+  duration_ms: 0.254131
+  ...
+# Subtest: 再実行禁止の文だけを消した本文は fail する
+ok 6 - 再実行禁止の文だけを消した本文は fail する
+  ---
+  duration_ms: 0.163443
+  ...
+# Subtest: 必須 4 項目名をこの順で含む本文は pass する
+ok 7 - 必須 4 項目名をこの順で含む本文は pass する
+  ---
+  duration_ms: 0.082438
+  ...
+# Subtest: 4 項目名のうち 1 つを欠いた本文は fail する
+ok 8 - 4 項目名のうち 1 つを欠いた本文は fail する
+  ---
+  duration_ms: 0.270454
+  ...
+# Subtest: 4 項目名の順番を入れ替えた本文は fail する
+ok 9 - 4 項目名の順番を入れ替えた本文は fail する
+  ---
+  duration_ms: 0.217602
+  ...
+# Subtest: 親が実測 CI 結果を渡していないときの非承認ルールが消えていると fail する
+ok 10 - 親が実測 CI 結果を渡していないときの非承認ルールが消えていると fail する
+  ---
+  duration_ms: 0.196091
+  ...
+# Subtest: 現行ファイルから非承認ルールだけを消すと fail する
+ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
+  ---
+  duration_ms: 0.236213
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 48.385576
+```

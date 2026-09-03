@@ -95,3 +95,4 @@ ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
 - `21:44` - 再実行 `node --test tests/agent-defs.test.mjs` は 11 pass / 0 fail / 0 skipped。`npm run ci` は lint・lint:docs・test:unit 553 pass / 0 fail で成功（共通検証の全文は progress に貼らない）。
 - `21:44` - `git diff main -- .claude/agents/` と `git diff main -- tools/run-unit-tests.mjs` は空。`tests/` の差分は未追跡の `tests/agent-defs.test.mjs` のみ。
 - `21:48` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/89 。Status は `In Progress` のまま。アーカイブしない。
+- `21:50` - `node loop-core/bin/loop.mjs check-actions`: `check-actions: HEAD のチェックはすべて成功しています。`

@@ -192,3 +192,9 @@ docs の形式違反はありません（54 件の作業ディレクトリを確
 # duration_ms 120384.736496
 ```
 
+- `12:48` - Copilot re-review on PR #85（HEAD `ed1f055`）: 再び Changes recommended。ガード / セキュリティを blocking として直す。
+  1. `reviewers` の正規化が `{}` に任意キーを書いており、`__proto__` 等で prototype pollution が起きる。**`Object.create(null)` の辞書にコピー。**
+  2. `verifyDefinitionSignature` の `Object.fromEntries` も同様。**null-prototype にキーソートして入れてから stringify。**
+  3. `readManifestFieldsAt` が base 側の `definedIn` / `protectedPaths` を相対正規形として検証していなかった。チェッカーは CI が単体コピーするので `loop-manifest.mjs` を import できない。同じ規則の `isRelativeRepoPath` をチェッカー内に置き、`manifestGuardFields` として公開してテストする。
+  ユニットテスト: `reviewers` / `scripts` の `__proto__` 汚染、base 側パス拒否。レビュー再依頼は親が push 後に行う。Status は In Progress のまま。アーカイブしない。
+

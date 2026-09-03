@@ -188,7 +188,7 @@ export function validateManifest(data, { manifestPath, fileExists = () => true }
     if (rawReviewers === null || typeof rawReviewers !== 'object' || Array.isArray(rawReviewers)) {
       typeError(manifestPath, 'reviewers');
     }
-    reviewers = {};
+    reviewers = Object.create(null);
     for (const [key, value] of Object.entries(rawReviewers)) {
       if (!isNonEmptyString(value)) {
         throw new ManifestError(`${manifestPath}: reviewers.${key} の型が不正です`);

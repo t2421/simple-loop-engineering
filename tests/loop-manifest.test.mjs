@@ -184,3 +184,40 @@ test('stages の paths も相対正規形のみ受け付ける', () => {
   );
   assert.deepEqual(out.stages[0].paths, ['src/']);
 });
+
+test('reviewers は null-prototype の辞書で、__proto__ キーでも汚染しない', () => {
+  const proto = Object.prototype;
+  try {
+    const injected = JSON.parse('{"code":"codex-reviewer","__proto__":"polluted"}');
+    const out = validateManifest(
+      validData({ reviewers: injected }),
+      { manifestPath: MANIFEST_FILE },
+    );
+    assert.equal(Object.getPrototypeOf(out.reviewers), null);
+    assert.equal(out.reviewers.code, 'codex-reviewer');
+    assert.equal(out.reviewers['__proto__'], 'polluted');
+    assert.equal(Object.hasOwn(proto, 'polluted'), false);
+    assert.equal({}.polluted, undefined);
+  } finally {
+    delete proto.polluted;
+  }
+});
+
+test('reviewers の __proto__ にオブジェクトを入れても Object.prototype を汚染しない', () => {
+  const proto = Object.prototype;
+  try {
+    assert.throws(
+      () => validateManifest(
+        validData({
+          reviewers: JSON.parse('{"code":"codex-reviewer","__proto__":{"polluted":true}}'),
+        }),
+        { manifestPath: MANIFEST_FILE },
+      ),
+      /reviewers\.__proto__ の型が不正です/,
+    );
+    assert.equal(Object.hasOwn(proto, 'polluted'), false);
+    assert.equal({}.polluted, undefined);
+  } finally {
+    delete proto.polluted;
+  }
+});

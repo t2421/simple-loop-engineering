@@ -5,6 +5,7 @@ import {
   findViolations,
   hasAllowLabel,
   verifyDefinitionSignature,
+  manifestGuardFields,
 } from '../tools/check-protected-paths.mjs';
 
 /** 差分もラベルも無い、素の入力 */
@@ -714,6 +715,46 @@ test('verifyDefinitionSignature: scripts のキー順だけでは変わらない
   const a = '{"scripts":{"b":"1","a":"1"}}';
   const b = '{"scripts":{"a":"1","b":"1"}}';
   assert.equal(verifyDefinitionSignature(a), verifyDefinitionSignature(b));
+});
+
+test('verifyDefinitionSignature: scripts の __proto__ キーで Object.prototype を汚染しない', () => {
+  const proto = Object.prototype;
+  try {
+    const raw = '{"scripts":{"b":"1","__proto__":{"polluted":true},"a":"1"}}';
+    const sig = verifyDefinitionSignature(raw);
+    assert.equal(Object.hasOwn(proto, 'polluted'), false);
+    assert.equal({}.polluted, undefined);
+    const reordered = '{"scripts":{"a":"1","__proto__":{"polluted":true},"b":"1"}}';
+    assert.equal(verifyDefinitionSignature(reordered), sig);
+  } finally {
+    delete proto.polluted;
+  }
+});
+
+test('manifestGuardFields: 相対正規形のパスを返す', () => {
+  const out = manifestGuardFields({
+    verify: { definedIn: ['package.json'] },
+    protectedPaths: ['loop.manifest.json', 'tools/loop-manifest.mjs'],
+  });
+  assert.deepEqual(out.definedInPaths, ['package.json']);
+  assert.deepEqual(out.extraProtectedPaths, ['loop.manifest.json', 'tools/loop-manifest.mjs']);
+});
+
+test('manifestGuardFields: 非正規パスは拒否する', () => {
+  assert.throws(
+    () => manifestGuardFields({
+      verify: { definedIn: ['../secret'] },
+      protectedPaths: ['loop.manifest.json'],
+    }),
+    /verify\.definedIn のパスが不正です/,
+  );
+  assert.throws(
+    () => manifestGuardFields({
+      verify: { definedIn: ['package.json'] },
+      protectedPaths: ['loop.manifest.json', 'a/../b'],
+    }),
+    /protectedPaths のパスが不正です/,
+  );
 });
 
 test('verifyDefinitionSignature: JSON でなければ内容の同一性', () => {

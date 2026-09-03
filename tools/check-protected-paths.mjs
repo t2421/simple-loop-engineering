@@ -21,6 +21,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
@@ -331,9 +332,10 @@ export function verifyDefinitionSignature(raw) {
       && !Array.isArray(parsed.scripts)
     ) {
       const scripts = parsed.scripts;
-      const sorted = Object.fromEntries(
-        Object.keys(scripts).sort().map((key) => [key, scripts[key]]),
-      );
+      const sorted = Object.create(null);
+      for (const key of Object.keys(scripts).sort()) {
+        sorted[key] = scripts[key];
+      }
       return JSON.stringify(sorted);
     }
   } catch {
@@ -559,6 +561,64 @@ function tryGitShow(ref, filePath) {
 }
 
 /**
+ * マニフェストに書ける相対パスか。すでに正規形の posix 相対パスだけを受け付ける。
+ * `tools/loop-manifest.mjs` と同じ規則。このファイルは CI が単体コピーするので
+ * そちらを import できない。
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isRelativeRepoPath(value) {
+  if (typeof value !== 'string' || value === '') return false;
+  if (value.includes('\\')) return false;
+  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return false;
+  const normalized = path.posix.normalize(value);
+  if (normalized !== value) return false;
+  if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) return false;
+  return true;
+}
+
+/**
+ * パース済みマニフェストからガードが使う definedIn / protectedPaths を取る。
+ * パスは相対正規形のみ。壊れているときは例外（既定値で補わない）。
+ *
+ * @param {unknown} data
+ * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] }}
+ */
+export function manifestGuardFields(data) {
+  const record = data !== null && typeof data === 'object' && !Array.isArray(data)
+    ? /** @type {Record<string, unknown>} */ (data)
+    : null;
+  if (record === null) {
+    throw new Error(`${MANIFEST}: マニフェストはオブジェクトである必要があります`);
+  }
+  const verify = record.verify;
+  const verifyRecord = verify !== null && typeof verify === 'object' && !Array.isArray(verify)
+    ? /** @type {Record<string, unknown>} */ (verify)
+    : null;
+  let definedIn = verifyRecord?.definedIn;
+  if (typeof definedIn === 'string') definedIn = [definedIn];
+  if (!Array.isArray(definedIn) || definedIn.length === 0) {
+    throw new Error(`${MANIFEST}: 必須項目 verify.definedIn がありません`);
+  }
+  for (const item of definedIn) {
+    if (!isRelativeRepoPath(item)) {
+      throw new Error(`${MANIFEST}: verify.definedIn のパスが不正です: ${item}`);
+    }
+  }
+  const extraProtectedPaths = Array.isArray(record.protectedPaths) ? record.protectedPaths : [];
+  for (const item of extraProtectedPaths) {
+    if (!isRelativeRepoPath(item)) {
+      throw new Error(`${MANIFEST}: protectedPaths のパスが不正です: ${item}`);
+    }
+  }
+  if (!extraProtectedPaths.includes(MANIFEST)) {
+    throw new Error(`${MANIFEST}: マニフェストが保護パス一覧に自分自身を含んでいない`);
+  }
+  return { definedInPaths: definedIn, extraProtectedPaths };
+}
+
+/**
  * 指定 ref のマニフェストから definedIn と protectedPaths を読む。
  * ファイルが無ければ null。壊れているときは例外（既定値で補わない）。
  *
@@ -574,16 +634,7 @@ function readManifestFieldsAt(ref) {
   } catch (err) {
     throw new Error(`${MANIFEST}: JSON として読めない: ${err.message}`, { cause: err });
   }
-  let definedIn = data?.verify?.definedIn;
-  if (typeof definedIn === 'string') definedIn = [definedIn];
-  if (!Array.isArray(definedIn) || definedIn.length === 0) {
-    throw new Error(`${MANIFEST}: 必須項目 verify.definedIn がありません`);
-  }
-  const extraProtectedPaths = Array.isArray(data?.protectedPaths) ? data.protectedPaths : [];
-  if (!extraProtectedPaths.includes(MANIFEST)) {
-    throw new Error(`${MANIFEST}: マニフェストが保護パス一覧に自分自身を含んでいない`);
-  }
-  return { definedInPaths: definedIn, extraProtectedPaths };
+  return manifestGuardFields(data);
 }
 
 /**

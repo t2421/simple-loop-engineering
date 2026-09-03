@@ -46,7 +46,21 @@
 | hook 配線の凍結 | **項目にしない** | 0044 申し送り 8。0054 で `.claude/settings.json` が `GATE_HELPERS` に入済み |
 
 - `12:04` - 凍結改訂の理由（`tools/check-protected-paths.mjs` と既存 `tests/`）: 検証コマンド定義の参照先をマニフェストの `verify.definedIn` に移す。JSON で `scripts` を持つファイルは従来どおり `scripts` オブジェクトだけを比較し、それ以外は内容の同一性（0044: 形式非依存・強い側）。既存の `GATE_HELPERS`・`APPEND_ONLY_DIRS`・テンプレ保護は残す。マニフェスト自身と `tools/loop-manifest.mjs` を保護に足すのは強化。検証は弱めていない。人間が `allow-protected-change` を付けてマージする。
-- `12:07` - `npm run ci` 緑。`# tests 510` `# pass 510` `# fail 0`（出力は会話に貼る）。
+- `12:07` - `npm run ci` 緑。出力末尾:
+
+```
+1..510
+# tests 510
+# suites 0
+# pass 510
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120557.768885
+```
+
+  lint・lint:docs も通過（`docs の形式違反はありません（54 件の作業ディレクトリを確認）。`）。
 - `12:07` - 完了条件 7 の grep:
 
 ```
@@ -110,4 +124,4 @@ $ PR_LABELS='["allow-protected-change"]' node tools/check-protected-paths.mjs f6
 exit=0
 ```
 
-導入 PR 自身に対する base 版チェッカーは `loop.manifest.json` の新規追加をまだ保護しない（add-protected-path: 効き始めるのはマージ後）。1 行変更の検知は HEAD チェッカーで測った。
+- `12:09` - 閉じて未マージの PR #76（同じブランチ名、レビュー往復 5 回上限で Blocked）は、0044 申し送りをマニフェスト項目にほぼ全部載せた結果レビューが収束しなかった。本実装は想定項目表に対する採用 / 不採用を試行ログに置き、構造付きの台帳・実装パスは項目にしない。#76 から残す知見は 1 つ: ガードはマニフェストを **base と HEAD の和集合**で読む。HEAD だけだと、同じ PR で `definedIn` から定義ファイルを外して検証を空にできる。

@@ -555,16 +555,15 @@ function tryGitShow(ref, filePath) {
 }
 
 /**
- * HEAD のマニフェストから definedIn と protectedPaths を読む。
- * 無い・壊れているときは例外（既定値で補わない）。
+ * 指定 ref のマニフェストから definedIn と protectedPaths を読む。
+ * ファイルが無ければ null。壊れているときは例外（既定値で補わない）。
  *
- * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] }}
+ * @param {string} ref
+ * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] } | null}
  */
-function readHeadManifestFields() {
-  const raw = tryGitShow('HEAD', MANIFEST);
-  if (raw === null) {
-    throw new Error(`マニフェストが無い: ${MANIFEST}`);
-  }
+function readManifestFieldsAt(ref) {
+  const raw = tryGitShow(ref, MANIFEST);
+  if (raw === null) return null;
   let data;
   try {
     data = JSON.parse(raw);
@@ -581,6 +580,29 @@ function readHeadManifestFields() {
     throw new Error(`${MANIFEST}: マニフェストが保護パス一覧に自分自身を含んでいない`);
   }
   return { definedInPaths: definedIn, extraProtectedPaths };
+}
+
+/**
+ * base と HEAD の宣言を和集合にする。
+ *
+ * HEAD だけを見ると、同じ PR で `definedIn` から定義ファイルを外し、
+ * そのファイルの検証コマンドを空にできる。base 側に載っていたパスも
+ * 凍らせる。導入 PR（base にマニフェストが無い）は HEAD だけを使う。
+ *
+ * @param {string} mergeBase
+ * @returns {{ definedInPaths: string[], extraProtectedPaths: string[] }}
+ */
+function readMergedManifestFields(mergeBase) {
+  const head = readManifestFieldsAt('HEAD');
+  if (head === null) {
+    throw new Error(`マニフェストが無い: ${MANIFEST}`);
+  }
+  const base = readManifestFieldsAt(mergeBase);
+  if (base === null) return head;
+  return {
+    definedInPaths: [...new Set([...base.definedInPaths, ...head.definedInPaths])],
+    extraProtectedPaths: [...new Set([...base.extraProtectedPaths, ...head.extraProtectedPaths])],
+  };
 }
 
 /**
@@ -676,7 +698,7 @@ function main() {
 
   try {
     changes = parseNameStatus(raw);
-    ({ definedInPaths, extraProtectedPaths } = readHeadManifestFields());
+    ({ definedInPaths, extraProtectedPaths } = readMergedManifestFields(mergeBase));
     definedInChanged = buildDefinedInChanged(mergeBase, definedInPaths);
     // これを渡さないと PR をまたぐ ID 再利用を取り逃がす
     baseArchivedIds = readBaseArchivedIds(mergeBase);

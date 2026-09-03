@@ -1,9 +1,9 @@
 # Progress: `0043-loop-core-extraction`
 
-- **Target Spec:** `task/0043-loop-core-extraction/spec.md`
+- **Target Spec:** `task/archive/0043-loop-core-extraction/spec.md`
 - **Branch:** `feat/0043-loop-core-extraction`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/87
-- **Status:** `In Progress` (Phase: `Implement`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -20,7 +20,7 @@
 - [x] Core とエージェント定義・Skill のバージョン不整合の検知手段の決定（→ 完了条件 10）
 - [ ] レビュー（GitHub Copilot。親が PR 作成後に依頼する）
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

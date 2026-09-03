@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0047-agent-defs-test/spec.md`
 - **Branch:** `feat/0047-agent-defs-test`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/89
 - **Status:** `In Progress` (Phase: `Verify`)
 - **Complexity:** `S`
 
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/agent-defs.test.mjs`)
 - [x] 実装 (なし。テスト新設のみ。`.claude/agents/` と既存 `tests/` は変更しない)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -94,3 +94,4 @@ ok 11 - 現行ファイルから非承認ルールだけを消すと fail する
 - `21:42` - `npm run ci` が eslint `preserve-caught-error` で失敗した。`loadCodexReviewerMarkdown` の ENOENT 例外に `{ cause: err }` を付けた。
 - `21:44` - 再実行 `node --test tests/agent-defs.test.mjs` は 11 pass / 0 fail / 0 skipped。`npm run ci` は lint・lint:docs・test:unit 553 pass / 0 fail で成功（共通検証の全文は progress に貼らない）。
 - `21:44` - `git diff main -- .claude/agents/` と `git diff main -- tools/run-unit-tests.mjs` は空。`tests/` の差分は未追跡の `tests/agent-defs.test.mjs` のみ。
+- `21:48` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/89 。Status は `In Progress` のまま。アーカイブしない。

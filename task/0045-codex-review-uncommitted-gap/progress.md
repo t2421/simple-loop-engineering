@@ -3,16 +3,16 @@
 - **Target Spec:** `task/0045-codex-review-uncommitted-gap/spec.md`
 - **Branch:** `feat/0045-codex-review-uncommitted-gap`
 - **PR:** `未作成`
-- **Status:** `Not Started` (Phase: `Plan`)
+- **Status:** `In Progress` (Phase: `Implement`)
 - **Complexity:** `S`
 
 ## タスクチェックリスト
 
 構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。
 
-- [ ] Specの要件・受け入れ条件の確認
-- [ ] テストの作成 (任意。検証の主は定義の grep と既存 `tests/agent-defs.test.mjs`。ヘルパーは置かない)
-- [ ] 実装 (`.claude/agents/codex-reviewer.md` の「手順」)
+- [x] Specの要件・受け入れ条件の確認
+- [ ] テストの作成 (任意。検証の主は定義の grep と既存 `tests/agent-defs.test.mjs`。ヘルパーは置かない。新規テストは置かない)
+- [x] 実装 (`.claude/agents/codex-reviewer.md` の「手順」)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
@@ -29,3 +29,4 @@
 docs の形式違反はありません（56 件の作業ディレクトリを確認）。
 ```
 - `22:00` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/91 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
+- `22:10` - `feat/0045-codex-review-uncommitted-gap` を最新 `main`（PR #91 マージ後）から切り、`.claude/agents/codex-reviewer.md` の「手順」だけを直した。既定起動を `codex review --base main` にした。`--uncommitted` は未コミットの補足読みに限り、main からのコミットあり＋クリーンツリー、および base 解決失敗では黙って走らせない。差分 0 件は承認せず、書式で「見た」と「見ていない」を区別する。0047 の 3 事実（再実行禁止・実測 CI 必須・スキーマ 4 項目）は残した。新規テストは置かない。レビューは親が GitHub Copilot に依頼する（`codex review` の成功は求めない）。

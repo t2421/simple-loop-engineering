@@ -2,8 +2,8 @@
 
 - **Target Spec:** `task/0041-backlog-freshness/spec.md`
 - **Branch:** `docs/0041-backlog-freshness`
-- **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/81`
+- **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -13,8 +13,8 @@
 - [x] Specの要件・受け入れ条件の確認
 - [x] 実装 (`CLAUDE.md` の「仕様」節に実測行の規約を追記)
 - [x] 実装 (`backlog/0015-playwright-setup-readonly-cache/spec.md` に実測行を適用)
-- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く）
+- [x] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] PR作成（進捗の **PR** に URL を書く）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -67,3 +67,4 @@ ci           "npm run lint && npm run lint:docs && npm run test:unit"
 - `13:10` - **レビューの 3 件目は、この進捗ファイル自身の規約違反だった。** 共通の検証（`npm run ci`）の出力を試行ログに貼っていた。CLAUDE.md「共通の検証」「進捗」の両方が「progress には書かない」と定めている。該当箇所を削り、作業固有の証跡（grep の結果・昇格との干渉の実測）だけを残した。
   **これはこのセッションで繰り返していた癖である。** 0053・0054 の進捗（アーカイブ済み）にも同じ出力が入っている。遡及修正はこの作業の範囲外なので触らないが、機械で捕まえる検査の提案がレビューから出ている（下記）
 - `13:15` - **範囲外として持ち越す提案（レビュアーからのテスト追加提案）。** `tools/lint-docs.mjs` に「progress の本文に共通検証の出力を貼らない」検査を足す。純関数 + ユニットテストで実装でき、ユニットテストの件数集計行や docs lint の成功メッセージを含む progress を違反にする（検知パターンの literal はここに書かない。書くとこの検査自身に引っかかる）。**0041 の範囲外なので別 backlog として起票するのが正しい**
+- `13:25` - PR #81 を作成。レビューで見つかった規約違反（progress に共通検証の出力を貼る癖）を機械で捕まえる候補を、`backlog/0055-progress-verification-lint` として別の docs PR で起票する

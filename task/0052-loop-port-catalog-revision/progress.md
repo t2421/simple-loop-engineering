@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0052-loop-port-catalog-revision/spec.md`
 - **Branch:** `feat/0052-loop-port-catalog-revision`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/84`
-- **Status:** `Blocked` (Phase: `Verify (外部)` — `codex review` 401)
+- **Status:** `In Progress` (Phase: `Copilot review awaited`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -25,3 +25,4 @@
 - `11:18` - Plan。`node tools/start-task.mjs` で worktree `.worktrees/feat/0052-loop-port-catalog-revision` を main から切った。記録 2.6 (a)(c)・2.7「新規項目」・4 節 (c)・5 節と spec「背景」の 5 件目を読んで照合した。SKILL.md に 2.14〜2.18 と 4 章アンチパターン 1 項目を追加のみで足した（既存行は削除していない）。
 - `11:19` - Verify (自己)。spec「例」の grep / `git diff` はすべて期待どおり。`npm run ci` は lint・lint:docs 緑、`# tests 490` `# pass 490` `# fail 0`。PR: https://github.com/t2421/simple-loop-engineering/pull/84
 - `11:21` - Verify (外部) 1 回目。`codex-reviewer` が spec 命題と本文の 1 対 1 照合を実施し、2.14〜2.18・4 章・完了条件 1–9 は欠落ゼロ、Critical 0 / High 0 と報告。ただし `codex` バイナリは無く、`npx @openai/codex review --base main` は `401 Unauthorized`（Missing bearer or basic authentication）。エージェント定義どおり **承認しない**。Status を `Blocked` にし、人間の Codex ログインまたは照合結果の扱い判断を待つ。実装差分は直していない。GitHub Actions（実装コミット `4b93619`）: verify / protected-paths / progress-coupling / e2e / preview はすべて `success`。
+- `11:25` - 正式レビューは `codex-reviewer` ではない。この経路では Codex が使えない（401）。GitHub Copilot code review を PR #84 に依頼済み。Status を `In Progress`（Phase: `Copilot review awaited`）に戻す。Done にしない。アーカイブしない。

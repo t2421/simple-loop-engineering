@@ -1,9 +1,9 @@
 # Progress: `0041-backlog-freshness`
 
-- **Target Spec:** `task/0041-backlog-freshness/spec.md`
+- **Target Spec:** `task/archive/0041-backlog-freshness/spec.md`
 - **Branch:** `docs/0041-backlog-freshness`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/81`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`backlog/0015-playwright-setup-readonly-cache/spec.md` に実測行を適用)
 - [x] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

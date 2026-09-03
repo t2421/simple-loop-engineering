@@ -59,6 +59,38 @@ test('definedIn ファイルでも定義シグネチャが同じなら違反に�
   assert.deepEqual(v, []);
 });
 
+test('definedInChanged の既定辞書は prototype 由来のキーを違反にしない', () => {
+  const v = findViolations({
+    changes: [
+      { status: 'M', path: 'constructor' },
+      { status: 'M', path: '__proto__' },
+    ],
+    definedInPaths: ['constructor', '__proto__'],
+  });
+  assert.deepEqual(v, []);
+});
+
+test('definedInChanged は boolean の true だけを違反にする', () => {
+  const v = findViolations({
+    changes: [{ status: 'M', path: 'package.json' }],
+    definedInPaths: ['package.json'],
+    definedInChanged: { 'package.json': 1 },
+  });
+  assert.deepEqual(v, []);
+});
+
+test('definedInChanged の __proto__ キーは null-prototype なら true で違反になる', () => {
+  const definedInChanged = Object.create(null);
+  definedInChanged['__proto__'] = true;
+  const v = findViolations({
+    changes: [{ status: 'M', path: '__proto__' }],
+    definedInPaths: ['__proto__'],
+    definedInChanged,
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].path, '__proto__');
+});
+
 test('specs/TEMPLATE.md を変更した差分は違反になる', () => {
   const v = findViolations({ ...empty, changes: [{ status: 'M', path: 'specs/TEMPLATE.md' }] });
   assert.equal(v.length, 1);

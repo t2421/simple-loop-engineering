@@ -226,4 +226,37 @@ docs の形式違反はありません（54 件の作業ディレクトリを確
 # duration_ms 120371.412243
 ```
 
+- `13:18` - Copilot round 3 on PR #85: 再び Changes recommended。同じ pollution 系。
+  1. `findViolations` の `definedInChanged` 既定と `buildDefinedInChanged` の構築が `{}`。マニフェスト由来のパスが `__proto__` / `constructor` だと prototype を読んで誤判定する。**`Object.create(null)`。**
+  2. `if (definedInChanged[path])` は truthy なら違反。prototype 由来やオブジェクトが混ざると誤判定する。**`=== true` だけを違反にする。**
+  監査: 同じファイルの `scriptsChanged` フォールバック `?? {}` もスクリプト名キーの読み取りなので `Object.create(null)` に揃えた。`reviewers` / 署名の詰め替えは前回済み。`complexityModels` は固定キー `S|M|L` だけ。回帰テスト: 既定辞書で `constructor` / `__proto__` を違反にしない、truthy 非 true は違反にしない、null-prototype に `__proto__: true` なら違反。
+- `13:21` - 修正後の `npm run ci` 緑。出力末尾:
+
+```
+> ci
+> npm run lint && npm run lint:docs && npm run test:unit
+
+> lint
+> eslint .
+
+> lint:docs
+> node tools/lint-docs.mjs
+
+docs の形式違反はありません（54 件の作業ディレクトリを確認）。
+
+> test:unit
+> node tools/run-unit-tests.mjs
+
+...
+1..522
+# tests 522
+# suites 0
+# pass 522
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120414.921134
+```
+
 

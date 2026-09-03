@@ -353,8 +353,8 @@ export function verifyDefinitionSignature(raw) {
  * @returns {boolean} 変わっていれば true
  */
 export function scriptsChanged(baseScripts, headScripts) {
-  const base = baseScripts ?? {};
-  const head = headScripts ?? {};
+  const base = baseScripts ?? Object.create(null);
+  const head = headScripts ?? Object.create(null);
   const keys = new Set([...Object.keys(base), ...Object.keys(head)]);
   for (const key of keys) {
     if (base[key] !== head[key]) return true;
@@ -377,7 +377,7 @@ export function scriptsChanged(baseScripts, headScripts) {
 export function findViolations({
   changes,
   definedInPaths = [],
-  definedInChanged = {},
+  definedInChanged = Object.create(null),
   extraProtectedPaths = [],
   baseArchivedIds = new Set(),
 }) {
@@ -434,7 +434,7 @@ export function findViolations({
     if (definedInPaths.includes(path)) {
       if (kind === 'appeared' && from === undefined) continue;
       if (kind === 'modified') {
-        if (definedInChanged[path]) {
+        if (definedInChanged[path] === true) {
           violations.push({ path, reason: '検証コマンドの定義が変わっている' });
         }
         continue;
@@ -673,7 +673,7 @@ function readMergedManifestFields(baseRef) {
  */
 function buildDefinedInChanged(mergeBase, definedInPaths) {
   /** @type {Record<string, boolean>} */
-  const definedInChanged = {};
+  const definedInChanged = Object.create(null);
   for (const filePath of definedInPaths) {
     const headRaw = tryGitShow('HEAD', filePath);
     if (headRaw === null) {

@@ -18,7 +18,7 @@ import {
   checkSpecHeadings,
   checkBacklogCompletion,
   lintDocs,
-} from '../tools/lint-docs.mjs';
+} from '../loop-core/ledger/lint-docs.mjs';
 
 function makeRoot(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lint-docs-fn-'));

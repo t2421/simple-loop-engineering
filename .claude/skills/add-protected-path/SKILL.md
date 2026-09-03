@@ -10,7 +10,7 @@ origin: user
 
 # 保護するパスを増やす・外す
 
-CLAUDE.md「変えてはいけないもの」の一覧は、CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にある。
+CLAUDE.md「変えてはいけないもの」の一覧は、CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `loop-core/gate/check-protected-paths.mjs` にある。
 
 **CLAUDE.md に行を足すだけではガードは検知しない。** 一覧・判定ロジック・テスト・spec の 4 つを揃える。
 
@@ -30,7 +30,7 @@ CLAUDE.md「変えてはいけないもの」の一覧は、CI のガード（`.
 
 人間が読む一覧。判定の実体ではない。
 
-### 3. `tools/check-protected-paths.mjs` の判定に足す
+### 3. `loop-core/gate/check-protected-paths.mjs` の判定に足す
 
 守り方は 3 つある。**該当する形を選ぶ。**
 
@@ -96,7 +96,7 @@ if ((path === CHECKER && status !== 'A') || oldPath === CHECKER) {
 
 ### 6. PR に `allow-protected-change` ラベルを付ける
 
-この作業は必ず自分のガードに引っかかる。手順 3（`tools/check-protected-paths.mjs` の変更）と手順 4（既存 `tests/` の変更）が**それぞれ独立に**違反判定されるためである。手順 5 で着手後に spec を書き換えたなら、それも別に数えられる。
+この作業は必ず自分のガードに引っかかる。手順 3（`loop-core/gate/check-protected-paths.mjs` の変更）と手順 4（既存 `tests/` の変更）が**それぞれ独立に**違反判定されるためである。手順 5 で着手後に spec を書き換えたなら、それも別に数えられる。
 
 手順 2（CLAUDE.md）は違反にならない。CLAUDE.md はどの保護リストにも入っていない。
 
@@ -104,7 +104,7 @@ if ((path === CHECKER && status !== 'A') || oldPath === CHECKER) {
 
 ## 効き始めるのはマージ後から
 
-ガードは **base リビジョンの** `tools/check-protected-paths.mjs` を実行する。候補側のチェッカーを実行すると、判定を潰す変更と保護パスの変更を同じ PR に入れるだけで回避できてしまうためである。
+ガードは **base リビジョンの** `loop-core/gate/check-protected-paths.mjs` を実行する。候補側のチェッカーを実行すると、判定を潰す変更と保護パスの変更を同じ PR に入れるだけで回避できてしまうためである。
 
 したがって**保護を足す PR 自身は古い判定で評価される。** 新しい保護が効くのは、その PR がマージされた後の PR からである。導入 PR で新しい保護が効かないのは想定どおりで、異常ではない。
 

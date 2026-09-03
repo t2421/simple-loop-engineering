@@ -365,7 +365,7 @@ export function promote(
 function main() {
   const name = process.argv[2];
   if (!name) {
-    console.error('使い方: node tools/promote.mjs <id>-<slug>');
+    console.error('使い方: node loop-core/bin/loop.mjs promote <id>-<slug>');
     process.exit(1);
   }
 

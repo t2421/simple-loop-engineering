@@ -1,5 +1,5 @@
 /**
- * `tools/stop-hook-ci-dir.mjs` のテスト。spec の「例」の各行を網羅する。
+ * `loop-core/gate/stop-hook-ci-dir.mjs` のテスト。spec の「例」の各行を網羅する。
  *
  * - 判定の各行: `resolveCiDir` に stdin の中身と `CLAUDE_PROJECT_DIR` を注入する
  * - 配線（git top-level の解決）: 実 git リポジトリに worktree を足して、
@@ -18,11 +18,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readCwd, resolveCiDir } from '../tools/stop-hook-ci-dir.mjs';
-import { findViolations } from '../tools/check-protected-paths.mjs';
+import { readCwd, resolveCiDir } from '../loop-core/gate/stop-hook-ci-dir.mjs';
+import { findViolations } from '../loop-core/gate/check-protected-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SCRIPT = path.join(rootDir, 'tools', 'stop-hook-ci-dir.mjs');
+const SCRIPT = path.join(rootDir, 'loop-core', 'gate', 'stop-hook-ci-dir.mjs');
 
 // --- 純関数: stdin と CLAUDE_PROJECT_DIR を注入して「例」の各行を固定する ---
 
@@ -112,19 +112,19 @@ test('readCwd は文字列以外・空文字列・非オブジェクトを undef
 
 const emptyDiff = { changes: [] };
 
-test('tools/stop-hook-ci-dir.mjs を変更した差分はガードが違反として検知する', () => {
+test('loop-core/gate/stop-hook-ci-dir.mjs を変更した差分はガードが違反として検知する', () => {
   const v = findViolations({
     ...emptyDiff,
-    changes: [{ status: 'M', path: 'tools/stop-hook-ci-dir.mjs' }],
+    changes: [{ status: 'M', path: 'loop-core/gate/stop-hook-ci-dir.mjs' }],
   });
   assert.equal(v.length, 1);
-  assert.equal(v[0].path, 'tools/stop-hook-ci-dir.mjs');
+  assert.equal(v[0].path, 'loop-core/gate/stop-hook-ci-dir.mjs');
 });
 
-test('tools/stop-hook-ci-dir.mjs を新規追加した差分はガードの違反にならない（導入 PR）', () => {
+test('loop-core/gate/stop-hook-ci-dir.mjs を新規追加した差分はガードの違反にならない（導入 PR）', () => {
   const v = findViolations({
     ...emptyDiff,
-    changes: [{ status: 'A', path: 'tools/stop-hook-ci-dir.mjs' }],
+    changes: [{ status: 'A', path: 'loop-core/gate/stop-hook-ci-dir.mjs' }],
   });
   assert.deepEqual(v, []);
 });
@@ -140,6 +140,30 @@ function git(cwd, ...args) {
   );
 }
 
+const MINI_MANIFEST = `${JSON.stringify({
+  install: { argv: ['true'] },
+  verify: { command: 'true', definedIn: ['package.json'] },
+  protectedPaths: ['loop.manifest.json'],
+})}\n`;
+
+function writeLoopCli(dest) {
+  const rels = [
+    'bin/loop.mjs',
+    'lib/manifest.mjs',
+    'lib/layout.mjs',
+    'lib/messages.mjs',
+    'gate/stop-hook-ci-dir.mjs',
+    'gate/check-actions.mjs',
+  ];
+  for (const rel of rels) {
+    const from = path.join(rootDir, 'loop-core', rel);
+    const to = path.join(dest, 'loop-core', rel);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+  }
+  fs.writeFileSync(path.join(dest, 'loop.manifest.json'), MINI_MANIFEST);
+}
+
 /** プライマリ + worktree の一時リポジトリを作る。`files` はコミットに含める */
 function makeRepoWithWorktree(files = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'stop-hook-ci-dir-'));
@@ -151,6 +175,7 @@ function makeRepoWithWorktree(files = {}) {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, content);
   }
+  writeLoopCli(primary);
   fs.writeFileSync(path.join(primary, 'README.md'), 'fixture\n');
   git(primary, 'add', '-A');
   git(primary, 'commit', '-q', '-m', 'init');
@@ -227,7 +252,7 @@ function runHook(command, input, projectDir, cwd) {
 
 test('Stop hook はスクリプトの出力先で npm run ci を実行する形になっている', () => {
   const command = stopHookCommand();
-  assert.match(command, /stop-hook-ci-dir\.mjs/);
+  assert.match(command, /stop-hook-ci-dir/);
   assert.match(command, /npm run ci/);
 });
 
@@ -237,7 +262,7 @@ test('壊れた worktree の cwd を与えると worktree 側で CI が走り ho
     'node -e "require(\'fs\').writeFileSync(\'ci-ran.txt\',\'worktree\');process.exit(1)"';
   const { base, primary, worktree } = makeRepoWithWorktree({
     'package.json': `${JSON.stringify({ name: 'fixture', private: true, scripts: { ci: okCi } }, null, 2)}\n`,
-    'tools/stop-hook-ci-dir.mjs': fs.readFileSync(SCRIPT, 'utf8'),
+    'loop-core/gate/stop-hook-ci-dir.mjs': fs.readFileSync(SCRIPT, 'utf8'),
   });
   try {
     // worktree 側だけを壊す（未コミットの変更。これが検証したい状況そのもの）
@@ -261,7 +286,7 @@ test('スクリプトが失敗すると hook は CI を回さずに失敗する�
   const okCi = 'node -e "require(\'fs\').writeFileSync(\'ci-ran.txt\',\'primary\')"';
   const { base, primary } = makeRepoWithWorktree({
     'package.json': `${JSON.stringify({ name: 'fixture', private: true, scripts: { ci: okCi } }, null, 2)}\n`,
-    'tools/stop-hook-ci-dir.mjs': fs.readFileSync(SCRIPT, 'utf8'),
+    'loop-core/gate/stop-hook-ci-dir.mjs': fs.readFileSync(SCRIPT, 'utf8'),
   });
   try {
     // CLAUDE_PROJECT_DIR 無し + 壊れた stdin: スクリプト（の起動）が失敗する状況

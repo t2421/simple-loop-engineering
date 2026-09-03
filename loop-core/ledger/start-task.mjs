@@ -23,7 +23,7 @@ import { pathToFileURL } from 'node:url';
 // フェンスの解釈は lint と 1 つにする。複製すると「lint は未記載と見るのに
 // start-task は貼った出力の中の値を読む」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
-import { loadManifest } from './loop-manifest.mjs';
+import { loadManifest } from '../lib/manifest.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
@@ -471,7 +471,7 @@ export function claimId({ rootDir, slug, place = 'task', mkdir = (dir) => fs.mkd
 }
 
 /** CLI の使い方。分岐が増えたので 1 箇所にまとめる */
-export const USAGE = '使い方: node tools/start-task.mjs [--next-id | --claim <slug> [--in <task|backlog>]]';
+export const USAGE = '使い方: node loop-core/bin/loop.mjs start-task [--next-id | --claim <slug> [--in <task|backlog>]]';
 
 /**
  * CLI の引数（`process.argv.slice(2)`）を解釈する純関数。

@@ -6,7 +6,7 @@ import {
   hasAllowLabel,
   verifyDefinitionSignature,
   manifestGuardFields,
-} from '../tools/check-protected-paths.mjs';
+} from '../loop-core/gate/check-protected-paths.mjs';
 
 /** 差分もラベルも無い、素の入力 */
 const empty = { changes: [] };
@@ -302,7 +302,7 @@ test('末尾が単独のバックスラッシュでも unquotePath が壊れな�
 test('ガードの判定ロジック自体の変更は違反になる', () => {
   const v = findViolations({
     ...empty,
-    changes: [{ status: 'M', path: 'tools/check-protected-paths.mjs' }],
+    changes: [{ status: 'M', path: 'loop-core/gate/check-protected-paths.mjs' }],
   });
   assert.equal(v.length, 1, 'base 由来で実行される以上、このファイルが信頼の根拠になる');
 });
@@ -310,14 +310,14 @@ test('ガードの判定ロジック自体の変更は違反になる', () => {
 test('ガードの判定ロジックの削除・リネームも違反になる', () => {
   const deleted = findViolations({
     ...empty,
-    changes: [{ status: 'D', path: 'tools/check-protected-paths.mjs' }],
+    changes: [{ status: 'D', path: 'loop-core/gate/check-protected-paths.mjs' }],
   });
   assert.equal(deleted.length, 1);
 
   const renamed = findViolations({
     ...empty,
     changes: [
-      { status: 'R', path: 'tools/x.mjs', oldPath: 'tools/check-protected-paths.mjs', similarity: 100 },
+      { status: 'R', path: 'tools/x.mjs', oldPath: 'loop-core/gate/check-protected-paths.mjs', similarity: 100 },
     ],
   });
   assert.equal(renamed.length, 1);
@@ -331,7 +331,7 @@ test('tools/ の他のファイルは保護対象ではない', () => {
 test('ガードの判定ロジックの新規追加は違反にならない（導入 PR）', () => {
   const v = findViolations({
     ...empty,
-    changes: [{ status: 'A', path: 'tools/check-protected-paths.mjs' }],
+    changes: [{ status: 'A', path: 'loop-core/gate/check-protected-paths.mjs' }],
   });
   assert.deepEqual(v, []);
 });
@@ -342,7 +342,7 @@ test('別ファイルをチェッカーのパスへ上書きリネームする�
     changes: [
       {
         status: 'R',
-        path: 'tools/check-protected-paths.mjs',
+        path: 'loop-core/gate/check-protected-paths.mjs',
         oldPath: 'tools/x.mjs',
         similarity: 100,
       },
@@ -766,10 +766,10 @@ test('verifyDefinitionSignature: scripts の __proto__ キーで Object.prototyp
 test('manifestGuardFields: 相対正規形のパスを返す', () => {
   const out = manifestGuardFields({
     verify: { definedIn: ['package.json'] },
-    protectedPaths: ['loop.manifest.json', 'tools/loop-manifest.mjs'],
+    protectedPaths: ['loop.manifest.json', 'loop-core/lib/manifest.mjs'],
   });
   assert.deepEqual(out.definedInPaths, ['package.json']);
-  assert.deepEqual(out.extraProtectedPaths, ['loop.manifest.json', 'tools/loop-manifest.mjs']);
+  assert.deepEqual(out.extraProtectedPaths, ['loop.manifest.json', 'loop-core/lib/manifest.mjs']);
 });
 
 test('manifestGuardFields: 非正規パスは拒否する', () => {
@@ -792,4 +792,35 @@ test('manifestGuardFields: 非正規パスは拒否する', () => {
 test('verifyDefinitionSignature: JSON でなければ内容の同一性', () => {
   assert.equal(verifyDefinitionSignature('ci:\n  script: test\n'), 'ci:\n  script: test\n');
   assert.notEqual(verifyDefinitionSignature('a'), 'b');
+});
+
+test('コアの VERSION 変更は違反、新規追加は許可', () => {
+  const changed = findViolations({
+    ...empty,
+    changes: [{ status: 'M', path: 'loop-core/VERSION' }],
+  });
+  assert.equal(changed.length, 1);
+  assert.match(changed[0].reason, /バージョン/);
+
+  const added = findViolations({
+    ...empty,
+    changes: [{ status: 'A', path: 'loop-core/VERSION' }],
+  });
+  assert.deepEqual(added, []);
+});
+
+test('コアの VERSION 削除・リネームも違反', () => {
+  assert.equal(
+    findViolations({ ...empty, changes: [{ status: 'D', path: 'loop-core/VERSION' }] }).length,
+    1,
+  );
+  assert.equal(
+    findViolations({
+      ...empty,
+      changes: [
+        { status: 'R', path: 'loop-core/VERSION.bak', oldPath: 'loop-core/VERSION', similarity: 100 },
+      ],
+    }).length,
+    1,
+  );
 });

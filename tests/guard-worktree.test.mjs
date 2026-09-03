@@ -8,10 +8,10 @@ import {
   readFilePath,
   resolvePrimaryRoot,
   blockMessage,
-} from '../tools/guard-worktree.mjs';
+} from '../loop-core/gate/guard-worktree.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const guardCli = path.join(rootDir, 'tools/guard-worktree.mjs');
+const guardCli = path.join(rootDir, 'loop-core/gate/guard-worktree.mjs');
 
 /** 判定に使う「プライマリチェックアウト」。テストは git から独立に求める */
 const primaryRoot = path.dirname(
@@ -141,7 +141,7 @@ test('git-common-dir からプライマリチェックアウトを求める', ()
 test('ブロックメッセージは worktree での開始手順を示す', () => {
   const message = blockMessage('/repo/src/math.mjs');
   assert.match(message, /worktree/);
-  assert.match(message, /tools\/start-task\.mjs/);
+  assert.match(message, /loop-core\/bin\/loop\.mjs/);
   assert.match(message, /\/repo\/src\/math\.mjs/);
 });
 
@@ -159,7 +159,7 @@ test('CLI: プライマリチェックアウトの実装ファイルは終了コ
   );
   assert.equal(result.status, 2);
   assert.match(result.stderr, /worktree/);
-  assert.match(result.stderr, /tools\/start-task\.mjs/);
+  assert.match(result.stderr, /loop-core\/bin\/loop\.mjs/);
 });
 
 test('CLI: .worktrees 配下の実装ファイルは終了コード 0 で通過させる', () => {

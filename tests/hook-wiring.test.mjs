@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findViolations } from '../tools/check-protected-paths.mjs';
+import { findViolations } from '../loop-core/gate/check-protected-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SETTINGS = path.join(rootDir, '.claude', 'settings.json');

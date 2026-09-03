@@ -14,8 +14,8 @@ import {
   INCOMPLETE_LINE,
   branchFor,
   isGitSafeRef,
-} from '../tools/promote.mjs';
-import { isValidBranchName } from '../tools/start-task.mjs';
+} from '../loop-core/ledger/promote.mjs';
+import { isValidBranchName } from '../loop-core/ledger/start-task.mjs';
 
 /** 昇格前の backlog spec（backlog 行・未確定行・プレースホルダ入り） */
 function backlogSpec() {

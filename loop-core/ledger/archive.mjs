@@ -326,7 +326,7 @@ export async function archive(
 async function main() {
   const name = process.argv[2];
   if (!name) {
-    console.error('使い方: node tools/archive.mjs <id>-<slug>');
+    console.error('使い方: node loop-core/bin/loop.mjs archive <id>-<slug>');
     process.exit(1);
   }
 

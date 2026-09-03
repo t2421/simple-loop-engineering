@@ -41,26 +41,32 @@
  * CLI としては `node tools/check-progress-coupling.mjs <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
  *
- * ローカル import を持たない。CI は base リビジョンを一時ファイルへ取り出して
- * 実行するため、相対 import があると候補側のファイルを読んでしまう
- * （`tools/e2e-needed.mjs` と同じ理由）。
+ * GitHub Actions は BASE の loop-core/ 一式を展開してから CLI 経由で実行する。
+ * sibling import を許す（単一ファイルコピーはしない）。
  */
 
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { IMPLEMENTATION_DIRS, PROGRESS_FILE, TASK_DIR } from '../lib/layout.mjs';
+import {
+  bypassLabelMessage,
+  coupledMessage,
+  couplingUsage,
+  docsOnlyMessage,
+  foreignProgressLines,
+  missingProgressLines,
+  multipleProgressLines,
+  newProgressNotCountedLines,
+  strayProgressAdviceLines,
+  strayProgressLines,
+  unchangedProgressAdviceLines,
+  unchangedProgressLines,
+} from '../lib/messages.mjs';
 
 /** 人間が付ける逃げ道。作業に紐づかない変更（ルール整備など）を通す */
 export const BYPASS_LABEL = 'no-progress-needed';
 
-/** ここに変更があれば「実装 PR」とみなす */
-const IMPLEMENTATION_DIRS = ['src/', 'tests/', 'tools/'];
-
-/** 作業の進捗ファイル名 */
-const PROGRESS_FILE = 'progress.md';
-
-/** 作業ディレクトリの親。旧 `progress/` レイアウトは対象外 */
-const TASK_DIR = 'task/';
 
 /**
  * 作業ディレクトリ名の形。**ID の 4 桁だけを縛り、slug の文字種は絞らない。**
@@ -681,9 +687,9 @@ function readHeadBranch() {
 }
 
 const MESSAGES = {
-  'bypass-label': `ラベル ${BYPASS_LABEL} があるため通過させます（人間による明示承認）。`,
-  'docs-only': 'src/・tests/・tools/ に変更がないため対象外です。',
-  coupled: '実装の変更に、進行中の作業の progress.md がちょうど 1 件伴っています。',
+  'bypass-label': bypassLabelMessage(BYPASS_LABEL),
+  'docs-only': docsOnlyMessage(),
+  coupled: coupledMessage(),
 };
 
 /**
@@ -712,7 +718,7 @@ function main() {
   const result = resolveCoupling({ baseRef, labels: readLabels(), headBranch });
 
   if (result.error === 'usage') {
-    console.error('使い方: node tools/check-progress-coupling.mjs <base-ref>');
+    console.error(couplingUsage());
     process.exit(1);
   }
   if (result.error === 'diff') {
@@ -728,45 +734,27 @@ function main() {
   }
 
   if (result.reason === 'unchanged') {
-    console.error('進行中の作業の progress.md が差分に出ていますが、中身が変わっていません');
-    console.error('（実行ビットなど、ファイルのモードだけの変更です）:');
+    for (const line of unchangedProgressLines()) console.error(line);
     for (const p of result.unchanged) console.error(`  - ${p}`);
-    console.error('工程を進めたら、その作業の progress.md の内容——Status・チェックボックス・');
-    console.error('試行ログ——を書き足して、同じ PR に含めてください。モードを変えただけでは');
-    console.error('進捗を記録したことになりません。');
+    for (const line of unchangedProgressAdviceLines()) console.error(line);
   } else if (result.reason === 'missing') {
-    console.error('実装（src/・tests/・tools/）を変更していますが、進行中の作業の');
-    console.error('progress.md（task/<id>-<slug>/progress.md）の更新が含まれていません。');
-    console.error('工程を進めたら、その作業の progress を同じ PR で更新してください。');
-    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
+    for (const line of missingProgressLines()) console.error(line);
     if (result.strays.length > 0) {
       console.error('次の変更は、その形でないため数えていません:');
       for (const stray of result.strays) console.error(`  - ${stray}`);
       console.error('（新規追加・削除・種別の変更（symlink への置き換えなど）・移動）');
     }
-    console.error('この PR で新しく作った progress.md は数えません。spec + progress は');
-    console.error('先に計画用ブランチの docs PR で main へ入れてください。');
+    for (const line of newProgressNotCountedLines()) console.error(line);
   } else if (result.reason === 'stray') {
-    console.error('進行中の作業の progress.md に、その場の更新でない変更が含まれています:');
+    for (const line of strayProgressLines()) console.error(line);
     for (const stray of result.strays) console.error(`  - ${stray}`);
-    console.error('数えるのは、base に既にある progress.md の内容を書き足した更新だけです。');
-    console.error('新規追加・削除・種別の変更（symlink への置き換えなど）・作業ディレクトリを');
-    console.error('またぐ移動（アーカイブを含む）は、実装 PR に混ぜないでください。');
-    console.error('1 PR = 1 作業です。');
-    console.error('spec + progress の新規作成は計画用ブランチの docs PR へ、');
-    console.error('アーカイブは main への直接コミットへ分けてください。');
+    for (const line of strayProgressAdviceLines()) console.error(line);
   } else if (result.reason === 'foreign') {
-    console.error(`更新された progress.md がこの PR の作業のものではありません: ${result.works[0]}`);
-    console.error(
-      `  task/${result.works[0]}/progress.md の Branch（base 側）: ${result.branch ?? '（行がありません）'}`,
-    );
-    console.error(`  この PR の head ブランチ: ${result.headBranch}`);
-    console.error('この PR のブランチで進めている作業の progress.md を更新してください。');
-    console.error('別の作業の progress.md を触っているなら、PR を分けてください。');
-    console.error('Branch は base（merge-base）側から読みます。着手時に main へ入れた値が');
-    console.error('正であり、この PR で書き換えても判定は変わりません。');
+    for (const line of foreignProgressLines(result.works[0], result.branch, result.headBranch)) {
+      console.error(line);
+    }
   } else {
-    console.error(`進行中の作業の progress.md が ${result.works.length} 件更新されています:`);
+    for (const line of multipleProgressLines(result.works.length)) console.error(line);
     for (const work of result.works) console.error(`  - ${work}`);
     console.error('1 PR = 1 作業です。作業ごとに PR を分けてください。');
   }

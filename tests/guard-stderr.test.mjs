@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CHECKER = path.join(repoRoot, 'tools', 'check-protected-paths.mjs');
+const CHECKER = path.join(repoRoot, 'loop-core', 'gate', 'check-protected-paths.mjs');
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
 

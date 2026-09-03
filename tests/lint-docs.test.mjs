@@ -28,10 +28,10 @@ import {
   findBadCheckboxes,
   checkBacklogCompletion,
   lintDocs,
-} from '../tools/lint-docs.mjs';
+} from '../loop-core/ledger/lint-docs.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CLI = path.join(repoRoot, 'tools', 'lint-docs.mjs');
+const CLI = path.join(repoRoot, 'loop-core', 'ledger', 'lint-docs.mjs');
 
 /** 一時ディレクトリを作り、テスト終了時に消す */
 function makeRoot(t) {
@@ -253,7 +253,7 @@ test('例6: backlog に progress.md を置く → 該当パスが列挙され、
 
 test('例7: npm run ci が lint:docs を実行する', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-  assert.match(pkg.scripts['lint:docs'], /tools\/lint-docs\.mjs/);
+  assert.match(pkg.scripts['lint:docs'], /loop-core\/bin\/loop\.mjs lint-docs/);
   assert.match(pkg.scripts.ci, /\blint:docs\b/);
 });
 

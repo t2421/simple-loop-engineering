@@ -41,7 +41,7 @@ function isNonEmptyString(value) {
  * @param {unknown} value
  * @returns {value is string}
  */
-function isRelativeRepoPath(value) {
+export function isRelativeRepoPath(value) {
   if (!isNonEmptyString(value)) return false;
   if (value.includes('\\')) return false;
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return false;

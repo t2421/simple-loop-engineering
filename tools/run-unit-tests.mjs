@@ -28,8 +28,16 @@ export function listUnitTestFiles(testsDir) {
     .map((name) => path.join(testsDir, name));
 }
 
+function listOptionalUnitTestFiles(testsDir) {
+  if (!fs.existsSync(testsDir)) return [];
+  return listUnitTestFiles(testsDir);
+}
+
 function main() {
-  const files = listUnitTestFiles(path.join(rootDir, 'tests'));
+  const files = [
+    ...listUnitTestFiles(path.join(rootDir, 'tests')),
+    ...listOptionalUnitTestFiles(path.join(rootDir, 'loop-core', 'tests')),
+  ];
   const child = spawn(process.execPath, ['--test', ...files], { stdio: 'inherit' });
   child.on('exit', (code, signal) => {
     if (signal) {

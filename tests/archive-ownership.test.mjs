@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { archive, readBranch, parsePrUrl, checkOwnership } from '../tools/archive.mjs';
+import { archive, readBranch, parsePrUrl, checkOwnership } from '../loop-core/ledger/archive.mjs';
 
 const NAME = '0019-foo';
 

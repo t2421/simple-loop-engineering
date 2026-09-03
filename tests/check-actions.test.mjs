@@ -8,7 +8,7 @@ import {
   readStopHookActive,
   DEFAULT_QUIET_SEC,
   DEFAULT_TIMEOUT_SEC,
-} from '../tools/check-actions.mjs';
+} from '../loop-core/gate/check-actions.mjs';
 
 /** 完了して成功したチェック */
 const ok = (name) => ({ name, status: 'completed', conclusion: 'success', html_url: `https://x/${name}`, id: 1 });

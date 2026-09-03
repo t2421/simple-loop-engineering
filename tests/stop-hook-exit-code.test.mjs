@@ -33,7 +33,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CI_DIR_SCRIPT = path.join(rootDir, 'tools', 'stop-hook-ci-dir.mjs');
+const CI_DIR_SCRIPT = path.join(rootDir, 'loop-core', 'gate', 'stop-hook-ci-dir.mjs');
 
 /**
  * 修正前の登録内容。「例」5 行目（バグの再現）に使う。
@@ -105,6 +105,19 @@ function makeFixture(t, { ciExit = 0, caExit = 0 } = {}) {
   fs.writeFileSync(
     path.join(repo, 'tools', 'check-actions.mjs'),
     esmStub('check-actions-ran.txt', caExit),
+  );
+  fs.cpSync(path.join(rootDir, 'loop-core'), path.join(repo, 'loop-core'), { recursive: true });
+  fs.writeFileSync(
+    path.join(repo, 'loop-core', 'gate', 'check-actions.mjs'),
+    esmStub('check-actions-ran.txt', caExit),
+  );
+  fs.writeFileSync(
+    path.join(repo, 'loop.manifest.json'),
+    `${JSON.stringify({
+      install: { argv: ['true'] },
+      verify: { command: 'true', definedIn: ['package.json'] },
+      protectedPaths: ['loop.manifest.json'],
+    })}\n`,
   );
 
   git(repo, 'init', '-q', '-b', 'main');

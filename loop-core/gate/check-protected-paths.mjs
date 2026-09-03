@@ -2,7 +2,7 @@
  * CLAUDE.md「変えてはいけないもの」の遵守を、base ブランチとの差分から機械的に検知する。
  *
  * 判定ロジックは純関数として公開し、テスト可能にしてある。
- * CLI としては `node tools/check-protected-paths.mjs <base-ref>` で実行する。
+ * CLI としては `node loop-core/bin/loop.mjs check-protected-paths <base-ref>` で実行する。
  * 違反があれば理由を表示して終了コード 1 で終わる。
  *
  * ## 構造: 分解してから判定する
@@ -21,9 +21,11 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { CORE_VERSION_FILE, TEMPLATES as LAYOUT_TEMPLATES } from '../lib/layout.mjs';
+import { isRelativeRepoPath } from '../lib/manifest.mjs';
+import { protectedPathsUsage } from '../lib/messages.mjs';
 
 /** 人間による明示承認の経路。この PR ラベルが付いていればガードを通過させる */
 export const ALLOW_LABEL = 'allow-protected-change';
@@ -32,18 +34,17 @@ export const ALLOW_LABEL = 'allow-protected-change';
 const MANIFEST = 'loop.manifest.json';
 
 /** 見出し・順番を固定した型。移動しても中身を変えてもいけない */
-const TEMPLATES = [
-  'task/TEMPLATE-spec.md',
-  'task/TEMPLATE-progress.md',
-  'specs/TEMPLATE.md',
-  'progress/TEMPLATE.md',
-];
+const TEMPLATES = LAYOUT_TEMPLATES;
 
 /**
- * 判定の根拠そのもの。ガードジョブは base リビジョンのこのファイルを実行するので、
- * これを書き換えられるとガードを恒久的に無効化できる。移動も変更も削除も許さない。
+ * 判定の根拠そのもの。ガードジョブは base の loop-core/ 一式を展開して CLI 経由で
+ * 実行する。これを書き換えられるとガードを恒久的に無効化できる。
+ * 移動も変更も削除も許さない。新規追加（導入 PR）だけ許可。
  */
-const CHECKER = 'tools/check-protected-paths.mjs';
+export const CHECKER = 'loop-core/gate/check-protected-paths.mjs';
+
+/** コアの版ピン。上げるには allow-protected-change が要る（完了条件 9） */
+export const VERSION_PIN = CORE_VERSION_FILE;
 
 /** 作業の仕様はこのファイル名だけにする */
 const SPEC_FILE = 'spec.md';
@@ -58,25 +59,21 @@ const SPEC_FILE = 'spec.md';
  * 実行するので骨抜き PR 自体は無傷の base 版で検査されるが、それがマージされた
  * 瞬間に以後の base が骨抜き版になる（2 PR で恒久的に無効化できる）。
  */
-const GATE_HELPERS = [
+export const GATE_HELPERS = [
   'tools/run-unit-tests.mjs',
   'tools/e2e-needed.mjs',
-  'tools/check-progress-coupling.mjs',
-  // Stop hook が CI を回す対象ディレクトリの判定。書き換えれば変更の無い
-  // チェックアウトを指させ、セッション停止時の検証を骨抜きにできる
-  'tools/stop-hook-ci-dir.mjs',
-  // push した HEAD の GitHub Actions の結果の判定。Stop hook が委譲する。
-  // 書き換えれば、赤い・未確定の Actions のまま会話を終えられる
-  'tools/check-actions.mjs',
-  // プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。
-  // 骨抜きにすれば worktree の規律が消え、実装が進捗の記録なしに main へ入る
-  'tools/guard-worktree.mjs',
-  // マニフェストの読み取り・検証。既定値で補う・自己保護を外す改変を止める
-  'tools/loop-manifest.mjs',
-  // **hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を
-  // 消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく
-  // 呼び出しの所在も守る（検証コマンドの definedIn と同じ構造）。
-  // 配線の網羅は tests/hook-wiring.test.mjs が実物から機械検証する
+  'loop-core/gate/check-progress-coupling.mjs',
+  'loop-core/gate/stop-hook-ci-dir.mjs',
+  'loop-core/gate/check-actions.mjs',
+  'loop-core/gate/guard-worktree.mjs',
+  'loop-core/lib/manifest.mjs',
+  'loop-core/lib/layout.mjs',
+  'loop-core/lib/messages.mjs',
+  'loop-core/lib/holes.mjs',
+  'loop-core/lib/check-compat.mjs',
+  'loop-core/bin/loop.mjs',
+  'loop-core/install.mjs',
+  'loop-core/templates/CLAUDE.md',
   '.claude/settings.json',
 ];
 
@@ -200,6 +197,7 @@ function covers(dir, p) {
 function isProtectedPath(p, extraProtectedPaths = [], definedInPaths = []) {
   return (
     p === CHECKER
+    || p === VERSION_PIN
     || isGateHelper(p)
     || isManifestProtected(p, extraProtectedPaths)
     || definedInPaths.includes(p)
@@ -406,10 +404,15 @@ export function findViolations({
 
     // --- 単一ファイルの規則 ---
 
-    if (path === CHECKER) {
-      // 新規追加（ガード導入 PR）だけ許可
+    if (path === CHECKER || path === VERSION_PIN) {
+      // 新規追加（ガード導入 PR / 版ピン導入 PR）だけ許可
       if (kind === 'appeared' && from === undefined) continue;
-      violations.push({ path: render(e), reason: 'ガードの判定ロジック自体は変更も移動もできない' });
+      violations.push({
+        path: render(e),
+        reason: path === VERSION_PIN
+          ? 'コアのバージョン指定は変更も移動もできない'
+          : 'ガードの判定ロジック自体は変更も移動もできない',
+      });
       continue;
     }
 
@@ -561,24 +564,6 @@ function tryGitShow(ref, filePath) {
 }
 
 /**
- * マニフェストに書ける相対パスか。すでに正規形の posix 相対パスだけを受け付ける。
- * `tools/loop-manifest.mjs` と同じ規則。このファイルは CI が単体コピーするので
- * そちらを import できない。
- *
- * @param {unknown} value
- * @returns {value is string}
- */
-function isRelativeRepoPath(value) {
-  if (typeof value !== 'string' || value === '') return false;
-  if (value.includes('\\')) return false;
-  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return false;
-  const normalized = path.posix.normalize(value);
-  if (normalized !== value) return false;
-  if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) return false;
-  return true;
-}
-
-/**
  * パース済みマニフェストからガードが使う definedIn / protectedPaths を取る。
  * パスは相対正規形のみ。壊れているときは例外（既定値で補わない）。
  *
@@ -726,7 +711,7 @@ function readBaseArchivedIds(mergeBase) {
 function main() {
   const baseRef = process.argv[2];
   if (!baseRef) {
-    console.error('使い方: node tools/check-protected-paths.mjs <base-ref>');
+    console.error(protectedPathsUsage());
     process.exit(1);
   }
 

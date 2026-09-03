@@ -8,8 +8,8 @@
 
 ## 対象
 
-- 場所: `tools/*.mjs` の汎用部分、`task/`・`backlog/` の構造、`task/TEMPLATE-spec.md`・`task/TEMPLATE-progress.md`、および CLAUDE.md の再利用可能部分 → 新パッケージ（名称未定）
-- 公開面: パッケージの `bin`（CLI）。各リポジトリは `package.json` の依存としてバージョンを固定し、CLI 経由でループのツールを実行する
+- 場所: `tools/*.mjs` の汎用部分、`task/`・`backlog/` の構造、`task/TEMPLATE-spec.md`・`task/TEMPLATE-progress.md`、および CLAUDE.md の再利用可能部分 → ディレクトリ `loop-core/`（バージョンは `loop-core/VERSION`）
+- 公開面: CLI `loop`（起動は `node loop-core/bin/loop.mjs`）。npm パッケージにはしない。各リポジトリは `loop-core/` をコピーしてバージョンを `VERSION` で固定し、CLI 経由でループのツールを実行する
 
 ## 背景
 
@@ -32,16 +32,16 @@
 
 | 層 | 中身 | 配布 |
 |---|---|---|
-| Core | `task/`・`backlog/` 構造、テンプレ 2 種、`archive` / `check-actions` / `check-progress-coupling` / `guard-worktree` / `lint-docs` / `start-task` / `check-protected-paths` / `promote` | パッケージ + `bin` |
-| Manifest | 0042 が定義する契約（プロジェクト直下 1 ファイル。検証コマンド・保護対象などプロジェクト固有値の置き場） | 各リポジトリ |
-| Project-local | `setup-playwright.mjs`・`e2e-needed.mjs`・figma skill・トークン表 | 各リポジトリ |
+| Core | `task/`・`backlog/` 構造、テンプレ 2 種、`archive` / `check-actions` / `check-progress-coupling` / `guard-worktree` / `lint-docs` / `start-task` / `check-protected-paths` / `promote`。内部は **ledger（台帳）** と **gate（ゲート）** に分ける。共有実行系としてマニフェスト読取（`lib/manifest.mjs`）と `stop-hook-ci-dir` も含める | バージョン付きディレクトリ `loop-core/` + コピー用 `install.mjs` + CLI `node loop-core/bin/loop.mjs`（コマンド名 `loop`） |
+| Manifest | 0042 が定義する契約（`loop.manifest.json`。検証コマンド・保護対象などプロジェクト固有値の置き場） | 各リポジトリ。契約は再定義しない |
+| Project-local | `setup-playwright.mjs`・`e2e-needed.mjs`・`run-unit-tests.mjs`・figma skill・トークン表 | 各リポジトリ |
 
-設計上の論点。昇格時にこの候補の中で答えを出す。
+設計上の論点への答え（この作業で確定）。
 
-1. **配布先の制約。** ループのツールは Claude のセッションだけでなく GitHub Actions からも実行される。したがって `.claude/` 配下だけに置くことはできない。`bin` を持つパッケージが妥当である
-2. **置き場が 2 つに割れる運用上の注意。** ツールはパッケージ側、エージェント定義（`spec-author` / `codex-reviewer` / `visual-design-reviewer`）と Skill は `t2421/claude-config` 側が自然である。この分割はバージョン整合の管理コストを生む。どちらか一方だけ更新されたときの検知方法を決める必要がある
-3. **移植で本当に効くのは `tools/` ではなく `CLAUDE.md` である。** 固有語 23 件のここが最も書き換えコストが高く、かつ最も価値が高い（毎セッション全文が載る＝ループの実行系そのもの）。再利用資産の中心は、不変の原則（Verify を 2 段にする / Critical ゼロまで完了と言わない / 出力を貼る / 期待値を書き換えない）と、埋めるべき穴（検証コマンド・成果物の置き場・レビュアー名・見た目の有無）を分離した **CLAUDE.md テンプレート**であるべきだ
-4. **コア自身のバージョン固定。** コアが外部パッケージになると、バージョンを上げる行為が検証を弱めうる（例: 新バージョンで `check-protected-paths` の判定が緩む）。コアのバージョン指定（`package.json` の該当行）も保護対象にし、変更には `allow-protected-change` を要求する
+1. **配布形態。** npm パッケージにはしない。0044 の移植先はパッケージマネージャが無く、`.mjs` のディレクトリを置けば動いた。選ぶ形態は **バージョン付きファイル群（`loop-core/`、版は `loop-core/VERSION`）+ コピー用 `install.mjs`**。CLI 入口は `node loop-core/bin/loop.mjs` であり、npm の `bin` に依存しない。GitHub Actions からも同じ木を `git archive` で base リビジョンから取り出して実行する。この形態は 0044 の移植先（パッケージマネージャ無し）に配れる。npm パッケージを選ぶと配れない。
+2. **Core と `t2421/claude-config` の版ずれ。** 検知方法は 1 つ: 消費リポジトリの `.claude/claude-config.version`（1 行。入れた `t2421/claude-config` の ref）を、Core が配る `loop-core/CLAUDE_CONFIG_COMPAT`（この Core 版が検証済みとする ref）と比較する。`loop check-compat` が不一致またはピン欠落を検出し、警告を出して終了コード非 0 で終わる。エージェント定義・Skill 自体は Core に入れない。
+3. **CLAUDE.md テンプレート。** 不変の原則と埋めるべき穴（`{{VERIFY_COMMAND}}` など）を分離して `loop-core/templates/CLAUDE.md` に置く。穴が残ったまま lint すると列挙して落ちる。
+4. **コア自身のバージョン固定。** 版の所在は `loop-core/VERSION`。これを保護パスに含め、上げるには `allow-protected-change` を要求する（npm の依存行ではない）。
 
 **backlog 時点の未解決点は解消済み**: `0038-promote-tool` は先行して単独実装され（`tools/promote.mjs`、アーカイブ済み）、Core 層に入る。この作業では新規実装ではなく**取り込み**の対象である。
 
@@ -49,10 +49,11 @@
 
 ## 範囲外
 
-- 0042 のマニフェスト契約の定義そのもの（0042 で行う）
-- 2 番目のプロジェクトへの手移植（0044 で行う）
-- Project-local 層（`setup-playwright.mjs`・`e2e-needed.mjs`・figma skill・トークン表）のパッケージへの取り込み
-- エージェント定義・Skill のパッケージへの取り込み（`t2421/claude-config` 側に置く）
+- 0042 のマニフェスト契約の定義そのもの（0042 で行う。ファイルは `loop.manifest.json`。読取実装は共有実行系として Core の `lib/manifest.mjs` へ移す）
+- 2 番目のプロジェクトへの手移植（0044 で行う。この作業で 0044 先へ再移植しない）
+- Project-local 層（`setup-playwright.mjs`・`e2e-needed.mjs`・figma skill・トークン表）の Core への取り込み
+- `run-unit-tests.mjs` の Core への取り込み。このリポジトリの `tests/` を列挙するプロジェクト固有の入口である
+- エージェント定義・Skill の Core への取り込み（`t2421/claude-config` 側に置く）
 
 ## 失敗時
 
@@ -60,22 +61,22 @@
 - コアのバージョン指定を `allow-protected-change` なしで変更する PR: `protected-paths` が検知して CI が落ちる
 - Core が期待する構造（`task/`・テンプレ 2 種）が無いリポジトリで CLI を実行: 何も変更せず、欠けている構造を表示して終了コード非 0
 - `CLAUDE.md` テンプレートの穴が未記入のまま lint: 未記入の穴をすべて列挙して終了コード非 0
-- Core のバージョンと、別置きのエージェント定義・Skill のバージョンが食い違う: 検知して警告する（→「仕様」論点 2）
+- Core のバージョンと、別置きのエージェント定義・Skill のバージョンが食い違う: `loop check-compat` が `.claude/claude-config.version` と `loop-core/CLAUDE_CONFIG_COMPAT` の不一致を検知し、警告を出して終了コード非 0（→「仕様」論点 2）
 
 ## 例
 
-検証に使う具体例。パッケージ名・CLI 名は着手時に確定させる（下表の `<...>` はその印）。
+検証に使う具体例。ディレクトリ名は `loop-core`、CLI 名は `loop`（起動は `node loop-core/bin/loop.mjs`）。
 
 | 操作または入力 | 期待結果 |
 |---|---|
 | このリポジトリで Core を CLI 経由に置き換えたあと `npm run ci` | 置き換え前と同じ結果。既存のテストがすべて通る |
-| このリポジトリで `<CLI> start-task --next-id` | 置き換え前の `node tools/start-task.mjs --next-id` と同じ出力 |
-| Core を導入していない空のリポジトリで `<CLI> start-task` | 構造が無い旨を表示して終了コード非 0。ファイルを作らない |
-| マニフェストを消して `<CLI>` の任意のコマンドを実行 | 何も変更せず終了コード非 0 |
+| このリポジトリで `node loop-core/bin/loop.mjs start-task --next-id` | 置き換え前の `node tools/start-task.mjs --next-id` と同じ出力 |
+| Core を導入していない空のリポジトリで `node loop-core/bin/loop.mjs start-task` | 構造が無い旨を表示して終了コード非 0。ファイルを作らない |
+| マニフェストを消して `node loop-core/bin/loop.mjs` の任意のコマンドを実行 | 何も変更せず終了コード非 0 |
 | `CLAUDE.md` テンプレートの穴を 1 つ残して lint | その穴が列挙され終了コード非 0 |
 | コアのバージョン指定を上げる PR をラベル無しで出す | `protected-paths` が失敗する |
 | 同じ PR に `allow-protected-change` を付けて再実行 | `protected-paths` が成功する |
-| 0044 の移植先と同じ性質（パッケージマネージャ無し）のリポジトリへ Core を配る | 選んだ配布形態で実際に配れる。配れないなら配布形態の選定が誤っている |
+| 0044 の移植先と同じ性質（パッケージマネージャ無し）のリポジトリへ Core を配る | `node loop-core/install.mjs <dest>` で `loop-core/` がコピーされ、`node loop-core/bin/loop.mjs` が npm 無しで起動できる |
 
 ## 完了条件
 

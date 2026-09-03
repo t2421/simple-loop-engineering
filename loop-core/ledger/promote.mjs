@@ -1,7 +1,7 @@
 /**
  * 昇格（backlog → task）の機械的な部分を 1 コマンドにする。
  *
- * 使い方: node tools/promote.mjs <id>-<slug>
+ * 使い方: node loop-core/bin/loop.mjs promote <id>-<slug>
  *
  * アーカイブ（`tools/archive.mjs`）が自動化されているのに、昇格だけ毎回手作業だった。
  * 手順のうち機械的なもの（移動・定型行の削除・progress の雛形生成）をここに落とす。
@@ -365,7 +365,7 @@ export function promote(
 function main() {
   const name = process.argv[2];
   if (!name) {
-    console.error('使い方: node tools/promote.mjs <id>-<slug>');
+    console.error('使い方: node loop-core/bin/loop.mjs promote <id>-<slug>');
     process.exit(1);
   }
 

@@ -17,11 +17,12 @@
 | `progress/archive/` | `tests/calc-page.test.mjs` 用のシンボリックリンク（本体は `task/archive/0003-calc-page/`） |
 | `backlog/` | 着手しない候補。`backlog/<id>-<slug>/spec.md`。完了条件は未確定。progress は作らない |
 | `src/` | 実装 |
+| `loop-core/` | ループコア（CLI `node loop-core/bin/loop.mjs`。版は `loop-core/VERSION`） |
 | `tests/` | テスト |
 | `.github/workflows/` | CI。`verify` が `npm run ci`、`e2e` は計算ページに影響しうる差分と `main` への push で `npm run test:e2e` |
 | `.claude/skills/` | 手順の知識。CLAUDE.md からは参照だけする |
 
-作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規の採番は `node tools/start-task.mjs --next-id` で計算する。
+作業の識別子はゼロ埋め 4 桁連番（`0001`、`0002`、…）。`task/` と `backlog/` で同じ番号空間を使う。slug は一覧用のラベル。例: `task/archive/0001-math-add/`、`backlog/0013-cloudflare-preview/`。次の新規の採番は `node loop-core/bin/loop.mjs start-task --next-id` で計算する。
 
 Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
@@ -37,13 +38,13 @@ Figma 抽出物の保存先と命名は `.claude/skills/figma-extract` が正。
 
 ## 開発ループ
 
-1. **Plan** — `node tools/start-task.mjs` を実行する。ツールが次の 1 作業（`task/` の `archive/` 以外で Blocked / Done でない最小 ID）を選び、worktree を用意する。何をするか 1〜3 行で宣言する
+1. **Plan** — `node loop-core/bin/loop.mjs start-task` を実行する。ツールが次の 1 作業（`task/` の `archive/` 以外で Blocked / Done でない最小 ID）を選び、worktree を用意する。何をするか 1〜3 行で宣言する
 2. **Implement** — 完了条件を満たす最小差分だけ実装する
 3. **Verify (自己)** — [共通の検証](#共通の検証)（CI と同じコマンド）を実行する。続けて対象仕様の完了条件に対して検証する。出力を会話に貼る
 4. **Verify (外部)** — 進捗に書いたレビューサブエージェントへ依頼する
 5. **Fix** — Critical 指摘がゼロになるまで 3〜4 を繰り返す
 6. **Record** — 進捗の Status・チェック・試行ログを更新する。PR を作成したら URL を進捗の **PR** に書く。見た目の変更なら該当箇所のスクリーンキャプチャを PR 本文に添付する（リポジトリには置かない）。この時点では Status を Done にしない。アーカイブもしない
-   - **push したら GitHub Actions の結果を確認する。** 赤い・未確定のまま「完了」と報告しない。Stop hook の `tools/check-actions.mjs` が未確認のまま終えることを防ぐ（未 push・`gh` 不在などでは黙って通すので、機構だけに頼らない）
+   - **push したら GitHub Actions の結果を確認する。** 赤い・未確定のまま「完了」と報告しない。Stop hook の `node loop-core/bin/loop.mjs check-actions` が未確認のまま終えることを防ぐ（未 push・`gh` 不在などでは黙って通すので、機構だけに頼らない）
 7. **Archive** — 紐付けた PR がマージされたら [アーカイブ](#アーカイブ) する
 
 Critical が残っている状態で「完了」と報告しない。Status を Done にしない。アーカイブもしない。PR 未作成・未マージでも同じ。
@@ -78,7 +79,7 @@ spec・progress・ルールを、いつコミットし、どこへマージす�
 
 触るファイルが重ならない作業どうしを選べば衝突しない。重なる場合も並列にしてよいが、後からマージする側が main を取り込んで解決する。解決コストが実装より大きくなるなら直列にする。
 
-次の 1 作業の worktree は `node tools/start-task.mjs` が用意する。選択を待たずに特定の作業を並行で開始するときだけ、手動で作る。
+次の 1 作業の worktree は `node loop-core/bin/loop.mjs start-task` が用意する。選択を待たずに特定の作業を並行で開始するときだけ、手動で作る。
 
 ```
 git worktree add .worktrees/<ブランチ名> -b <ブランチ名> main
@@ -129,7 +130,7 @@ npm run ci
 - `backlog/` は未完了の作業ではない。次の作業を選ぶときの対象にしない
 - 着手するときは同じ ID のまま `backlog/<id>-<slug>/` を `task/<id>-<slug>/` へ移し、完了条件を埋めて `progress.md` を置く。**移動と完了条件の記入は同じ PR で行う**。[コミットとマージ](#コミットとマージ) の昇格と同じく、計画用ブランチの docs PR で main へ入れる
 - 最初から着手する作業は `task/<id>-<slug>/` を新しく作り、完了条件を埋めて `progress.md` を置く
-- `specs/` と `progress/` に残っている対（移行前の未完了）はこの構造では動かさない。完了後のアーカイブは、その時点の `tools/archive.mjs` に従う
+- `specs/` と `progress/` に残っている対（移行前の未完了）はこの構造では動かさない。完了後のアーカイブは、その時点の `node loop-core/bin/loop.mjs archive` に従う
 
 ## 見た目
 
@@ -157,7 +158,7 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 このリポジトリ固有の決めごとだけ、ここに書く。
 
 - チェックリストは作業固有の項目だけ書く（仕様確認、Figma 抽出、テスト作成、実装、レビュー、PR 作成、見た目なら PR へのスクリーンキャプチャ、PR マージ後のアーカイブ）
-- **Complexity**（`S | M | L`）は spec 起草時に `spec-author` が付与する。`node tools/start-task.mjs` がこの等級から実装に使うモデルを引く（`S → haiku`、`M → sonnet`、`L → fable`）。無い進捗（既存分）は `M` とみなす
+- **Complexity**（`S | M | L`）は spec 起草時に `spec-author` が付与する。`node loop-core/bin/loop.mjs start-task` がこの等級から実装に使うモデルを引く（`S → haiku`、`M → sonnet`、`L → fable`）。無い進捗（既存分）は `M` とみなす
 - 構文チェック・テスト実行など全作業共通の検証は progress に書かない。`npm run ci` が強制する
 
 ## アーカイブ
@@ -171,7 +172,7 @@ Figma のライブファイルは完了条件にしない。抽出して作業�
 手順:
 
 ```
-node tools/archive.mjs <id>-<slug>
+node loop-core/bin/loop.mjs archive <id>-<slug>
 git add -A && git commit -m "docs: archive <id>-<slug>"
 ```
 
@@ -221,14 +222,17 @@ git add -A && git commit -m "docs: archive <id>-<slug>"
 - `.github/workflows/` の検証ステップ（`npm run ci` を外して通すことを防ぐ）
 - `tools/run-unit-tests.mjs`（ユニットテストの列挙。`ci` が委譲する）
 - `tools/e2e-needed.mjs`（e2e を回すかの判定。CI は base リビジョンを実行する）
-- `tools/check-progress-coupling.mjs`（実装 PR と progress 更新の結合の判定。CI は base リビジョンを実行する）
-- `tools/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
-- `tools/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
-- `tools/guard-worktree.mjs`（プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。骨抜きにすると worktree の規律が消え、実装が進捗の記録なしに入る）
-- `tools/loop-manifest.mjs`（マニフェストの読み取り・検証。既定値で補う・自己保護を外す改変を止める）
+- `loop-core/VERSION`（コアの版ピン。上げるには `allow-protected-change` が要る）
+- `loop-core/bin/loop.mjs`（Core CLI 入口。hook と `npm run lint:docs` が呼ぶ）
+- `loop-core/gate/check-protected-paths.mjs`（保護パス判定。CI は base の loop-core 一式を実行する）
+- `loop-core/gate/check-progress-coupling.mjs`（実装 PR と progress 更新の結合の判定。CI は base リビジョンを実行する）
+- `loop-core/gate/stop-hook-ci-dir.mjs`（Stop hook が CI を回す対象ディレクトリの判定。書き換えると変更の無いチェックアウトを検証させられる）
+- `loop-core/gate/check-actions.mjs`（push した HEAD の GitHub Actions 結果の判定。Stop hook が委譲する。書き換えると、赤い・未確定の Actions のまま会話を終えられる）
+- `loop-core/gate/guard-worktree.mjs`（プライマリチェックアウトでの実装編集を止める PreToolUse hook の判定。骨抜きにすると worktree の規律が消え、実装が進捗の記録なしに入る）
+- `loop-core/lib/manifest.mjs`（マニフェストの読み取り・検証。既定値で補う・自己保護を外す改変を止める）
 - `.claude/settings.json`（**hook の配線そのもの。** 上の判定コードをすべて凍結しても、ここから登録を消せば判定は 1 行も変えずに呼ばれなくなる。判定の所在だけでなく呼び出しの所在も守る）
 
-この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `tools/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
+この一覧は CI のガード（`.github/workflows/guard.yml`）が機械的に検知する。判定は `loop-core/gate/check-protected-paths.mjs` にあり、このファイル自体も保護対象である。
 
 守る対象を増やす・外すときは `.claude/skills/add-protected-path` に従う。**この節に行を足すだけではガードは検知しない。**
 

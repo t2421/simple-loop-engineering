@@ -9,8 +9,8 @@ import {
   ManifestError,
   loadManifest,
   validateManifest,
-} from '../tools/loop-manifest.mjs';
-import { findViolations, hasAllowLabel } from '../tools/check-protected-paths.mjs';
+} from '../loop-core/lib/manifest.mjs';
+import { findViolations, hasAllowLabel } from '../loop-core/gate/check-protected-paths.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -164,10 +164,10 @@ test('相対パスは正規形のみ受け付ける', () => {
 
 test('正規形の相対パスは通る', () => {
   const out = validateManifest(
-    validData({ protectedPaths: [MANIFEST_FILE, 'tools/loop-manifest.mjs'] }),
+    validData({ protectedPaths: [MANIFEST_FILE, 'loop-core/lib/manifest.mjs'] }),
     { manifestPath: MANIFEST_FILE },
   );
-  assert.deepEqual(out.protectedPaths, [MANIFEST_FILE, 'tools/loop-manifest.mjs']);
+  assert.deepEqual(out.protectedPaths, [MANIFEST_FILE, 'loop-core/lib/manifest.mjs']);
 });
 
 test('stages の paths も相対正規形のみ受け付ける', () => {

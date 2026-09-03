@@ -25,19 +25,24 @@
  * ただし**黙って**無効化はしない。想定外で素通りしたときは理由を stderr に 1 行出す。
  * ガードが効いていないことに気づけないのが、いちばん悪い失敗の仕方である。
  *
- * 手動実行: `echo '{"tool_input":{"file_path":"..."}}' | node tools/guard-worktree.mjs`
+ * 手動実行: `echo '{"tool_input":{"file_path":"..."}}' | node loop-core/bin/loop.mjs guard-worktree`
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import {
+  IMPLEMENTATION_DIR_NAMES,
+  WORKTREES_DIR as LAYOUT_WORKTREES_DIR,
+} from '../lib/layout.mjs';
+import { blockImplementationMessage } from '../lib/messages.mjs';
 
 /** worktree を置くディレクトリ。ここから下はプライマリでの編集ではない */
-export const WORKTREES_DIR = '.worktrees';
+export const WORKTREES_DIR = LAYOUT_WORKTREES_DIR;
 
 /** worktree で編集すべき実装のディレクトリ */
-export const IMPLEMENTATION_DIRS = ['src', 'tests', 'tools'];
+export const IMPLEMENTATION_DIRS = [...IMPLEMENTATION_DIR_NAMES];
 
 /** ブロックの終了コード。Claude Code はこれを見て stderr をセッションへ戻す */
 export const BLOCK_EXIT_CODE = 2;
@@ -49,10 +54,7 @@ export const BLOCK_EXIT_CODE = 2;
  * @returns {string}
  */
 export function blockMessage(filePath) {
-  return [
-    `プライマリチェックアウトの実装ファイルは編集できません: ${filePath}`,
-    '実装は worktree で行う。`node tools/start-task.mjs` で開始する。',
-  ].join('\n');
+  return blockImplementationMessage(filePath);
 }
 
 /**

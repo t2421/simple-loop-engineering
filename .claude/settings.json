@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/guard-worktree.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/loop-core/bin/loop.mjs\" guard-worktree"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=\"$(cat)\" && CI_DIR=\"$(printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/stop-hook-ci-dir.mjs\")\" && cd \"$CI_DIR\" && { npm run ci 1>&2 || exit 2; } && printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\"",
+            "command": "INPUT=\"$(cat)\" && CI_DIR=\"$(printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/loop-core/bin/loop.mjs\" stop-hook-ci-dir)\" && cd \"$CI_DIR\" && { npm run ci 1>&2 || exit 2; } && printf %s \"$INPUT\" | node \"$CLAUDE_PROJECT_DIR/loop-core/bin/loop.mjs\" check-actions",
             "timeout": 900
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/check-actions.mjs\" --on-bash-post"
+            "command": "node \"$CLAUDE_PROJECT_DIR/loop-core/bin/loop.mjs\" check-actions --on-bash-post"
           }
         ]
       }

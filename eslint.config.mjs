@@ -21,7 +21,7 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.mjs', 'tools/**/*.mjs', 'eslint.config.mjs'],
+    files: ['tests/**/*.mjs', 'tools/**/*.mjs', 'loop-core/**/*.mjs', 'eslint.config.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

@@ -20,12 +20,12 @@ import {
   resolveCoupling,
   strayProgressPaths,
   unchangedProgressPaths,
-} from '../tools/check-progress-coupling.mjs';
-import { findViolations } from '../tools/check-protected-paths.mjs';
+} from '../loop-core/gate/check-progress-coupling.mjs';
+import { findViolations } from '../loop-core/gate/check-protected-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const CLI = path.join(rootDir, 'tools/check-progress-coupling.mjs');
+const CLI = path.join(rootDir, 'loop-core/gate/check-progress-coupling.mjs');
 
 /** 実行環境にたまたま入っていると判定が変わる、CI 由来の環境変数 */
 const CI_ENV_KEYS = ['GITHUB_HEAD_REF', 'GITHUB_ACTIONS'];
@@ -1388,19 +1388,19 @@ test('CLI: GITHUB_ACTIONS で head ブランチ名が空なら fail-closed', (t)
 
 const noScripts = { changes: [] };
 
-test('ガードは tools/check-progress-coupling.mjs の変更を違反として検知する', () => {
+test('ガードは loop-core/gate/check-progress-coupling.mjs の変更を違反として検知する', () => {
   const changed = findViolations({
     ...noScripts,
-    changes: [{ status: 'M', path: 'tools/check-progress-coupling.mjs' }],
+    changes: [{ status: 'M', path: 'loop-core/gate/check-progress-coupling.mjs' }],
   });
   assert.equal(changed.length, 1);
-  assert.equal(changed[0].path, 'tools/check-progress-coupling.mjs');
+  assert.equal(changed[0].path, 'loop-core/gate/check-progress-coupling.mjs');
 });
 
-test('ガードは tools/check-progress-coupling.mjs の新規追加を違反にしない', () => {
+test('ガードは loop-core/gate/check-progress-coupling.mjs の新規追加を違反にしない', () => {
   const added = findViolations({
     ...noScripts,
-    changes: [{ status: 'A', path: 'tools/check-progress-coupling.mjs' }],
+    changes: [{ status: 'A', path: 'loop-core/gate/check-progress-coupling.mjs' }],
   });
   assert.deepEqual(added, []);
 });

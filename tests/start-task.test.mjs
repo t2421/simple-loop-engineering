@@ -12,7 +12,7 @@ import {
   selectNextTask,
   nextIdFrom,
   startTask,
-} from '../tools/start-task.mjs';
+} from '../loop-core/ledger/start-task.mjs';
 
 const MODELS = Object.freeze({ S: 'haiku', M: 'sonnet', L: 'fable' });
 

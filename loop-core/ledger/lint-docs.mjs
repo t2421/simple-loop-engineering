@@ -1,7 +1,7 @@
 /**
  * spec / progress / backlog がテンプレートに準拠しているかを機械検証する。
  *
- * CLI としては `node tools/lint-docs.mjs [ルート]`（`npm run lint:docs`）で実行する。
+ * CLI としては `node loop-core/bin/loop.mjs lint-docs [ルート]`（`npm run lint:docs`）で実行する。
  * 違反があればパスと理由をすべて列挙し、終了コード 1 で終わる。違反なしなら 0。
  *
  * ## 構造: 読み取りと判定を分ける
@@ -20,7 +20,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { findUnfilledHoles, unfilledHoleReasons } from '../lib/holes.mjs';
+import { CLAUDE_MD } from '../lib/layout.mjs';
 
 /** spec.md の `##` 見出しは、この名前がこの順で並ぶ */
 export const SPEC_HEADINGS = Object.freeze([
@@ -419,13 +422,27 @@ export function lintDocs(rootDir) {
     }
   }
 
+  const claudePath = path.join(rootDir, CLAUDE_MD);
+  if (fs.existsSync(claudePath)) {
+    push(CLAUDE_MD, unfilledHoleReasons(findUnfilledHoles(fs.readFileSync(claudePath, 'utf8'))));
+  }
+
   return violations.sort((a, b) => a.path.localeCompare(b.path) || a.reason.localeCompare(b.reason));
 }
 
+function defaultRoot() {
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return process.cwd();
+  }
+}
+
 function main() {
-  const rootDir = process.argv[2]
-    ? path.resolve(process.argv[2])
-    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const rootDir = process.argv[2] ? path.resolve(process.argv[2]) : defaultRoot();
 
   let violations;
   let checked;

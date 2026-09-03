@@ -29,22 +29,32 @@ jobs:
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           set -euo pipefail
-          # checkout が渡すのは PR のマージコミットなので、リポジトリ上の
-          # tools/check-protected-paths.mjs は「候補側」のコードである。
-          # それを実行すると、チェッカーを無害化する変更と保護パスの変更を
-          # 同じ PR に入れるだけでガードを回避できる。
-          # 実行するのは必ず base リビジョンの版にする。
-          CHECKER="$RUNNER_TEMP/check-protected-paths.mjs"
-          if git cat-file -e "origin/$BASE_REF:tools/check-protected-paths.mjs" 2>/dev/null; then
-            git show "origin/$BASE_REF:tools/check-protected-paths.mjs" > "$CHECKER"
-            echo "base（origin/$BASE_REF）のチェッカーで判定します。"
+          # 実行するのは必ず base リビジョンの版にする。候補側を実行すると、
+          # チェッカーを無害化する変更と保護パスの変更を同じ PR に入れるだけで
+          # ガードを回避できる。
+          # Core 抽出後は sibling import があるので、単一ファイルコピーではなく
+          # base の loop-core/ 一式を展開して CLI 経由で実行する。
+          BASE="origin/$BASE_REF"
+          if git cat-file -e "$BASE:loop-core/bin/loop.mjs" 2>/dev/null; then
+            git archive "$BASE" loop-core | tar -x -C "$RUNNER_TEMP"
+            echo "base（$BASE）の loop-core CLI で判定します。"
+            node "$RUNNER_TEMP/loop-core/bin/loop.mjs" check-protected-paths "$BASE"
+          elif git cat-file -e "$BASE:tools/check-protected-paths.mjs" 2>/dev/null; then
+            CHECKER="$RUNNER_TEMP/check-protected-paths.mjs"
+            git show "$BASE:tools/check-protected-paths.mjs" > "$CHECKER"
+            echo "base（$BASE）の単一ファイルチェッカーで判定します（loop-core 導入前）。"
+            node "$CHECKER" "$BASE"
           else
-            # ガード自身を導入する PR だけがここに来る。base にまだ存在しないため、
-            # 候補側を使うほかない。マージ後は必ず上の経路になる。
-            CHECKER="tools/check-protected-paths.mjs"
             echo "::warning::base にチェッカーが無いため候補側で判定します（ガード導入 PR のみ想定）。"
+            if [ -f loop-core/bin/loop.mjs ]; then
+              node loop-core/bin/loop.mjs check-protected-paths "$BASE"
+            elif [ -f tools/check-protected-paths.mjs ]; then
+              node tools/check-protected-paths.mjs "$BASE"
+            else
+              echo "候補側にもチェッカーがありません。"
+              exit 1
+            fi
           fi
-          node "$CHECKER" "origin/$BASE_REF"
 
   progress-coupling:
     runs-on: ubuntu-latest
@@ -67,16 +77,24 @@ jobs:
         run: |
           set -euo pipefail
           # protected-paths と同じ理由で、実行するのは必ず base リビジョンの版にする。
-          # 候補側を実行すると、判定を骨抜きにする変更と実装変更を同じ PR に入れる
-          # だけで検査を回避できる。
-          CHECKER="$RUNNER_TEMP/check-progress-coupling.mjs"
-          if git cat-file -e "origin/$BASE_REF:tools/check-progress-coupling.mjs" 2>/dev/null; then
-            git show "origin/$BASE_REF:tools/check-progress-coupling.mjs" > "$CHECKER"
-            echo "base（origin/$BASE_REF）のチェッカーで判定します。"
+          BASE="origin/$BASE_REF"
+          if git cat-file -e "$BASE:loop-core/bin/loop.mjs" 2>/dev/null; then
+            git archive "$BASE" loop-core | tar -x -C "$RUNNER_TEMP"
+            echo "base（$BASE）の loop-core CLI で判定します。"
+            node "$RUNNER_TEMP/loop-core/bin/loop.mjs" check-progress-coupling "$BASE"
+          elif git cat-file -e "$BASE:tools/check-progress-coupling.mjs" 2>/dev/null; then
+            CHECKER="$RUNNER_TEMP/check-progress-coupling.mjs"
+            git show "$BASE:tools/check-progress-coupling.mjs" > "$CHECKER"
+            echo "base（$BASE）の単一ファイルチェッカーで判定します（loop-core 導入前）。"
+            node "$CHECKER" "$BASE"
           else
-            # このチェックを導入する PR だけがここに来る。base にまだ存在しないため、
-            # 候補側を使うほかない。マージ後は必ず上の経路になる。
-            CHECKER="tools/check-progress-coupling.mjs"
             echo "::warning::base にチェッカーが無いため候補側で判定します（導入 PR のみ想定）。"
+            if [ -f loop-core/bin/loop.mjs ]; then
+              node loop-core/bin/loop.mjs check-progress-coupling "$BASE"
+            elif [ -f tools/check-progress-coupling.mjs ]; then
+              node tools/check-progress-coupling.mjs "$BASE"
+            else
+              echo "候補側にもチェッカーがありません。"
+              exit 1
+            fi
           fi
-          node "$CHECKER" "origin/$BASE_REF"

@@ -197,4 +197,33 @@ docs の形式違反はありません（54 件の作業ディレクトリを確
   2. `verifyDefinitionSignature` の `Object.fromEntries` も同様。**null-prototype にキーソートして入れてから stringify。**
   3. `readManifestFieldsAt` が base 側の `definedIn` / `protectedPaths` を相対正規形として検証していなかった。チェッカーは CI が単体コピーするので `loop-manifest.mjs` を import できない。同じ規則の `isRelativeRepoPath` をチェッカー内に置き、`manifestGuardFields` として公開してテストする。
   ユニットテスト: `reviewers` / `scripts` の `__proto__` 汚染、base 側パス拒否。レビュー再依頼は親が push 後に行う。Status は In Progress のまま。アーカイブしない。
+- `12:51` - 修正後の `npm run ci` 緑。出力末尾:
+
+```
+> ci
+> npm run lint && npm run lint:docs && npm run test:unit
+
+> lint
+> eslint .
+
+> lint:docs
+> node tools/lint-docs.mjs
+
+docs の形式違反はありません（54 件の作業ディレクトリを確認）。
+
+> test:unit
+> node tools/run-unit-tests.mjs
+
+...
+1..519
+# tests 519
+# suites 0
+# pass 519
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120371.412243
+```
+
 

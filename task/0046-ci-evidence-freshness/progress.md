@@ -19,7 +19,7 @@
 
 ## 試行ログ・エラー履歴
 
-- `00:48` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0046-ci-evidence-freshness`）。完了条件 5〜8・失敗時・例を確定した。判定の主は規約の文言（`CLAUDE.md`「トークンコスト」と `codex-reviewer.md`「テスト結果の扱い」）。機械的チェックは任意の新規テスト（既存 `tests/agent-defs.test.mjs` は変更しない）。実測 CI の SHA はレビュー対象 HEAD と一致すること。0047 の再実行禁止は弱めない。Complexity は `M`（対象が 2 ファイル。任意の新規テストを足すと 3。凍結改訂ではないので L ではない）。**この PR は昇格（docs）だけ。実装はしない。** 実装 PR の予約ブランチは `feat/0046-ci-evidence-freshness`。この git ブランチは `docs/promote-0046-ci-evidence-freshness`。進捗の **PR** は実装 PR 用なので `未作成` のまま。
+- `00:48` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0046-ci-evidence-freshness`）。完了条件 5〜8・失敗時・例を確定した。判定の主は規約の文言（`CLAUDE.md`「トークンコスト」と `codex-reviewer.md`「テスト結果の扱い」）。機械的チェックは任意の新規テスト（既存 `tests/agent-defs.test.mjs` は変更しない）。実測 CI の SHA はレビュー対象 HEAD と一致すること。0047 の再実行禁止は弱めない。Complexity は `M`（対象が 2 ファイル。任意の新規テストを足すと 3。凍結改訂ではないので L ではない）。**当時（昇格 docs PR #93。実装 PR #100 ではない）:** この PR は昇格（docs）だけ。実装はしない。実装 PR の予約ブランチは `feat/0046-ci-evidence-freshness`。この git ブランチは `docs/promote-0046-ci-evidence-freshness`。進捗の **PR** は実装 PR 用なので `未作成` のまま。
 - `00:49` - `npm run lint:docs`: exit 0。成功文は貼らない。
 - `00:50` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/93 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
 - `03:04` - `node loop-core/bin/loop.mjs start-task` が `0046-ci-evidence-freshness` を選び、ブランチ `feat/0046-ci-evidence-freshness` の worktree を作成した。実装: `CLAUDE.md`「トークンコスト」と `.claude/agents/codex-reviewer.md`「テスト結果の扱い」に鮮度の 3 事実（取得 SHA がレビュー対象 HEAD と一致、未コミット付き取得はその旨、一致が確認できないときは承認しない）を追加。0047 の再実行禁止・実測 CI 必須・スキーマ 4 項目の順は残した。任意の新規テスト `tests/ci-evidence-freshness.test.mjs` を追加（既存 `tests/agent-defs.test.mjs` は未変更）。

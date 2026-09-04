@@ -127,10 +127,15 @@ function load(filePath) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-/** 指定見出しの節を消す。次の `## ` またはファイル末尾まで。 */
+/** 指定見出しの節を消す。行頭の `## ` だけを対象にし、直前の改行は残す。フェンス内は触らない。 */
 function removeMarkdownSection(markdown, heading) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return markdown.replace(new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## |$)`), '');
+  const headingRe = new RegExp(`(^|\\n)## ${escaped}(?:\\n|$)([\\s\\S]*?)(?=\\n## |$)`);
+  const stripOutside = (text) => text.replace(headingRe, '$1');
+  return markdown
+    .split(/(```[\s\S]*?```)/)
+    .map((part, i) => (i % 2 === 1 ? part : stripOutside(part)))
+    .join('');
 }
 
 // --- 例の各行（定義ファイル） ---
@@ -218,6 +223,33 @@ test('トークンコスト節がファイル末尾でも削除シミュレー�
   assert.ok(reasons.includes(REASON_SHA_HEAD), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_UNCOMMITTED), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_NO_APPROVE), reasons.join('\n'));
+});
+
+test('行頭以外やコードフェンス内の ## 見出し文字列は節削除しない', () => {
+  const inline = `前文 see ## ${TOKEN_COST_HEADING} here\n\n## other\n`;
+  assert.equal(removeMarkdownSection(inline, TOKEN_COST_HEADING), inline);
+
+  const body = validBody();
+  const fenced = [
+    '前文',
+    '',
+    '```',
+    `## ${TOKEN_COST_HEADING}`,
+    'fence body',
+    '```',
+    '',
+    `## ${TOKEN_COST_HEADING}`,
+    '',
+    body,
+    '',
+    '## 次',
+    '',
+  ].join('\n');
+  const deleted = removeMarkdownSection(fenced, TOKEN_COST_HEADING);
+  assert.match(deleted, new RegExp(`\`\`\`\\n## ${TOKEN_COST_HEADING}\\n`));
+  assert.match(deleted, /^前文\n/);
+  assert.match(deleted, /\n## 次\n/);
+  assert.equal(deleted.includes(body), false);
 });
 
 test('テスト結果の扱いから鮮度の文だけを消すと fail する', () => {

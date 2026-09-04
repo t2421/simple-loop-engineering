@@ -12,7 +12,8 @@
  * | HEAD がリモート追跡ブランチに無い（未 push） | 通す。理由を stderr に 1 行 |
  * | 全チェックが success / skipped | 通す |
  * | 1 つでも failure / cancelled / timed_out など非成功で完了 | **ブロック**（終了コード 2） |
- * | 未完了が残る | 上限まで待つ（既定 8 分・CHECK_ACTIONS_TIMEOUT_SEC）。超過は「未確定」でブロック |
+ * | 取り残し（status 未完了なのに conclusion がある、または親 run 完了なのに配下が未完了） | 待たずにブロック。案内に `gh run rerun <run_id>`。任意で 1 回再実行 |
+ * | 通常の未完了が残る | 上限まで待つ（既定 8 分・CHECK_ACTIONS_TIMEOUT_SEC）。超過は「未確定」でブロック |
  *
  * 「全部成功」に見えても即座には通さない。ワークフローは別々に起動するので、
  * 先に登録された check-run だけが成功で返り、`guard` や `preview` の check-run が
@@ -72,10 +73,42 @@ export const DEFAULT_QUIET_SEC = 30;
 export const PASSING_CONCLUSIONS = ['success', 'skipped'];
 
 /**
- * チェックの一覧を 4 通りに分類する純関数。
+ * conclusion が「入っている」か。null / 欠落 / 空文字は空とみなす（条件 A）。
  *
- * @param {Array<{name:string,status:string,conclusion:string|null}>} checks
- * @returns {{verdict:'pass'|'block'|'pending'|'empty', failed?:object[], pending?:object[]}}
+ * @param {unknown} conclusion
+ * @returns {boolean}
+ */
+function hasConclusion(conclusion) {
+  return conclusion != null && String(conclusion) !== '';
+}
+
+/**
+ * 1 件の check-run が取り残しなら、当たった条件（A / B）を返す純関数。
+ * どちらでもなければ空配列。
+ *
+ * - 条件 A: `status` が `completed` 以外で、かつ `conclusion` が空でない
+ * - 条件 B: 親 run の `run_status` が `completed` で、配下の `status` が `completed` 以外
+ *
+ * @param {{status?:string, conclusion?:string|null, run_status?:string|null}} check
+ * @returns {Array<'A'|'B'>}
+ */
+export function stuckConditions(check) {
+  if (check == null || typeof check !== 'object') return [];
+  const conditions = [];
+  const incomplete = check.status !== 'completed';
+  if (incomplete && hasConclusion(check.conclusion)) conditions.push('A');
+  if (incomplete && check.run_status === 'completed') conditions.push('B');
+  return conditions;
+}
+
+/**
+ * チェックの一覧を分類する純関数。
+ *
+ * 失敗（completed かつ非成功）を先に見る。取り残しは通常の未確定より優先し、
+ * 待たずに案内できるようにする。未確定を成功にはしない。
+ *
+ * @param {Array<{name:string,status:string,conclusion:string|null,run_status?:string|null}>} checks
+ * @returns {{verdict:'pass'|'block'|'pending'|'empty'|'stuck', failed?:object[], pending?:object[], stuck?:object[]}}
  */
 export function classify(checks) {
   if (!Array.isArray(checks) || checks.length === 0) return { verdict: 'empty' };
@@ -83,9 +116,22 @@ export function classify(checks) {
     (c) => c.status === 'completed' && !PASSING_CONCLUSIONS.includes(c.conclusion),
   );
   if (failed.length > 0) return { verdict: 'block', failed };
+  const stuck = checks.filter((c) => stuckConditions(c).length > 0);
+  if (stuck.length > 0) return { verdict: 'stuck', stuck };
   const pending = checks.filter((c) => c.status !== 'completed');
   if (pending.length > 0) return { verdict: 'pending', pending };
   return { verdict: 'pass' };
+}
+
+/**
+ * `CHECK_ACTIONS_RERUN_STUCK` が正の整数（`1` を含む）なら自動再実行を選ぶ。
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {boolean}
+ */
+export function rerunStuckEnabledFromEnv(env = process.env) {
+  const parsed = Number.parseInt(env.CHECK_ACTIONS_RERUN_STUCK ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0;
 }
 
 /**
@@ -164,8 +210,31 @@ function describeFailures(failed) {
   return lines;
 }
 
+/** 取り残しの説明行。チェック名・条件 A/B・再実行コマンド（取れるとき） */
+function describeStuck(stuck) {
+  const names = stuck.map((c) => c.name).join(', ');
+  const lines = [`check-actions: 取り残されたチェックがあります（${names}）。`];
+  for (const c of stuck) {
+    const labels = stuckConditions(c).join(' / ');
+    lines.push(
+      `  - ${c.name}: 条件 ${labels}（status=${c.status}, conclusion=${c.conclusion ?? 'null'}, run_status=${c.run_status ?? 'n/a'}）`,
+    );
+    if (c.run_id != null && c.run_id !== '') {
+      lines.push(`    gh run rerun ${c.run_id}`);
+    }
+  }
+  return lines;
+}
+
+function firstRunId(stuck) {
+  for (const c of stuck) {
+    if (c.run_id != null && c.run_id !== '') return c.run_id;
+  }
+  return undefined;
+}
+
 /**
- * 判定の本体。gh 呼び出し・時刻・待機は注入する。
+ * 判定の本体。gh 呼び出し・時刻・待機・再実行は注入する。
  *
  * @param {object} input
  * @param {() => Promise<object[]>} input.fetchChecks - HEAD のチェック一覧を返す
@@ -175,6 +244,8 @@ function describeFailures(failed) {
  * @param {number} [input.pollIntervalSec] - 再取得の間隔
  * @param {number} [input.quietSec] - 「全部成功」を信じるまでに集合が変わらないことを求める秒数
  * @param {boolean} [input.stopHookActive] - 2 度目以降の停止か
+ * @param {boolean} [input.rerunStuckEnabled] - CHECK_ACTIONS_RERUN_STUCK 相当。真なら最大 1 回再実行
+ * @param {(runId: string|number) => Promise<unknown>} [input.rerunStuck] - `gh run rerun` 相当
  * @returns {Promise<{exit:0|2, lines:string[]}>}
  */
 export async function decide({
@@ -186,6 +257,8 @@ export async function decide({
   quietSec = DEFAULT_QUIET_SEC,
   stopHookActive = false,
   isPushed = () => true,
+  rerunStuckEnabled = false,
+  rerunStuck,
 }) {
   if (!isPushed()) {
     return { exit: 0, lines: ['check-actions: HEAD がリモートに無いため（未 push）、判定しません。'] };
@@ -216,6 +289,8 @@ export async function decide({
   /** 直前に観測したチェック名の集合と、それが現れた時刻。静穏期間の計測に使う */
   let settledNames = null;
   let settledSince = 0;
+  /** 自動再実行は最大 1 回。2 回目は走らせない */
+  let didRerunStuck = false;
 
   for (;;) {
     let checks;
@@ -232,8 +307,10 @@ export async function decide({
 
     // 2 度目以降の停止。待たずに、いまの状態を述べて通す。
     // ここで待つと「未確定のまま 8 分固まる」を停止のたびに繰り返してしまう。
+    // 取り残しを成功メッセージに倒さない（stop_hook_active でも述べる）。
     if (stopHookActive) {
       if (result.verdict === 'block') return noteOnly(describeFailures(result.failed));
+      if (result.verdict === 'stuck') return noteOnly(describeStuck(result.stuck));
       if (result.verdict === 'pending') return noteOnly(describePending(result.pending));
       if (result.verdict === 'empty') return { exit: 0, lines: [EMPTY_LINE] };
       return { exit: 0, lines: [PASS_LINE] };
@@ -241,6 +318,28 @@ export async function decide({
 
     if (result.verdict === 'block') {
       return halt(describeFailures(result.failed));
+    }
+
+    if (result.verdict === 'stuck') {
+      const runId = firstRunId(result.stuck);
+      if (
+        rerunStuckEnabled
+        && !didRerunStuck
+        && runId != null
+        && typeof rerunStuck === 'function'
+      ) {
+        try {
+          await rerunStuck(runId);
+          didRerunStuck = true;
+          continue;
+        } catch (error) {
+          return halt([
+            ...describeStuck(result.stuck),
+            `check-actions: gh run rerun ${runId} に失敗しました（${error.message}）。`,
+          ]);
+        }
+      }
+      return halt(describeStuck(result.stuck));
     }
 
     if (result.verdict === 'pass') {
@@ -293,7 +392,13 @@ export function isPushed() {
   }
 }
 
-/** HEAD のチェック一覧を gh から取る */
+/** HEAD のチェック一覧を gh から取る。親 run の id / status を載せる（条件 B 用） */
+function parseActionsRunId(htmlUrl) {
+  if (typeof htmlUrl !== 'string') return undefined;
+  const match = htmlUrl.match(/\/actions\/runs\/(\d+)/);
+  return match ? Number(match[1]) : undefined;
+}
+
 async function fetchChecksFromGh() {
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], {
     encoding: 'utf8',
@@ -305,11 +410,52 @@ async function fetchChecksFromGh() {
       'api',
       `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`,
       '--jq',
-      '[.check_runs[] | {name, status, conclusion, html_url, id}]',
+      '[.check_runs[] | {name, status, conclusion, html_url, id, check_suite_id: .check_suite.id}]',
     ],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
-  return JSON.parse(out);
+  const checks = JSON.parse(out);
+  const runBySuite = new Map();
+  const runById = new Map();
+  try {
+    const runsOut = execFileSync(
+      'gh',
+      [
+        'api',
+        `repos/{owner}/{repo}/actions/runs?head_sha=${sha}&per_page=100`,
+        '--jq',
+        '[.workflow_runs[] | {id, status, check_suite_id}]',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    for (const run of JSON.parse(runsOut)) {
+      if (run.check_suite_id != null) runBySuite.set(run.check_suite_id, run);
+      if (run.id != null) runById.set(run.id, run);
+    }
+  } catch {
+    // 親 run が取れなくても check-run 自体は返す（条件 A は判定できる）
+  }
+  return checks.map((c) => {
+    const fromUrl = parseActionsRunId(c.html_url);
+    const run = (c.check_suite_id != null ? runBySuite.get(c.check_suite_id) : undefined)
+      ?? (fromUrl != null ? runById.get(fromUrl) : undefined);
+    return {
+      name: c.name,
+      status: c.status,
+      conclusion: c.conclusion,
+      html_url: c.html_url,
+      id: c.id,
+      run_id: run?.id ?? fromUrl,
+      run_status: run?.status,
+    };
+  });
+}
+
+function rerunStuckFromGh(runId) {
+  execFileSync('gh', ['run', 'rerun', String(runId)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 const sleepReal = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
@@ -352,6 +498,8 @@ async function main() {
     timeoutSec: positiveIntFromEnv('CHECK_ACTIONS_TIMEOUT_SEC', DEFAULT_TIMEOUT_SEC),
     quietSec: positiveIntFromEnv('CHECK_ACTIONS_QUIET_SEC', DEFAULT_QUIET_SEC),
     stopHookActive: readStopHookActive(raw),
+    rerunStuckEnabled: rerunStuckEnabledFromEnv(),
+    rerunStuck: rerunStuckFromGh,
   });
 
   for (const line of result.lines) console.error(line);

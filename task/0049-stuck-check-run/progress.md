@@ -3,17 +3,17 @@
 - **Target Spec:** `task/0049-stuck-check-run/spec.md`
 - **Branch:** `feat/0049-stuck-check-run`
 - **PR:** `未作成`
-- **Status:** `Not Started` (Phase: `Plan`)
+- **Status:** `In Progress` (Phase: `Verify`)
 - **Complexity:** `L`
 
 ## タスクチェックリスト
 
 構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。
 
-- [ ] Specの要件・受け入れ条件の確認
-- [ ] テストの作成 (`tests/check-actions-stuck.test.mjs`)
-- [ ] 実装 (`loop-core/gate/check-actions.mjs`)
-- [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
+- [x] Specの要件・受け入れ条件の確認
+- [x] テストの作成 (`tests/check-actions-stuck.test.mjs`)
+- [x] 実装 (`loop-core/gate/check-actions.mjs`)
+- [/] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に実装 PR の URL を書く。`allow-protected-change` ラベルを付ける。ラベル無しで `protected-paths` が失敗し、ラベル付きで成功することを Actions の結果で確認する）
 - [ ] PRマージ後のアーカイブ
 
@@ -29,3 +29,46 @@
 docs の形式違反はありません（56 件の作業ディレクトリを確認）。
 ```
 - `00:52` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/95 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
+- `03:05` - 実装ブランチ `feat/0049-stuck-check-run` を現行 `origin/main`（`f9d248e`）から切り、worktree で着手した。#83 / #90 と他作業は触らない。
+- `03:12` - `stuckConditions` / `classify` の `stuck` / `decide` の即ブロックと任意 1 回再実行を入れた。`PASSING_CONCLUSIONS` と `DEFAULT_TIMEOUT_SEC = 480` は変えていない。既存 `tests/check-actions.test.mjs` は未編集。新規 `tests/check-actions-stuck.test.mjs` は時刻・gh・再実行を注入する。`node --test tests/check-actions-stuck.test.mjs tests/check-actions.test.mjs` の出力:
+
+```
+# tests 41
+# suites 0
+# pass 41
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 62.234036
+```
+- `03:15` - `git diff origin/main -- tests/check-actions.test.mjs` は空。`package.json` の `scripts` と `.github/workflows/` に差分無し。旧 `tools/check-actions.mjs` は復活させていない。
+- `03:17` - `npm run ci` の出力（先頭と末尾）:
+
+```
+> ci
+> npm run lint && npm run lint:docs && npm run test:unit
+
+> lint
+> eslint .
+
+> lint:docs
+> node loop-core/bin/loop.mjs lint-docs
+
+docs の形式違反はありません（56 件の作業ディレクトリを確認）。
+
+> test:unit
+> node tools/run-unit-tests.mjs
+```
+
+```
+1..566
+# tests 566
+# suites 0
+# pass 566
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120549.550479
+```

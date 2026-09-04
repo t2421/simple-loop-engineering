@@ -20,14 +20,7 @@
 ## 試行ログ・エラー履歴
 
 - `00:48` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0046-ci-evidence-freshness`）。完了条件 5〜8・失敗時・例を確定した。判定の主は規約の文言（`CLAUDE.md`「トークンコスト」と `codex-reviewer.md`「テスト結果の扱い」）。機械的チェックは任意の新規テスト（既存 `tests/agent-defs.test.mjs` は変更しない）。実測 CI の SHA はレビュー対象 HEAD と一致すること。0047 の再実行禁止は弱めない。Complexity は `M`（対象が 2 ファイル。任意の新規テストを足すと 3。凍結改訂ではないので L ではない）。**この PR は昇格（docs）だけ。実装はしない。** 実装 PR の予約ブランチは `feat/0046-ci-evidence-freshness`。この git ブランチは `docs/promote-0046-ci-evidence-freshness`。進捗の **PR** は実装 PR 用なので `未作成` のまま。
-- `00:49` - `npm run lint:docs` の出力:
-
-```
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-```
+- `00:49` - `npm run lint:docs`: exit 0。成功文は貼らない。
 - `00:50` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/93 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
 - `03:04` - `node loop-core/bin/loop.mjs start-task` が `0046-ci-evidence-freshness` を選び、ブランチ `feat/0046-ci-evidence-freshness` の worktree を作成した。実装: `CLAUDE.md`「トークンコスト」と `.claude/agents/codex-reviewer.md`「テスト結果の扱い」に鮮度の 3 事実（取得 SHA がレビュー対象 HEAD と一致、未コミット付き取得はその旨、一致が確認できないときは承認しない）を追加。0047 の再実行禁止・実測 CI 必須・スキーマ 4 項目の順は残した。任意の新規テスト `tests/ci-evidence-freshness.test.mjs` を追加（既存 `tests/agent-defs.test.mjs` は未変更）。
 - `03:06` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/100 。マージしない。親が Copilot を依頼する。
@@ -61,5 +54,6 @@ CLAUDE.md:195:- **レビュアーはサンドボックス内で `npm run ci`・�
 ```
 - `03:08` - `node --test tests/agent-defs.test.mjs`（0047 の 3 事実）: `# tests 11` `# pass 11` `# fail 0`
 - `03:09` - 新規テスト初回は節抽出が `m` フラグの `$`（行末）で本文 1 行目までしか取れず fail。`extractMarkdownSection` から `m` を外して修正。再実行 `node --test tests/ci-evidence-freshness.test.mjs`: `# tests 9` `# pass 9` `# fail 0`
-- `03:10` - 先の `npm run ci` は SHA `1640755ada6af364012329e4e227d10ac7e25c78` 上で、未コミットの `tests/ci-evidence-freshness.test.mjs` 抽出修正あり。lint / lint:docs / test:unit `# tests 562` `# pass 562` `# fail 0`。この進捗コミット後にクリーン HEAD で取り直す。
+- `03:10` - 先の `npm run ci` は SHA `1640755ada6af364012329e4e227d10ac7e25c78` 上で、未コミットの `tests/ci-evidence-freshness.test.mjs` 抽出修正あり。`npm run ci: exit 0`。この進捗コミット後にクリーン HEAD で取り直す。
 - `04:51` - Copilot #100 の 2 件: トークンコスト節削除の lookahead を `(?=\n## |$)` にし、SHA/HEAD 判定を compact + 大小無視にした。末尾節削除と `sha`/`head` のケースをテストに足した。`tests/agent-defs.test.mjs` は未変更。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 21` `# pass 21` `# fail 0`
+- `05:03` - 共通検証 dump を削った（docs lint 成功文と `npm run ci` 全件集計）。作業固有の grep と `node --test` 小件は残した。

@@ -70,3 +70,36 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 `loop-core/bin/loop.mjs`・`package.json`・凍結ヘルパー・`loop.manifest.json` は差分に無い。#83 / #90 には触れていない。
 - `03:10` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/101 。進捗の **PR** に書いた。Verify (外部) へ。
 - `03:06` - GitHub Actions の Guard / protected-paths が失敗: `tests/start-task.test.mjs: 既存のテストの内容が変わっている`。`tests/` は append-only（新規追加は `appeared`、既存ファイルの内容変更は禁止）。既存テストを元に戻し、0059 のケースは新規 `tests/start-task-unblock.test.mjs` へ移す。`tests/unblock.test.mjs` はそのまま。検証を弱めていない。
+- `03:12` - 修正後の `node loop-core/bin/loop.mjs check-protected-paths origin/main`:
+
+```
+保護パスの変更はありません（5 件の差分を確認）。
+```
+
+終了コード 0。`git diff origin/main --stat`:
+
+```
+ loop-core/ledger/start-task.mjs            |  39 ++++-
+ loop-core/ledger/unblock.mjs               | 107 +++++++++++++
+ task/0059-blocked-auto-unblock/progress.md |  53 +++++-
+ tests/start-task-unblock.test.mjs          | 248 +++++++++++++++++++++++++++++
+ tests/unblock.test.mjs                     |  98 ++++++++++++
+ 5 files changed, 533 insertions(+), 12 deletions(-)
+```
+
+`tests/start-task.test.mjs` は差分に無い。
+- `03:14` - 再実行 `npm run ci` 末尾:
+
+```
+1..570
+# tests 570
+# suites 0
+# pass 570
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120522.813299
+```
+
+終了コード 0。

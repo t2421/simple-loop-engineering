@@ -24,6 +24,7 @@ import { pathToFileURL } from 'node:url';
 // start-task は貼った出力の中の値を読む」という解釈の割れが起きる
 import { linesOutsideFences } from './lint-docs.mjs';
 import { loadManifest } from '../lib/manifest.mjs';
+import { evaluateBlockedUnblock } from './unblock.mjs';
 
 /** progress の Status のうち、選択の対象にしない値 */
 const UNSELECTABLE = new Set(['Blocked', 'Done']);
@@ -120,12 +121,19 @@ export function modelForComplexity(complexity, models) {
  * 次に着手する作業を選ぶ純関数。
  * Status が Blocked / Done でない作業のうち、最小 ID を返す。無ければ null。
  *
- * @param {Array<{id: string, dirName: string, status: string, branch: string | null}>} entries
- * @returns {{id: string, dirName: string, status: string, branch: string | null} | null}
+ * Blocked は原則除外する。例外は `unblockMet === true` のときだけ
+ * （解除述語 `path-exists:` が解釈でき、そのパスが存在する）。
+ * 述語無しの入力では従来どおり選ばない。
+ *
+ * @param {Array<{id: string, dirName: string, status: string, branch: string | null, unblockMet?: boolean}>} entries
+ * @returns {{id: string, dirName: string, status: string, branch: string | null, unblockMet?: boolean} | null}
  */
 export function selectNextTask(entries) {
   const candidates = entries
-    .filter((e) => !UNSELECTABLE.has(e.status))
+    .filter((e) => {
+      if (e.status === 'Blocked' && e.unblockMet === true) return true;
+      return !UNSELECTABLE.has(e.status);
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
   return candidates[0] ?? null;
 }
@@ -162,8 +170,11 @@ export function isValidBranchName(name) {
  * `task/` の archive 以外の作業ディレクトリを読み、選択に要るメタを集める。
  * progress.md が読めない・Status が読めない作業は、黙って飛ばさず失敗にする。
  *
+ * Status は読んだ値のまま返す。Blocked の解除は `unblockMet` による選択時の
+ * 読み替えだけであり、ファイルは書き換えない。
+ *
  * @param {string} rootDir
- * @returns {Array<{id: string, dirName: string, status: string, branch: string | null}>}
+ * @returns {Array<{id: string, dirName: string, status: string, branch: string | null, complexity: string | null, unblockMet: boolean, unblockSkipReason: string | null}>}
  */
 function readTaskEntries(rootDir) {
   const taskDir = path.join(rootDir, 'task');
@@ -187,6 +198,13 @@ function readTaskEntries(rootDir) {
     if (meta.status === null) {
       throw new Error(`task/${dirent.name}/progress.md から Status を読めません`);
     }
+    let unblockMet = false;
+    let unblockSkipReason = null;
+    if (meta.status === 'Blocked') {
+      const evaluated = evaluateBlockedUnblock(markdown, rootDir);
+      unblockMet = evaluated.selectable;
+      unblockSkipReason = evaluated.skipReason;
+    }
     entries.push({
       id: m[1],
       dirName: dirent.name,
@@ -194,6 +212,8 @@ function readTaskEntries(rootDir) {
       branch: meta.branch,
       // 等級の妥当性は選択後に見る。選ばれなかった作業の不正で開始を止めない
       complexity: parseComplexity(markdown),
+      unblockMet,
+      unblockSkipReason,
     });
   }
   return entries;
@@ -224,9 +244,16 @@ function defaultExec(cmd, args, opts = {}) {
  * @returns {{id: string, dirName: string, branch: string, worktreePath: string, complexity: string, model: string, created: boolean}}
  */
 export function startTask({ rootDir, exec = defaultExec }) {
-  const picked = selectNextTask(readTaskEntries(rootDir));
+  const entries = readTaskEntries(rootDir);
+  const picked = selectNextTask(entries);
   if (picked === null) {
-    throw new Error('選択可能な作業がありません（task/ の archive 以外に Blocked / Done でない作業が無い）');
+    const skipLines = entries
+      .filter((e) => e.status === 'Blocked' && e.unblockSkipReason !== null)
+      .map((e) => `task/${e.dirName}: ${e.unblockSkipReason}`);
+    const suffix = skipLines.length === 0 ? '' : `\n${skipLines.join('\n')}`;
+    throw new Error(
+      `選択可能な作業がありません（task/ の archive 以外に Blocked / Done でない作業が無い）${suffix}`,
+    );
   }
   if (picked.branch === null) {
     throw new Error(`task/${picked.dirName}/progress.md に **Branch** がありません`);

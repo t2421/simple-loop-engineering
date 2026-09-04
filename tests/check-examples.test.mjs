@@ -17,6 +17,7 @@ import {
   classifyRow,
   extractCommand,
   formatReport,
+  parseSafeCommand,
   parseStdoutInt,
 } from '../tools/check-examples.mjs';
 import { archive } from '../loop-core/ledger/archive.mjs';
@@ -231,8 +232,8 @@ test('CLI: stdout 不一致は非 0 でどの行かを示し、期待値は書�
   assert.notEqual(r.status, 0);
   const out = `${r.stdout}${r.stderr}`;
   assert.match(out, /echo 99/);
-  assert.match(out, /期待: 0/);
-  assert.match(out, /実際: 99/);
+  assert.match(out, /期待: "0"/);
+  assert.match(out, /実際: "99"/);
   assert.equal(fs.readFileSync(path.join(root, 'task/0061-mismatch/spec.md'), 'utf8'), spec);
 });
 
@@ -250,8 +251,8 @@ test('stdout 不一致は終了コード非 0。どの行かを示し、期待�
   const result = checkExamples('0061-mismatch', { root });
   assert.equal(result.ok, false);
   assert.match(result.reason, /stdout が期待と違います/);
-  assert.match(result.reason, /期待: 0/);
-  assert.match(result.reason, /実際: 99/);
+  assert.match(result.reason, /期待: "0"/);
+  assert.match(result.reason, /実際: "99"/);
   assert.equal(fs.readFileSync(path.join(root, 'task/0061-mismatch/spec.md'), 'utf8'), spec);
 });
 
@@ -294,6 +295,80 @@ test('extractCommand: 引用符の外の \\| だけをパイプに戻す', () =>
     "`grep -n '^### 2\\.\\(1[0-3]\\|[1-9]\\) ' file \\| wc -l`",
   );
   assert.equal(cmd, "grep -n '^### 2\\.\\(1[0-3]\\|[1-9]\\) ' file | wc -l");
+});
+
+test('parseSafeCommand: grep と grep|wc は argv になり、危険なトークンは拒否する', () => {
+  const grep = parseSafeCommand("grep -c '^### 2\\.' .claude/skills/loop-port/SKILL.md");
+  assert.equal(grep.ok, true);
+  assert.deepEqual(grep.pipeline, [
+    { file: 'grep', args: ['-c', '^### 2\\.', '.claude/skills/loop-port/SKILL.md'] },
+  ]);
+  const piped = parseSafeCommand("grep -n '^### 2\\.\\(1[0-3]\\|[1-9]\\) ' file | wc -l");
+  assert.equal(piped.ok, true);
+  assert.deepEqual(piped.pipeline, [
+    { file: 'grep', args: ['-n', '^### 2\\.\\(1[0-3]\\|[1-9]\\) ', 'file'] },
+    { file: 'wc', args: ['-l'] },
+  ]);
+  assert.equal(parseSafeCommand('echo 1; rm -rf /').ok, false);
+  assert.equal(parseSafeCommand('echo 1 && echo 2').ok, false);
+  assert.equal(parseSafeCommand('echo hi > pwned').ok, false);
+  assert.equal(parseSafeCommand('echo `whoami`').ok, false);
+  assert.equal(parseSafeCommand('rm -rf .').ok, false);
+  assert.equal(parseSafeCommand('cat /etc/passwd').ok, false);
+  assert.equal(parseSafeCommand('/bin/rm -rf .').ok, false);
+  assert.equal(parseSafeCommand('node -e "process.exit(0)"').ok, false);
+  assert.equal(parseSafeCommand('node tools/check-examples.mjs 0099-missing').ok, true);
+});
+
+test('危険なコマンドは実行せず拒否する', (t) => {
+  const root = makeRoot(t);
+  const marker = path.join(root, 'PWNED');
+  write(
+    root,
+    'task/0061-unsafe/spec.md',
+    specWithExamples(
+      '危険',
+      [
+        '| 操作または入力 | 期待結果 |',
+        '|---|---|',
+        '| `echo pwned > PWNED` | 終了コード 0 |',
+        '| `rm -rf PWNED` | 終了コード 0 |',
+        '| `echo 1; echo 2` | `2` |',
+        '| `echo 1 && echo 2` | `2` |',
+        '| `echo 1 \\|\\| echo 2` | `1` |',
+        '| `echo 1 \\| rm` | 終了コード 0 |',
+      ].join('\n'),
+    ),
+  );
+  const result = checkExamples('0061-unsafe', { root });
+  assert.equal(result.ok, false);
+  assert.equal(fs.existsSync(marker), false, 'リダイレクトを実行していない');
+  assert.equal(result.rows.length, 6);
+  for (const row of result.rows) {
+    assert.equal(row.status, 'fail', row.input);
+    assert.match(row.detail, /許可されていない|危険なトークン/);
+  }
+});
+
+test('stdout-int で終了コード非 0 のとき stderr を detail に含める', (t) => {
+  const root = makeRoot(t);
+  write(
+    root,
+    'task/0061-stderr/spec.md',
+    specWithExamples(
+      'stderr',
+      [
+        '| 操作または入力 | 期待結果 |',
+        '|---|---|',
+        '| `grep -c ^x$ no-such-file` | `0` |',
+      ].join('\n'),
+    ),
+  );
+  const result = checkExamples('0061-stderr', { root });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /終了コードが 0 ではない/);
+  assert.match(result.reason, /stderr:/);
+  assert.match(result.reason, /no-such-file|No such file|No such/);
 });
 
 // --- archive 配線（既存 tests/archive.test.mjs は触らない） ---

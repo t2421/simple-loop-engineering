@@ -6,6 +6,9 @@
  * 評価する行は次の 3 種だけ。それ以外（手順文・定性的な「5 行。この順に…」・
  * 「3 以上」・`git diff` の説明文）は推測して合否を付けず、対象外と明示して落とさない。
  * incomplete な backlog（「例」が未確定のまま）も必須にしない。評価可能な行が 0 件なら成功。
+ * 実行は allowlist（grep / wc / echo / true / false、および
+ * `node tools/check-examples.mjs`）の argv を `shell: false` で回す。
+ * `;` `&&` リダイレクト コマンド置換 `rm` などは実行せず拒否する。
  */
 
 import fs from 'node:fs';
@@ -35,6 +38,12 @@ const COMMAND_TIMEOUT_MS = 60_000;
 
 /** 定性行とみなして整数期待を付けない語 */
 const QUALITATIVE_RE = /以上|この順に|行番号|行以上/;
+
+/**
+ * 実行を許す読み取り系コマンド。パス付き（`/bin/rm`）や別名は受けない。
+ * `node` は `tools/check-examples.mjs` への呼び出しだけ別扱い。
+ */
+export const ALLOWED_COMMANDS = Object.freeze(['grep', 'wc', 'echo', 'true', 'false']);
 
 /**
  * リポジトリルートを決める。git が取れなければ cwd。
@@ -251,29 +260,191 @@ export function classifyRow(input, expected) {
 }
 
 /**
+ * 引用符の外の `|` でパイプライン段に分ける。`||` は拒否。
+ *
  * @param {string} command
- * @param {string} cwd
- * @returns {{ status: number | null, stdout: string, stderr: string }}
+ * @returns {{ ok: true, stages: string[] } | { ok: false, reason: string }}
  */
-function runCommand(command, cwd) {
-  const r = spawnSync(command, {
-    cwd,
-    encoding: 'utf8',
-    shell: true,
-    timeout: COMMAND_TIMEOUT_MS,
-    env: process.env,
-  });
-  const stdout = (r.stdout ?? '').replace(/\n+$/, '');
-  const stderr = (r.stderr ?? '').replace(/\n+$/, '');
-  if (r.error && r.error.code === 'ETIMEDOUT') {
-    return {
-      status: 1,
-      stdout,
-      stderr: stderr || `コマンドがタイムアウトしました（${COMMAND_TIMEOUT_MS}ms）: ${command}`,
-    };
+function splitPipelineStages(command) {
+  const stages = [];
+  let cur = '';
+  let quote = null;
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote === null && (c === "'" || c === '"')) {
+      quote = c;
+      cur += c;
+      continue;
+    }
+    if (quote !== null && c === quote) {
+      quote = null;
+      cur += c;
+      continue;
+    }
+    if (quote === null && c === '|') {
+      if (command[i + 1] === '|') {
+        return { ok: false, reason: '危険なトークンを含みます: ||' };
+      }
+      stages.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += c;
   }
-  const status = typeof r.status === 'number' ? r.status : 1;
-  return { status, stdout, stderr };
+  if (quote !== null) {
+    return { ok: false, reason: '引用符が閉じていません' };
+  }
+  stages.push(cur.trim());
+  const nonempty = stages.filter((s) => s !== '');
+  if (nonempty.length === 0) {
+    return { ok: false, reason: 'コマンドが空です' };
+  }
+  return { ok: true, stages: nonempty };
+}
+
+/**
+ * 1 段を argv に分ける。引用符の外のメタ文字は拒否。
+ *
+ * @param {string} stage
+ * @returns {{ ok: true, argv: string[] } | { ok: false, reason: string }}
+ */
+function tokenizeStage(stage) {
+  const tokens = [];
+  let cur = '';
+  let quote = null;
+  const flush = () => {
+    if (cur !== '') {
+      tokens.push(cur);
+      cur = '';
+    }
+  };
+  for (let i = 0; i < stage.length; i += 1) {
+    const c = stage[i];
+    if (quote === null) {
+      if (c === "'" || c === '"') {
+        quote = c;
+        continue;
+      }
+      if (/\s/.test(c)) {
+        flush();
+        continue;
+      }
+      if (c === '&' && stage[i + 1] === '&') {
+        return { ok: false, reason: '危険なトークンを含みます: &&' };
+      }
+      if (/[;<>&`]/.test(c)) {
+        return { ok: false, reason: `危険なトークンを含みます: ${c}` };
+      }
+      cur += c;
+      continue;
+    }
+    if (c === quote) {
+      quote = null;
+      continue;
+    }
+    cur += c;
+  }
+  if (quote !== null) {
+    return { ok: false, reason: '引用符が閉じていません' };
+  }
+  flush();
+  if (tokens.length === 0) {
+    return { ok: false, reason: 'コマンドが空です' };
+  }
+  return { ok: true, argv: tokens };
+}
+
+/**
+ * 段の先頭コマンドが許可された読み取り系かを判定する純関数。
+ *
+ * @param {string} file
+ * @param {string[]} args
+ * @returns {boolean}
+ */
+export function isAllowedCommand(file, args) {
+  if (typeof file !== 'string' || file === '') return false;
+  if (file.includes('/') || file.includes('\\')) return false;
+  if (file === 'rm') return false;
+  if (ALLOWED_COMMANDS.includes(file)) return true;
+  if (file === 'node') {
+    const script = args[0];
+    if (script !== 'tools/check-examples.mjs') return false;
+    if (args.includes('-e') || args.includes('--eval')) return false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * シェルを使わず実行できる形へ落とす。危険なトークンや許可外コマンドは拒否。
+ *
+ * @param {string} command
+ * @returns {{ ok: true, pipeline: Array<{ file: string, args: string[] }> } | { ok: false, reason: string }}
+ */
+export function parseSafeCommand(command) {
+  if (typeof command !== 'string' || command.trim() === '') {
+    return { ok: false, reason: 'コマンドが空です' };
+  }
+  if (/[`\n\r]/.test(command) || /\$\(/.test(command)) {
+    return { ok: false, reason: '危険なトークンを含みます（コマンド置換または改行）' };
+  }
+  const split = splitPipelineStages(command);
+  if (!split.ok) return split;
+  const pipeline = [];
+  for (const stage of split.stages) {
+    const tokens = tokenizeStage(stage);
+    if (!tokens.ok) return tokens;
+    const [file, ...args] = tokens.argv;
+    if (!isAllowedCommand(file, args)) {
+      return { ok: false, reason: `許可されていないコマンドです: ${file}` };
+    }
+    pipeline.push({ file, args });
+  }
+  return { ok: true, pipeline };
+}
+
+/**
+ * allowlist 済みの argv を `shell: false` で順に実行する。`|` は Node 側でつなぐ。
+ *
+ * @param {Array<{ file: string, args: string[] }>} pipeline
+ * @param {string} cwd
+ * @returns {{ status: number, stdout: string, stderr: string }}
+ */
+function runPipeline(pipeline, cwd) {
+  let input;
+  let last = { status: 1, stdout: '', stderr: '' };
+  const stderrParts = [];
+  for (const stage of pipeline) {
+    const r = spawnSync(stage.file, stage.args, {
+      cwd,
+      encoding: 'utf8',
+      shell: false,
+      timeout: COMMAND_TIMEOUT_MS,
+      env: process.env,
+      input,
+    });
+    const stdout = r.stdout ?? '';
+    const stderr = r.stderr ?? '';
+    if (stderr) stderrParts.push(stderr);
+    if (r.error && r.error.code === 'ETIMEDOUT') {
+      return {
+        status: 1,
+        stdout: stdout.replace(/\n+$/, ''),
+        stderr: (stderrParts.join('') || `コマンドがタイムアウトしました（${COMMAND_TIMEOUT_MS}ms）`).replace(/\n+$/, ''),
+      };
+    }
+    last = {
+      status: typeof r.status === 'number' ? r.status : 1,
+      stdout,
+      stderr,
+    };
+    input = stdout;
+  }
+  return {
+    status: last.status,
+    stdout: last.stdout.replace(/\n+$/, ''),
+    stderr: stderrParts.join('').replace(/\n+$/, ''),
+  };
 }
 
 /**
@@ -287,18 +458,23 @@ function evaluateClassified(classified, root) {
   if (classified.kind === 'skip') {
     return { status: 'skip', detail: classified.reason };
   }
-  const ran = runCommand(classified.command, root);
+  const parsed = parseSafeCommand(classified.command);
+  if (!parsed.ok) {
+    return { status: 'fail', detail: parsed.reason };
+  }
+  const ran = runPipeline(parsed.pipeline, root);
   if (classified.kind === 'stdout-int') {
     if (ran.status !== 0) {
+      const stderrPart = ran.stderr ? `。stderr: ${JSON.stringify(ran.stderr)}` : '';
       return {
         status: 'fail',
-        detail: `終了コードが 0 ではない（実際: ${ran.status}）。stdout: ${JSON.stringify(ran.stdout)}`,
+        detail: `終了コードが 0 ではない（実際: ${ran.status}）。stdout: ${JSON.stringify(ran.stdout)}${stderrPart}`,
       };
     }
     if (ran.stdout !== classified.expected) {
       return {
         status: 'fail',
-        detail: `stdout が期待と違います（期待: ${classified.expected} / 実際: ${ran.stdout}）`,
+        detail: `stdout が期待と違います（期待: ${JSON.stringify(classified.expected)} / 実際: ${JSON.stringify(ran.stdout)}）`,
       };
     }
     return { status: 'pass', detail: `stdout ${ran.stdout}` };

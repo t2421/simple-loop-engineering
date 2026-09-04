@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0059-blocked-auto-unblock/spec.md`
 - **Branch:** `feat/0059-blocked-auto-unblock`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/101`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `In Progress` (Phase: `Record`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -124,3 +124,15 @@ Review was interrupted. Please re-run /review and wait for it to complete.
 ```
 
 終了コード 1。レビュー不承認は通算 2 回（上限 5）。追加の Fix は実装側には無い。PR は https://github.com/t2421/simple-loop-engineering/pull/101 。
+- `03:17` - 人間が PR に Copilot レビューを依頼した。
+- `03:19` - Copilot のレビュー（https://github.com/t2421/simple-loop-engineering/pull/101#pullrequestreview-5108871275 ）。GitHub 上の state は `COMMENTED`（APPROVED ではない）。本文は Approval recommended。Comments generated: 0。指摘は無い。実装は直していない。`codex-reviewer` のチェックは付けない（401 のまま。代替承認にはしない）。人間が依頼した Copilot が差戻し無しだったので、Codex 待ちの Blocked は解除し Status を `In Progress`（Phase: `Record`）へ戻す。HEAD `5451c14` の GitHub Actions は verify / e2e / protected-paths / progress-coupling / preview すべて pass。
+
+```
+### 🟢 Approval recommended
+
+解除述語の解釈・選択条件・副作用（Status 非書換え）について新規テストで網羅されており、既存挙動（Blocked 除外）も維持されています。
+
+- Files reviewed: 5/5 changed files
+- Comments generated: 0
+- Review effort level: Lite
+```

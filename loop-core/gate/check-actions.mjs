@@ -415,6 +415,14 @@ export function isPushed() {
   }
 }
 
+/**
+ * `gh api .../check-runs` の `--jq`。`.check_suite.id` は suite が null / 欠落だと
+ * jq が落ち、fetchChecks 全体が例外になって gate が fail-open する。
+ * `?.` なら null を返すだけなので判定を続けられる。
+ */
+export const CHECK_RUNS_JQ =
+  '[.check_runs[] | {name, status, conclusion, html_url, id, check_suite_id: .check_suite?.id}]';
+
 /** HEAD のチェック一覧を gh から取る。親 run の id / status を載せる（条件 B 用） */
 export function parseActionsRunId(htmlUrl) {
   if (typeof htmlUrl !== 'string') return undefined;
@@ -497,7 +505,7 @@ async function fetchChecksFromGh() {
       'api',
       `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`,
       '--jq',
-      '[.check_runs[] | {name, status, conclusion, html_url, id, check_suite_id: .check_suite.id}]',
+      CHECK_RUNS_JQ,
     ],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );

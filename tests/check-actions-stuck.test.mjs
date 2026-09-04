@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   classify,
   decide,
@@ -9,6 +10,7 @@ import {
   needsParentRunList,
   attachParentRuns,
   withParentRuns,
+  CHECK_RUNS_JQ,
   DEFAULT_QUIET_SEC,
   DEFAULT_TIMEOUT_SEC,
   PASSING_CONCLUSIONS,
@@ -335,3 +337,41 @@ test('attachParentRuns: 親 run 取得失敗相当（runs 空）でも check-run
   assert.equal(attached[0].run_status, undefined);
   assert.deepEqual(stuckConditions(attached[0]), ['A']);
 });
+
+test('CHECK_RUNS_JQ: check_suite が null / 欠落でも jq は落ちず、check_suite_id は null', () => {
+  assert.match(CHECK_RUNS_JQ, /\.check_suite\?\.id/);
+  const input = JSON.stringify({
+    check_runs: [
+      {
+        name: 'progress-coupling',
+        status: 'in_progress',
+        conclusion: 'success',
+        html_url: 'https://github.com/t2421/simple-loop-engineering/actions/runs/32672846210/job/4',
+        id: 4,
+        check_suite: null,
+      },
+      {
+        name: 'e2e',
+        status: 'in_progress',
+        conclusion: null,
+        html_url: 'https://x/e2e',
+        id: 5,
+      },
+      {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        html_url: 'https://x/verify',
+        id: 6,
+        check_suite: { id: 9 },
+      },
+    ],
+  });
+  const out = JSON.parse(execFileSync('jq', ['-c', CHECK_RUNS_JQ], { input, encoding: 'utf8' }));
+  assert.equal(out[0].check_suite_id, null);
+  assert.equal(out[1].check_suite_id, null);
+  assert.equal(out[2].check_suite_id, 9);
+  assert.equal(out[0].name, 'progress-coupling');
+  assert.deepEqual(stuckConditions(out[0]), ['A']);
+});
+

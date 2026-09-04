@@ -79,3 +79,4 @@ base（origin/main）の loop-core CLI で判定します。
 ```
 - `04:55` - `npm run ci: exit 0`。
 - `05:03` - PR #104 の progress 共通検証 lint に先立ち、docs lint 成功文と `npm run ci` / `N>=50` の集計 dump をこの進捗から外した。作業固有の `node --test tests/check-actions-stuck.test.mjs` の集計は残す。エージェントは `allow-protected-change` を付けない。
+- `05:11` - Copilot: `gh api .../check-runs` の jq を `.check_suite?.id` にした（suite が null / 欠落でも jq が落ちて fail-open しない）。`CHECK_RUNS_JQ` を `jq` に通すテストを追加。`node --test tests/check-actions-stuck.test.mjs tests/check-actions.test.mjs` は 47 pass / 0 fail。`npm run ci: exit 0`。エージェントは `allow-protected-change` を付けない。

@@ -65,8 +65,8 @@ function compactText(markdown) {
 
 function hasShaHeadMatch(markdown) {
   const compact = compactText(markdown);
-  const hasSha = /SHA|リビジョン/.test(compact);
-  const hasHead = /HEAD/.test(markdown);
+  const hasSha = /SHA|リビジョン/i.test(compact);
+  const hasHead = /HEAD/i.test(compact);
   const hasMatch = /一致/.test(compact);
   return hasSha && hasHead && hasMatch;
 }
@@ -79,7 +79,7 @@ function hasUncommittedDisclosure(markdown) {
 function hasNoApproveOnMismatch(markdown) {
   const compact = compactText(markdown);
   const hasMismatch =
-    /一致が確認できない|一致しない|対応が確認できない|SHA欠落|SHAが無い/.test(compact);
+    /一致が確認できない|一致しない|対応が確認できない|SHA欠落|SHAが無い/i.test(compact);
   const hasRefuse = /承認(しない|してはならない)/.test(compact);
   return hasMismatch && hasRefuse;
 }
@@ -95,6 +95,12 @@ function validBody({
 
 function load(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+/** 指定見出しの節を消す。次の `## ` またはファイル末尾まで。 */
+function removeMarkdownSection(markdown, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return markdown.replace(new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## |$)`), '');
 }
 
 // --- 例の各行（定義ファイル） ---
@@ -114,9 +120,9 @@ test('現状の codex-reviewer.md「テスト結果の扱い」で pass する',
 test('事実が残る文言の微修正は pass する', () => {
   const markdown = validBody({
     shaHead:
-      '取得したリビジョン（SHA）がレビュー対象 HEAD と一致していなければならない。',
+      '取得したリビジョン（sha）がレビュー対象 head と一致していなければならない。',
     uncommitted: '未コミット付きで取った結果はその旨が分かること。',
-    noApprove: '対応が確認できないときは承認してはならない。',
+    noApprove: 'sha が無いときは承認してはならない。',
   });
   assert.deepEqual(checkCiEvidenceFreshness(markdown), []);
 });
@@ -153,9 +159,20 @@ test('一致確認できないときの非承認を欠いた本文は fail す�
 
 test('トークンコスト節を削除した CLAUDE.md 相当は fail する', () => {
   const live = load(CLAUDE_MD_PATH);
-  const deleted = live.replace(/## トークンコスト[\s\S]*?(?=\n## )/, '');
+  const deleted = removeMarkdownSection(live, TOKEN_COST_HEADING);
   const section = extractMarkdownSection(deleted, TOKEN_COST_HEADING);
   const reasons = checkCiEvidenceFreshness(section);
+  assert.ok(reasons.includes(REASON_SHA_HEAD), reasons.join('\n'));
+  assert.ok(reasons.includes(REASON_UNCOMMITTED), reasons.join('\n'));
+  assert.ok(reasons.includes(REASON_NO_APPROVE), reasons.join('\n'));
+});
+
+test('トークンコスト節がファイル末尾でも削除シミュレーションが効く', () => {
+  const lastSection = ['前文', '', `## ${TOKEN_COST_HEADING}`, '', validBody()].join('\n');
+  const deleted = removeMarkdownSection(lastSection, TOKEN_COST_HEADING);
+  assert.notEqual(deleted, lastSection);
+  assert.equal(extractMarkdownSection(deleted, TOKEN_COST_HEADING), '');
+  const reasons = checkCiEvidenceFreshness(extractMarkdownSection(deleted, TOKEN_COST_HEADING));
   assert.ok(reasons.includes(REASON_SHA_HEAD), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_UNCOMMITTED), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_NO_APPROVE), reasons.join('\n'));

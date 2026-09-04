@@ -62,3 +62,4 @@ CLAUDE.md:195:- **レビュアーはサンドボックス内で `npm run ci`・�
 - `03:08` - `node --test tests/agent-defs.test.mjs`（0047 の 3 事実）: `# tests 11` `# pass 11` `# fail 0`
 - `03:09` - 新規テスト初回は節抽出が `m` フラグの `$`（行末）で本文 1 行目までしか取れず fail。`extractMarkdownSection` から `m` を外して修正。再実行 `node --test tests/ci-evidence-freshness.test.mjs`: `# tests 9` `# pass 9` `# fail 0`
 - `03:10` - 先の `npm run ci` は SHA `1640755ada6af364012329e4e227d10ac7e25c78` 上で、未コミットの `tests/ci-evidence-freshness.test.mjs` 抽出修正あり。lint / lint:docs / test:unit `# tests 562` `# pass 562` `# fail 0`。この進捗コミット後にクリーン HEAD で取り直す。
+- `04:51` - Copilot #100 の 2 件: トークンコスト節削除の lookahead を `(?=\n## |$)` にし、SHA/HEAD 判定を compact + 大小無視にした。末尾節削除と `sha`/`head` のケースをテストに足した。`tests/agent-defs.test.mjs` は未変更。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 21` `# pass 21` `# fail 0`

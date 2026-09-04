@@ -21,3 +21,4 @@
 
 - `00:48` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0055-progress-verification-lint`）。完了条件 5〜10・失敗時・例を確定した。0043 後の lint 所在は `loop-core/ledger/lint-docs.mjs`。検知は共通検証の dump（全件集計クラスタと docs lint の成功文）に限り、コマンド名だけの言及は落とさない。フェンスの中と外の両方を見る。作業固有の `node --test` + テストファイルパスは免除する。`task/archive/` はパス接頭辞で外す。Complexity は `M`（lint 本体と新規テストの 2 ファイル。フェンス内外と偽陽性の切り分けがある。凍結改訂は含まない）。**この PR は昇格（docs）だけ。実装はしない。** 実装 PR の予約ブランチは `feat/0055-progress-verification-lint`。この git ブランチは `docs/promote-0055-progress-verification-lint`。進捗の **PR** は実装 PR 用なので `未作成` のまま。検知対象そのものの成功文や全件集計行は、この進捗に貼らない（`0041` と同じ回避）。
 - `00:49` - `npm run lint:docs` は終了コード 0。成功文はここに貼らない（この作業の検知対象そのもの）。出力は docs PR 本文と会話に置く。
+- `00:50` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/94 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。

@@ -63,17 +63,45 @@ function compactText(markdown) {
   return markdown.replace(/\s+/g, '');
 }
 
+/** 要件を弱める否定。キーワード近傍にあれば事実は残っていない。 */
+const WEAKENER_RE = /不要|必要ない|必要はない|求めない|しなくてよい|しなくてもよい|問わない/;
+
+/**
+ * `keywordRe` の各ヒットの前後に弱め語があるか。
+ *
+ * @param {string} compact
+ * @param {RegExp} keywordRe
+ * @param {number} [window]
+ * @returns {boolean}
+ */
+function hasWeakenerNear(compact, keywordRe, window = 20) {
+  const flags = keywordRe.flags.includes('g') ? keywordRe.flags : `${keywordRe.flags}g`;
+  const re = new RegExp(keywordRe.source, flags);
+  for (const match of compact.matchAll(re)) {
+    const start = Math.max(0, match.index - window);
+    const end = Math.min(compact.length, match.index + match[0].length + window);
+    if (WEAKENER_RE.test(compact.slice(start, end))) return true;
+  }
+  return false;
+}
+
 function hasShaHeadMatch(markdown) {
   const compact = compactText(markdown);
   const hasSha = /SHA|リビジョン/i.test(compact);
   const hasHead = /HEAD/i.test(compact);
-  const hasMatch = /一致/.test(compact);
-  return hasSha && hasHead && hasMatch;
+  const affirmative =
+    /一致(すること|していなければならない|していることを確認|しなければならない|は必須)/.test(
+      compact,
+    );
+  if (!hasSha || !hasHead || !affirmative) return false;
+  return !hasWeakenerNear(compact, /一致|SHA|HEAD|リビジョン/i);
 }
 
 function hasUncommittedDisclosure(markdown) {
   const compact = compactText(markdown);
-  return /未コミット/.test(compact) && /(旨|明記|分か)/.test(compact);
+  if (!/未コミット/.test(compact)) return false;
+  if (!/(旨|明記|分か)/.test(compact)) return false;
+  return !hasWeakenerNear(compact, /未コミット|旨|明記|分か/);
 }
 
 function hasNoApproveOnMismatch(markdown) {
@@ -81,7 +109,9 @@ function hasNoApproveOnMismatch(markdown) {
   const hasMismatch =
     /一致が確認できない|一致しない|対応が確認できない|SHA欠落|SHAが無い/i.test(compact);
   const hasRefuse = /承認(しない|してはならない)/.test(compact);
-  return hasMismatch && hasRefuse;
+  if (!hasMismatch || !hasRefuse) return false;
+  if (/承認してよい/.test(compact)) return false;
+  return !hasWeakenerNear(compact, /承認(しない|してはならない)/);
 }
 
 /** 鮮度の 3 事実を持つ最小の本文。現行ファイルの複製ではない。 */
@@ -134,6 +164,18 @@ test('0047 の 3 事実だけの本文は鮮度不足で fail する', () => {
     'severity 根拠 完了条件番号 一文の要約',
   ].join('\n');
   const reasons = checkCiEvidenceFreshness(only0047);
+  assert.ok(reasons.includes(REASON_SHA_HEAD), reasons.join('\n'));
+  assert.ok(reasons.includes(REASON_UNCOMMITTED), reasons.join('\n'));
+  assert.ok(reasons.includes(REASON_NO_APPROVE), reasons.join('\n'));
+});
+
+test('弱めた文言（一致は不要）は fail する', () => {
+  const markdown = validBody({
+    shaHead: '実測の CI 結果に SHA と HEAD の一致は不要。',
+    uncommitted: '未コミットの旨は不要。',
+    noApprove: '一致が確認できないときも承認しないことは不要。',
+  });
+  const reasons = checkCiEvidenceFreshness(markdown);
   assert.ok(reasons.includes(REASON_SHA_HEAD), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_UNCOMMITTED), reasons.join('\n'));
   assert.ok(reasons.includes(REASON_NO_APPROVE), reasons.join('\n'));

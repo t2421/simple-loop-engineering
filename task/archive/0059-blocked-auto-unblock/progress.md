@@ -1,9 +1,9 @@
 # Progress: `0059-blocked-auto-unblock`
 
-- **Target Spec:** `task/0059-blocked-auto-unblock/spec.md`
+- **Target Spec:** `task/archive/0059-blocked-auto-unblock/spec.md`
 - **Branch:** `feat/0059-blocked-auto-unblock`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/101`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`loop-core/ledger/start-task.mjs`、置くなら同じ ledger の小さなヘルパー)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

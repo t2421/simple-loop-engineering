@@ -36,3 +36,4 @@ $ grep -c '^### 2\.' .claude/skills/loop-port/SKILL.md
 
 docs の形式違反はありません（56 件の作業ディレクトリを確認）。
 ```
+- `00:52` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/98 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。

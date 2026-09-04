@@ -45,5 +45,6 @@ docs の形式違反を 5 件検知しました:
   検査は仕様どおり動いている。完了条件 9 は、これら 5 件の dump を別の docs PR で消してからでないと満たせない。この PR では触らない。
 - `04:54` - Copilot 指摘: 同じ文脈に `node --test <ファイル>` があると集計検査を丸ごと skip していた。共通コマンドまたは floor 以上の集計があるときは免除しないようにした。混在ケースの回帰テストを追加。`node --test tests/lint-docs-progress-verification.test.mjs` は 18 pass / 0 fail。
 - `04:55` - マージ可能にするため、0046 / 0048 / 0049 / 0059 / 0060 の docs lint 成功文 1 行だけを差し替えた（spec は未変更。#83 / #90 の実装には未接触）。`task/archive/` は対象外のまま。`npm run lint:docs` と `npm run ci` は終了コード 0。成功文と全件集計はここに貼らない。
+- `05:12` - Copilot: 他作業 progress の差分は 1 PR = 1 作業に反する。0046 / 0048 / 0049 / 0059 / 0060 の progress を `origin/main` に戻した。dump 除去は #99〜#103 に任せる。この PR の差分は `loop-core/ledger/lint-docs.mjs`・`tests/lint-docs-progress-verification.test.mjs`・`task/0055-progress-verification-lint/progress.md` だけ。混在ケース（`node --test <ファイル>` + `npm run ci`）の免除回避修正と回帰テストは残す。`no-progress-needed` は不要になるので外す。マージ順は他 5 本が先、そのあと #104。
 
 

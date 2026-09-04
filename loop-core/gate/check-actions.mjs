@@ -125,13 +125,36 @@ export function classify(checks) {
 
 /**
  * `CHECK_ACTIONS_RERUN_STUCK` が正の整数（`1` を含む）なら自動再実行を選ぶ。
+ * `parseInt` は使わない（`1x` を 1 と読むため）。数字だけを受け付ける。
  *
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {boolean}
  */
 export function rerunStuckEnabledFromEnv(env = process.env) {
-  const parsed = Number.parseInt(env.CHECK_ACTIONS_RERUN_STUCK ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0;
+  const raw = env.CHECK_ACTIONS_RERUN_STUCK;
+  return typeof raw === 'string' && /^[1-9]\d*$/.test(raw);
+}
+
+/**
+ * catch した値をログ用の 1 行にする。非 Error（文字列・null・オブジェクト）も落とさない。
+ *
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function errorReason(error) {
+  if (error instanceof Error) return error.message || error.name;
+  if (typeof error === 'string') return error;
+  try {
+    const json = JSON.stringify(error);
+    if (typeof json === 'string') return json;
+  } catch {
+    // 循環参照など
+  }
+  try {
+    return String(error);
+  } catch {
+    return 'unknown';
+  }
 }
 
 /**
@@ -335,7 +358,7 @@ export async function decide({
         } catch (error) {
           return halt([
             ...describeStuck(result.stuck),
-            `check-actions: gh run rerun ${runId} に失敗しました（${error.message}）。`,
+            `check-actions: gh run rerun ${runId} に失敗しました（${errorReason(error)}）。`,
           ]);
         }
       }
@@ -393,10 +416,74 @@ export function isPushed() {
 }
 
 /** HEAD のチェック一覧を gh から取る。親 run の id / status を載せる（条件 B 用） */
-function parseActionsRunId(htmlUrl) {
+export function parseActionsRunId(htmlUrl) {
   if (typeof htmlUrl !== 'string') return undefined;
   const match = htmlUrl.match(/\/actions\/runs\/(\d+)/);
   return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * 条件 B のための親 run 一覧が要るか。未完了が 1 件でもあれば要る。
+ * すべて completed なら `actions/runs` を叩かない。
+ *
+ * @param {Array<{status?:string}|null|undefined>} checks
+ * @returns {boolean}
+ */
+export function needsParentRunList(checks) {
+  if (!Array.isArray(checks)) return false;
+  return checks.some((c) => c != null && c.status !== 'completed');
+}
+
+/**
+ * check-run に親 run の id / status を載せる純関数。runs が空なら URL から run_id だけ拾う。
+ *
+ * @param {object[]} checks
+ * @param {Array<{id?:number, status?:string, check_suite_id?:number}>} [runs]
+ * @returns {object[]}
+ */
+export function attachParentRuns(checks, runs = []) {
+  const runBySuite = new Map();
+  const runById = new Map();
+  for (const run of runs) {
+    if (run.check_suite_id != null) runBySuite.set(run.check_suite_id, run);
+    if (run.id != null) runById.set(run.id, run);
+  }
+  return checks.map((c) => {
+    const fromUrl = parseActionsRunId(c.html_url);
+    const run = (c.check_suite_id != null ? runBySuite.get(c.check_suite_id) : undefined)
+      ?? (fromUrl != null ? runById.get(fromUrl) : undefined);
+    return {
+      name: c.name,
+      status: c.status,
+      conclusion: c.conclusion,
+      html_url: c.html_url,
+      id: c.id,
+      run_id: run?.id ?? fromUrl,
+      run_status: run?.status,
+    };
+  });
+}
+
+/**
+ * 未完了があるときだけ親 run 一覧を取る。注入してテストする。
+ *
+ * @param {object[]} checks
+ * @param {() => object[] | Promise<object[]>} [fetchParentRuns]
+ * @returns {Promise<{checks: object[], fetchedParentRuns: boolean}>}
+ */
+export async function withParentRuns(checks, fetchParentRuns) {
+  if (!needsParentRunList(checks)) {
+    return { checks: attachParentRuns(checks, []), fetchedParentRuns: false };
+  }
+  if (typeof fetchParentRuns !== 'function') {
+    return { checks: attachParentRuns(checks, []), fetchedParentRuns: false };
+  }
+  try {
+    const runs = await fetchParentRuns();
+    return { checks: attachParentRuns(checks, Array.isArray(runs) ? runs : []), fetchedParentRuns: true };
+  } catch {
+    return { checks: attachParentRuns(checks, []), fetchedParentRuns: true };
+  }
 }
 
 async function fetchChecksFromGh() {
@@ -415,9 +502,7 @@ async function fetchChecksFromGh() {
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
   const checks = JSON.parse(out);
-  const runBySuite = new Map();
-  const runById = new Map();
-  try {
+  const result = await withParentRuns(checks, () => {
     const runsOut = execFileSync(
       'gh',
       [
@@ -428,27 +513,9 @@ async function fetchChecksFromGh() {
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
-    for (const run of JSON.parse(runsOut)) {
-      if (run.check_suite_id != null) runBySuite.set(run.check_suite_id, run);
-      if (run.id != null) runById.set(run.id, run);
-    }
-  } catch {
-    // 親 run が取れなくても check-run 自体は返す（条件 A は判定できる）
-  }
-  return checks.map((c) => {
-    const fromUrl = parseActionsRunId(c.html_url);
-    const run = (c.check_suite_id != null ? runBySuite.get(c.check_suite_id) : undefined)
-      ?? (fromUrl != null ? runById.get(fromUrl) : undefined);
-    return {
-      name: c.name,
-      status: c.status,
-      conclusion: c.conclusion,
-      html_url: c.html_url,
-      id: c.id,
-      run_id: run?.id ?? fromUrl,
-      run_status: run?.status,
-    };
+    return JSON.parse(runsOut);
   });
+  return result.checks;
 }
 
 function rerunStuckFromGh(runId) {

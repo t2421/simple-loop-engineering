@@ -101,3 +101,38 @@ base（origin/main）の loop-core CLI で判定します。
 ```
 
 例 10（ラベル付きで `protected-paths` 成功）は人間が `allow-protected-change` を付けたあとの再実行を待つ。
+- `04:52` - PR #103 の Copilot 「Changes recommended」3 件を直した。`rerunStuckEnabledFromEnv` は `/^[1-9]\d*$/` のみ（`1x` は無効）。`rerunStuck` 失敗は `errorReason` で非 Error も文字列化。`actions/runs` は未完了チェックがあるときだけ取る（`needsParentRunList` / `withParentRuns`）。既存 `tests/check-actions.test.mjs` は未編集。エージェントは `allow-protected-change` を付けない。`node --test tests/check-actions-stuck.test.mjs tests/check-actions.test.mjs` の出力:
+
+```
+# tests 46
+# suites 0
+# pass 46
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 66.110736
+```
+- `04:55` - `npm run ci` の出力（先頭と末尾）:
+
+```
+> lint
+> eslint .
+
+> lint:docs
+> node loop-core/bin/loop.mjs lint-docs
+
+docs の形式違反はありません（56 件の作業ディレクトリを確認）。
+```
+
+```
+1..571
+# tests 571
+# suites 0
+# pass 571
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120507.750385
+```

@@ -5,6 +5,10 @@ import {
   decide,
   stuckConditions,
   rerunStuckEnabledFromEnv,
+  errorReason,
+  needsParentRunList,
+  attachParentRuns,
+  withParentRuns,
   DEFAULT_QUIET_SEC,
   DEFAULT_TIMEOUT_SEC,
   PASSING_CONCLUSIONS,
@@ -237,11 +241,97 @@ test('自動再実行を選んだが gh run rerun が失敗する: 成功にせ�
   assert.doesNotMatch(text, PASS_LINE);
 });
 
-test('rerunStuckEnabledFromEnv: 正の整数だけ真。true や 0 では選ばない', () => {
+test('rerunStuck が非 Error を投げても成功にせず、理由をログに残す', async () => {
+  assert.equal(errorReason(new Error('gh: rerun failed')), 'gh: rerun failed');
+  assert.equal(errorReason('plain'), 'plain');
+  assert.equal(errorReason(null), 'null');
+  assert.equal(errorReason({ code: 1 }), '{"code":1}');
+
+  const { now, sleep } = clock();
+  const r = await decide({
+    ...base,
+    fetchChecks: fetcher([[stuckA]]),
+    now,
+    sleep,
+    rerunStuckEnabled: true,
+    rerunStuck: async () => {
+      throw 'gh: rerun failed';
+    },
+  });
+  assert.equal(r.exit, 2);
+  assert.match(r.lines.join('\n'), /gh run rerun 32672846210 に失敗しました（gh: rerun failed）/);
+  assert.doesNotMatch(r.lines.join('\n'), PASS_LINE);
+});
+
+test('rerunStuckEnabledFromEnv: 正の整数だけ真。1x / 01 / true / 0 では選ばない', () => {
   assert.equal(rerunStuckEnabledFromEnv({}), false);
   assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '' }), false);
   assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '0' }), false);
   assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: 'true' }), false);
+  assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '1x' }), false);
+  assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '01' }), false);
+  assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '1.5' }), false);
   assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '1' }), true);
   assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '2' }), true);
+  assert.equal(rerunStuckEnabledFromEnv({ CHECK_ACTIONS_RERUN_STUCK: '10' }), true);
+});
+
+test('needsParentRunList: すべて completed なら親 run 一覧は不要。未完了が 1 件でもあれば要る', () => {
+  assert.equal(needsParentRunList([]), false);
+  assert.equal(needsParentRunList([ok('verify'), ok('e2e')]), false);
+  assert.equal(needsParentRunList([stuckA]), true);
+  assert.equal(needsParentRunList([ok('verify'), pendingE2e]), true);
+});
+
+test('withParentRuns: 全完了なら fetchParentRuns を呼ばない', async () => {
+  let called = 0;
+  const r = await withParentRuns(
+    [ok('verify'), { ...ok('e2e'), html_url: 'https://github.com/t2421/simple-loop-engineering/actions/runs/9/job/1' }],
+    () => {
+      called += 1;
+      return [{ id: 9, status: 'completed', check_suite_id: 1 }];
+    },
+  );
+  assert.equal(r.fetchedParentRuns, false);
+  assert.equal(called, 0);
+  assert.equal(r.checks[1].run_id, 9);
+  assert.equal(r.checks[1].run_status, undefined);
+});
+
+test('withParentRuns: 未完了があるときだけ親 run を取り、条件 B を判定できる', async () => {
+  let called = 0;
+  const incomplete = {
+    name: 'job',
+    status: 'in_progress',
+    conclusion: null,
+    html_url: 'https://github.com/t2421/simple-loop-engineering/actions/runs/1/job/2',
+    id: 2,
+    check_suite_id: 9,
+  };
+  const r = await withParentRuns([incomplete], () => {
+    called += 1;
+    return [{ id: 1, status: 'completed', check_suite_id: 9 }];
+  });
+  assert.equal(r.fetchedParentRuns, true);
+  assert.equal(called, 1);
+  assert.equal(r.checks[0].run_id, 1);
+  assert.equal(r.checks[0].run_status, 'completed');
+  assert.deepEqual(stuckConditions(r.checks[0]), ['B']);
+  assert.equal(classify(r.checks).verdict, 'stuck');
+});
+
+test('attachParentRuns: 親 run 取得失敗相当（runs 空）でも check-run は返し、条件 A は残る', () => {
+  const attached = attachParentRuns([
+    {
+      name: 'progress-coupling',
+      status: 'in_progress',
+      conclusion: 'success',
+      html_url: 'https://github.com/t2421/simple-loop-engineering/actions/runs/32672846210/job/4',
+      id: 4,
+      check_suite_id: 9,
+    },
+  ], []);
+  assert.equal(attached[0].run_id, 32672846210);
+  assert.equal(attached[0].run_status, undefined);
+  assert.deepEqual(stuckConditions(attached[0]), ['A']);
 });

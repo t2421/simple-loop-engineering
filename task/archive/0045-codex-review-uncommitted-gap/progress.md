@@ -1,9 +1,9 @@
 # Progress: `0045-codex-review-uncommitted-gap`
 
-- **Target Spec:** `task/0045-codex-review-uncommitted-gap/spec.md`
+- **Target Spec:** `task/archive/0045-codex-review-uncommitted-gap/spec.md`
 - **Branch:** `feat/0045-codex-review-uncommitted-gap`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/92
-- **Status:** `In Progress` (Phase: `Verify`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`.claude/agents/codex-reviewer.md` の「手順」)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

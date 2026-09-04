@@ -1,9 +1,9 @@
 # Progress: `0048-parallel-session-pr-dedup`
 
-- **Target Spec:** `task/0048-parallel-session-pr-dedup/spec.md`
+- **Target Spec:** `task/archive/0048-parallel-session-pr-dedup/spec.md`
 - **Branch:** `feat/0048-parallel-session-pr-dedup`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/99`
-- **Status:** `Blocked` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`CLAUDE.md` の「並列作業（worktree）」節と「コミットとマージ」節)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

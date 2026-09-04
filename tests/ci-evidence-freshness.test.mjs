@@ -39,7 +39,8 @@ export const REASON_NO_APPROVE =
  */
 export function extractMarkdownSection(markdown, heading) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`^## ${escaped}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
+  // `m` を付けない。`$` が行末に化けると、本文の最初の 1 行で打ち切られる。
+  const re = new RegExp(`(?:^|\\n)## ${escaped}(?:\\n|$)([\\s\\S]*?)(?=\\n## |$)`);
   const match = markdown.match(re);
   return match ? match[1] : '';
 }

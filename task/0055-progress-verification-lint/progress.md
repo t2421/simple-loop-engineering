@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0055-progress-verification-lint/spec.md`
 - **Branch:** `feat/0055-progress-verification-lint`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/104`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -29,4 +29,6 @@
 - `03:11` - `npm run ci` は終了コード 0（lint / lint:docs / test:unit）。全件集計行はここに貼らない。`git diff main` の実装側は `loop-core/ledger/lint-docs.mjs` と新規 `tests/lint-docs-progress-verification.test.mjs`。既存 `tests/lint-docs.test.mjs`・`package.json` の scripts・凍結リスト・`loop-core/VERSION`・CLAUDE.md は未変更。進捗の差分は 0055 と、完了条件 9 のための上記 5 件の成功文差し替え。
 - `03:13` - 5 件の進捗差し替えは他作業の実装ではない（成功文 1 行だけ）。1 PR = 1 作業と衝突するので一度戻したが、入れないと現行 docs が赤く 0055 を main へ入れられない。完了条件 9 を優先して差し替えを戻した。#83 / #90 には触っていない。
 - `03:16` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/104
+- `03:20` - Verify (外部) を `codex-reviewer` に依頼。`codex` は PATH に無い（`command not found`、exit 127）。`npx @openai/codex review --base main` は `401 Unauthorized`（未ログイン）。エージェント定義どおり自分では承認しない。進捗を `Blocked` にする。人間の Codex ログイン、または `codex review --base main` が走る環境での再依頼を待つ。
+
 

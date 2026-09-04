@@ -1,9 +1,9 @@
 # Progress: `0046-ci-evidence-freshness`
 
-- **Target Spec:** `task/0046-ci-evidence-freshness/spec.md`
+- **Target Spec:** `task/archive/0046-ci-evidence-freshness/spec.md`
 - **Branch:** `feat/0046-ci-evidence-freshness`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/100
-- **Status:** `In Progress` (Phase: `Verify`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`CLAUDE.md`「トークンコスト」、`.claude/agents/codex-reviewer.md`「テスト結果の扱い」)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

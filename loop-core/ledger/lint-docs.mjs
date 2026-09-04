@@ -415,12 +415,16 @@ function collectVerificationContexts(markdown) {
       if (fence === null) {
         fence = mark;
         fenceLines = [];
-      } else if (fence === mark) {
+        return;
+      }
+      if (fence === mark) {
         fences.push({ lines: fenceLines });
         fence = null;
         fenceLines = [];
+        return;
       }
-      return;
+      // 開いているフェンスと違う印（``` の中の `~~~` など）は区切りではない。
+      // return するとその行が文脈から落ち、集計やコマンドを取りこぼす。
     }
     if (fence !== null) {
       fenceLines.push({ number, text });
@@ -474,7 +478,9 @@ function collectVerificationContexts(markdown) {
  * @returns {boolean}
  */
 function hasSharedUnitCommand(text) {
-  return /\bnpm run ci\b/.test(text) || /\bnpm run test:unit\b/.test(text);
+  // `npm run ci: exit 0` は終了コードの記録（コマンド名）であり dump ではない。
+  // `\bnpm run ci\b` は `ci` と `:` の間に単語境界があるので誤って真になる。
+  return /\bnpm run ci(?!:)/.test(text) || /\bnpm run test:unit\b/.test(text);
 }
 
 /**

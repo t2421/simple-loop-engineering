@@ -314,6 +314,37 @@ test('同じ文脈に node --test <ファイル> と npm run ci の集計が混�
   );
 });
 
+test('同じ項目の node --test 小件集計と npm run ci: exit 0 は違反にしない', (t) => {
+  const root = makeRoot(t);
+  const extra = [
+    '',
+    '- `12:00` - `node --test tests/foo.test.mjs` は `# tests 17` / `# pass 17` / `# fail 0`。`npm run ci: exit 0`。',
+    '',
+  ].join('\n');
+  putTask(root, '0030-a', { extra });
+  assert.deepEqual(lintDocs(root), []);
+});
+
+test('フェンス内の別印の行は区切りにせず、その行の集計も検知する', (t) => {
+  const root = makeRoot(t);
+  const extra = [
+    '',
+    '- `12:00` - フェンス内に ~~~ で始まる行がある',
+    '',
+    '```',
+    '~~~ npm run ci',
+    '# tests 8  # pass 8  # fail 0',
+    '```',
+    '',
+  ].join('\n');
+  const progressPath = putTask(root, '0030-a', { extra });
+  const reasons = dumpReasons(lintDocs(root), progressPath);
+  assert.ok(
+    reasons.some((reason) => /ユニットテストの集計/.test(reason)),
+    JSON.stringify(reasons),
+  );
+});
+
 test('同じ文脈の npm run test:unit と小件集計は違反', (t) => {
   const root = makeRoot(t);
   const extra = [

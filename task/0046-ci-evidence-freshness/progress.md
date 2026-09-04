@@ -57,4 +57,5 @@ CLAUDE.md:195:- **レビュアーはサンドボックス内で `npm run ci`・�
 - `03:10` - 先の `npm run ci` は SHA `1640755ada6af364012329e4e227d10ac7e25c78` 上で、未コミットの `tests/ci-evidence-freshness.test.mjs` 抽出修正あり。`npm run ci: exit 0`。この進捗コミット後にクリーン HEAD で取り直す。
 - `04:51` - Copilot #100 の 2 件: トークンコスト節削除の lookahead を `(?=\n## |$)` にし、SHA/HEAD 判定を compact + 大小無視にした。末尾節削除と `sha`/`head` のケースをテストに足した。`tests/agent-defs.test.mjs` は未変更。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 21` `# pass 21` `# fail 0`
 - `05:03` - 共通検証 dump を削った（docs lint 成功文と `npm run ci` 全件集計）。作業固有の grep と `node --test` 小件は残した。
-- `05:11` - Copilot「一致は不要」でもキーワードだけで pass する抜け。3 ヘルパに肯定要件と近傍の 不要/必要ない 拒否を足し、弱めた文言の回帰テストを追加。SHA/HEAD は大小無視のまま。
+- `05:11` - Copilot「一致は不要」でもキーワードだけで pass する抜け。3 ヘルパに肯定要件と近傍の 不要/必要ない 拒否を足し、弱めた文言の回帰テストを追加。SHA/HEAD は大小無視のまま。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 22` `# pass 22` `# fail 0`
+- `06:46` - `origin/main`（#99 0048 ほか）へ rebase。衝突なし。CLAUDE.md は 0048 の派生 docs PR 規約と 0046 の SHA/HEAD 鮮度を両方残した。

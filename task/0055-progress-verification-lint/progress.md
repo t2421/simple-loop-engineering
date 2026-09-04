@@ -2,8 +2,8 @@
 
 - **Target Spec:** `task/0055-progress-verification-lint/spec.md`
 - **Branch:** `feat/0055-progress-verification-lint`
-- **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (自己)`)
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/104`
+- **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/lint-docs-progress-verification.test.mjs`。既存 `tests/lint-docs.test.mjs` は変更しない)
 - [x] 実装 (`loop-core/ledger/lint-docs.mjs` に `checkProgressNoSharedVerification` を足し、`checkProgress` から呼ぶ。`task/archive/` は外す)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -28,3 +28,5 @@
 - `03:08` - `grep -n "checkProgressNoSharedVerification" loop-core/ledger/lint-docs.mjs` は定義 508 行・呼び出し 573 行。JSDoc 497 行に `linesOutsideFences` 例外。検知対象そのものの成功文はここに貼らない。
 - `03:11` - `npm run ci` は終了コード 0（lint / lint:docs / test:unit）。全件集計行はここに貼らない。`git diff main` の実装側は `loop-core/ledger/lint-docs.mjs` と新規 `tests/lint-docs-progress-verification.test.mjs`。既存 `tests/lint-docs.test.mjs`・`package.json` の scripts・凍結リスト・`loop-core/VERSION`・CLAUDE.md は未変更。進捗の差分は 0055 と、完了条件 9 のための上記 5 件の成功文差し替え。
 - `03:13` - 5 件の進捗差し替えは他作業の実装ではない（成功文 1 行だけ）。1 PR = 1 作業と衝突するので一度戻したが、入れないと現行 docs が赤く 0055 を main へ入れられない。完了条件 9 を優先して差し替えを戻した。#83 / #90 には触っていない。
+- `03:16` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/104
+

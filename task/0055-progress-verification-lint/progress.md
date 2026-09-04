@@ -48,6 +48,7 @@ docs の形式違反を 5 件検知しました:
 - `05:12` - Copilot: 他作業 progress の差分は 1 PR = 1 作業に反する。0046 / 0048 / 0049 / 0059 / 0060 の progress を `origin/main` に戻した。dump 除去は #99〜#103 に任せる。この PR の差分は `loop-core/ledger/lint-docs.mjs`・`tests/lint-docs-progress-verification.test.mjs`・`task/0055-progress-verification-lint/progress.md` だけ。混在ケース（`node --test <ファイル>` + `npm run ci`）の免除回避修正と回帰テストは残す。`no-progress-needed` は不要になるので外す。マージ順は他 5 本が先、そのあと #104。
 - `07:12` - #99〜#103 が main に入ったので `origin/main` へ rebase。Copilot: `collectVerificationContexts` が開いているフェンスと違う印の行を捨てていた。内容として残す。回帰テストを追加。混在ケースの修正は残っている。
 - `07:25` - フェンス内の別印は区切りにしない。混在ケース（`node --test <ファイル>` + `npm run ci`）は引き続き違反。`npm run ci: exit 0` は終了コードの記録なので共有コマンドにしない。0060 の進捗は触らない。
+- `20:20` - Copilot: floor 以上でも、同じ文脈に作業固有の `node --test` とファイルパスがあれば免除（仕様どおり N の大小を問わない）。共有コマンドとの混在は引き続き違反。回帰テストを追加。フェンス別印の修正は残す。
 
 
 

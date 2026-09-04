@@ -314,6 +314,43 @@ test('同じ文脈に node --test <ファイル> と npm run ci の集計が混�
   );
 });
 
+test('作業固有の node --test <ファイル> は floor 以上でも違反にしない', (t) => {
+  const root = makeRoot(t);
+  const extra = [
+    '',
+    '- `12:00` - 専用の大きなファイルを実行した',
+    '',
+    '```',
+    'node --test tests/huge.test.mjs',
+    '# tests 80  # pass 80  # fail 0',
+    '```',
+    '',
+  ].join('\n');
+  putTask(root, '0030-a', { extra });
+  assert.deepEqual(lintDocs(root), []);
+});
+
+test('作業固有の node --test <ファイル> でも npm run ci が同じ文脈なら違反', (t) => {
+  const root = makeRoot(t);
+  const extra = [
+    '',
+    '- `12:00` - 専用の大きなファイルと共通検証を同じフェンスに貼った',
+    '',
+    '```',
+    'node --test tests/huge.test.mjs',
+    '# tests 80  # pass 80  # fail 0',
+    'npm run ci',
+    '```',
+    '',
+  ].join('\n');
+  const progressPath = putTask(root, '0030-a', { extra });
+  const reasons = dumpReasons(lintDocs(root), progressPath);
+  assert.ok(
+    reasons.some((reason) => /ユニットテストの集計/.test(reason)),
+    JSON.stringify(reasons),
+  );
+});
+
 test('同じ項目の node --test 小件集計と npm run ci: exit 0 は違反にしない', (t) => {
   const root = makeRoot(t);
   const extra = [

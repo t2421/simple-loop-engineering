@@ -55,8 +55,9 @@ export const COMPLEXITY_VALUES = Object.freeze(['S', 'M', 'L']);
 /**
  * ユニットテスト全件集計とみなす `# tests N` の下限。
  *
- * 作業固有の `node --test <ファイル>` は数十件にしかならない。コマンド名が
- * 無い全件貼付（`# tests 482` など）を拾うために使う。
+ * コマンド名が無い全件貼付（`# tests 482` など）を拾うために使う。
+ * 同じ文脈に作業固有の `node --test <ファイル>` がある集計は、この下限を
+ * 超えても免除する（共有コマンドが無いとき）。
  */
 export const SHARED_UNIT_TEST_COUNT_FLOOR = 50;
 
@@ -484,6 +485,18 @@ function hasSharedUnitCommand(text) {
 }
 
 /**
+ * 同じ文脈に作業固有の `node --test <ファイル>` 証跡があるか。
+ * ファイル指定の無い素の `node --test` は対象外。
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function hasTaskSpecificNodeTest(text) {
+  if (!/\bnode --test\b/.test(text)) return false;
+  return /\S+\.test\.mjs\b/.test(text) || /\btests\/[^\s`]+/.test(text);
+}
+
+/**
  * progress 本文に共通検証の dump が無いかを判定する純関数。
  *
  * **この検査だけはコードフェンスの内側と外側の両方を見る。** 既存の走査は
@@ -492,9 +505,11 @@ function hasSharedUnitCommand(text) {
  * （`task/archive/0053-stop-hook-block-exit-code/progress.md` 66 行目）。
  * 両方を見たうえで、作業固有の証跡と切り分ける。
  *
- * 作業固有の `node --test <ファイル>` だけの小件集計は違反にしない。
- * 同じ文脈に `npm run ci` / `npm run test:unit` がある、または `# tests N` が
- * `SHARED_UNIT_TEST_COUNT_FLOOR` 以上なら、作業固有の証跡があっても違反にする。
+ * 作業固有の `node --test <ファイル>` 証跡がある集計は、N の大小を問わず
+ * 違反にしない。同じ文脈に `npm run ci` / `npm run test:unit` があるときは
+ * 免除しない。ファイル指定の無い素の `node --test` は免除しない。
+ * 作業固有の証跡が無く、`# tests N` が `SHARED_UNIT_TEST_COUNT_FLOOR` 以上
+ * なら違反にする。
  *
  * `checkProgress` は `relPath` が `task/archive/` で始まる進捗にはこの関数を
  * 呼ばない。アーカイブ済みの貼付は範囲外である。
@@ -514,8 +529,9 @@ export function checkProgressNoSharedVerification(progressMarkdown) {
   for (const context of collectVerificationContexts(progressMarkdown)) {
     const body = context.lines.map((line) => line.text).join('\n');
     const shared = hasSharedUnitCommand(body);
+    const taskSpecific = hasTaskSpecificNodeTest(body);
     for (const cluster of findSummaryClusters(context.lines)) {
-      if (shared || cluster.tests >= SHARED_UNIT_TEST_COUNT_FLOOR) {
+      if (shared || (!taskSpecific && cluster.tests >= SHARED_UNIT_TEST_COUNT_FLOOR)) {
         reasons.push(`${cluster.line} 行目: 共通の検証の出力（ユニットテストの集計）を progress に貼っている`);
       }
     }

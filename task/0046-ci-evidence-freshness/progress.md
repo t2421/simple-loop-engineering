@@ -59,3 +59,4 @@ CLAUDE.md:195:- **レビュアーはサンドボックス内で `npm run ci`・�
 - `05:03` - 共通検証 dump を削った（docs lint 成功文と `npm run ci` 全件集計）。作業固有の grep と `node --test` 小件は残した。
 - `05:11` - Copilot「一致は不要」でもキーワードだけで pass する抜け。3 ヘルパに肯定要件と近傍の 不要/必要ない 拒否を足し、弱めた文言の回帰テストを追加。SHA/HEAD は大小無視のまま。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 22` `# pass 22` `# fail 0`
 - `06:46` - `origin/main`（#99 0048 ほか）へ rebase。衝突なし。CLAUDE.md は 0048 の派生 docs PR 規約と 0046 の SHA/HEAD 鮮度を両方残した。
+- `06:50` - Copilot: `removeMarkdownSection` を行頭 `## ` のみ・直前改行保持・フェンス内は対象外に。`00:48` を当時の昇格 docs PR と明示。`node --test tests/ci-evidence-freshness.test.mjs tests/agent-defs.test.mjs`: `# tests 23` `# pass 23` `# fail 0`

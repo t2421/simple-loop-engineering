@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0048-parallel-session-pr-dedup/spec.md`
 - **Branch:** `feat/0048-parallel-session-pr-dedup`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/99`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 - **Complexity:** `S`
 
 ## タスクチェックリスト
@@ -84,4 +84,13 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 ```
 
 完了条件 8・9: 差分は当該 2 ファイルのみ。ロック・bot・機械的検知・0039 のディレクトリ割当・実装 PR 重複対応の変更は無い。失敗時は実行時分岐ではない（なしとして該当しない）。
+- `03:11` - `npm run ci` を進捗追記後の HEAD `ba577f0` でも再実行。exit 0。`1..553` / `# tests 553` / `# pass 553` / `# fail 0` / `duration_ms 120466.445903`。
+- `03:11` - GitHub Actions（`node loop-core/bin/loop.mjs check-actions`）: `check-actions: HEAD のチェックはすべて成功しています。` `gh pr checks 99`: e2e / preview / progress-coupling / protected-paths / verify はすべて `pass`。
+- `03:12` - Verify (外部) 1 回目。`codex-reviewer` は **承認しない**。差分の状態: 見ていない（取得失敗）。`codex review --base main` の出力:
+
+```
+--: line 1: codex: command not found
+```
+
+exit_code: 127。`codex` バイナリは PATH に無い。エージェント定義どおり自分でレビューして承認したことにはしない。Status を `Blocked` にする。人間の Codex ログインまたは照合結果の扱い判断を待つ。実装差分は直していない。
 

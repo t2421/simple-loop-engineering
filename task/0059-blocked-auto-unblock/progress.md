@@ -11,7 +11,7 @@
 構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。
 
 - [x] Specの要件・受け入れ条件の確認
-- [x] テストの作成 (`tests/start-task.test.mjs`。置くならヘルパー用の新規テスト)
+- [x] テストの作成 (`tests/start-task-unblock.test.mjs`・`tests/unblock.test.mjs`。既存 `tests/start-task.test.mjs` は保護のため未変更)
 - [x] 実装 (`loop-core/ledger/start-task.mjs`、置くなら同じ ledger の小さなヘルパー)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
@@ -69,3 +69,4 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 
 `loop-core/bin/loop.mjs`・`package.json`・凍結ヘルパー・`loop.manifest.json` は差分に無い。#83 / #90 には触れていない。
 - `03:10` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/101 。進捗の **PR** に書いた。Verify (外部) へ。
+- `03:06` - GitHub Actions の Guard / protected-paths が失敗: `tests/start-task.test.mjs: 既存のテストの内容が変わっている`。`tests/` は append-only（新規追加は `appeared`、既存ファイルの内容変更は禁止）。既存テストを元に戻し、0059 のケースは新規 `tests/start-task-unblock.test.mjs` へ移す。`tests/unblock.test.mjs` はそのまま。検証を弱めていない。

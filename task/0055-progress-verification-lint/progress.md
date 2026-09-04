@@ -30,5 +30,19 @@
 - `03:13` - 5 件の進捗差し替えは他作業の実装ではない（成功文 1 行だけ）。1 PR = 1 作業と衝突するので一度戻したが、入れないと現行 docs が赤く 0055 を main へ入れられない。完了条件 9 を優先して差し替えを戻した。#83 / #90 には触っていない。
 - `03:16` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/104
 - `03:20` - Verify (外部) を `codex-reviewer` に依頼。`codex` は PATH に無い（`command not found`、exit 127）。`npx @openai/codex review --base main` は `401 Unauthorized`（未ログイン）。エージェント定義どおり自分では承認しない。進捗を `Blocked` にする。人間の Codex ログイン、または `codex review --base main` が走る環境での再依頼を待つ。
+- `03:24` - GitHub Actions の `progress-coupling` が失敗。6 件の progress が更新されている（0046 / 0048 / 0049 / 0055 / 0059 / 0060）。「1 PR = 1 作業です。」他作業 5 件の成功文差し替えを main の内容に戻した。#83 / #90 には触っていない。
+- `03:25` - 差し替えを戻したあと `npm run lint:docs` は終了コード 1。出力（成功文そのものは含まない）:
+
+```
+docs の形式違反を 5 件検知しました:
+  - task/0046-ci-evidence-freshness/progress.md: 29 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている
+  - task/0048-parallel-session-pr-dedup/progress.md: 29 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている
+  - task/0049-stuck-check-run/progress.md: 29 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている
+  - task/0059-blocked-auto-unblock/progress.md: 29 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている
+  - task/0060-spec-examples-eval/progress.md: 37 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている
+```
+
+  検査は仕様どおり動いている。完了条件 9 は、これら 5 件の dump を別の docs PR で消してからでないと満たせない。この PR では触らない。
+
 
 

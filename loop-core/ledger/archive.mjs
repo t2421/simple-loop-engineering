@@ -12,6 +12,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { checkExamples as inspectExamples } from '../../tools/check-examples.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -200,6 +201,9 @@ async function getRepoWithGh(root) {
  * @param {(url: string) => Promise<{merged: boolean, reason?: string, headRefName?: string}>} [opts.checkPr] - PR 確認。テストで差し替える
  * @param {() => Promise<{owner: string, repo: string}>} [opts.getRepo] - 実行中のリポジトリ。テストで差し替える
  * @returns {Promise<{ok: boolean, reason?: string, moved?: string[]}>}
+ *
+ * ファイルを動かす直前に同じ作業の spec「例」を検査する。評価可能な行が失敗したら
+ * 何も変更せず失敗する。評価可能な行が 0 件なら止めない。
  */
 export async function archive(
   name,
@@ -284,6 +288,14 @@ export async function archive(
       ok: false,
       reason: `task/${name}/progress.md に ${missing.join(' / ')} の行がありません。書式を直してから実行してください`,
     };
+  }
+
+  // 評価可能な「例」が落ちている作業をアーカイブすると、Done の自己申告が残る。
+  // 検査が非 0 なら、ここまで一切ファイルを変更していない状態で止める。
+  // 評価可能な行が 0 件（既存 archive テストの fixture を含む）は成功とし、止めない。
+  const examples = inspectExamples(name, { root });
+  if (!examples.ok) {
+    return { ok: false, reason: examples.reason ?? '「例」の検査が失敗しました' };
   }
 
   // ここから先がファイルの変更。途中で失敗したら、やった分を巻き戻す。

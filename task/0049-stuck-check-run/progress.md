@@ -20,14 +20,6 @@
 ## 試行ログ・エラー履歴
 
 - `00:50` - backlog から昇格した（`node loop-core/bin/loop.mjs promote 0049-stuck-check-run`）。完了条件 5〜12・失敗時・例を確定した。対象パスは 0043 以降の `loop-core/gate/check-actions.mjs`（旧 `tools/check-actions.mjs` は使わない）。運用手順だけの案は 480 秒待機を止めないので採らず、判定本体の改訂にする。既定は案内（待たずに exit 2 + `gh run rerun`）。自動再実行は `CHECK_ACTIONS_RERUN_STUCK` で最大 1 回の任意。未確定を成功にしない。凍結改訂なので実装 PR は `allow-protected-change` + 人間のマージ。Complexity は `L`（凍結改訂と、条件 A/B・案内/再実行の設計判断）。**この PR は昇格（docs）だけ。実装はしない。** 実装 PR の予約ブランチは `feat/0049-stuck-check-run`。この git ブランチは `docs/promote-0049-stuck-check-run`。進捗の **PR** は実装 PR 用なので `未作成` のまま。
-- `00:51` - `npm run lint:docs` の出力:
-
-```
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-```
 - `00:52` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/95 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
 - `03:05` - 実装ブランチ `feat/0049-stuck-check-run` を現行 `origin/main`（`f9d248e`）から切り、worktree で着手した。#83 / #90 と他作業は触らない。
 - `03:12` - `stuckConditions` / `classify` の `stuck` / `decide` の即ブロックと任意 1 回再実行を入れた。`PASSING_CONCLUSIONS` と `DEFAULT_TIMEOUT_SEC = 480` は変えていない。既存 `tests/check-actions.test.mjs` は未編集。新規 `tests/check-actions-stuck.test.mjs` は時刻・gh・再実行を注入する。`node --test tests/check-actions-stuck.test.mjs tests/check-actions.test.mjs` の出力:
@@ -43,35 +35,7 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 # duration_ms 62.234036
 ```
 - `03:15` - `git diff origin/main -- tests/check-actions.test.mjs` は空。`package.json` の `scripts` と `.github/workflows/` に差分無し。旧 `tools/check-actions.mjs` は復活させていない。
-- `03:17` - `npm run ci` の出力（先頭と末尾）:
-
-```
-> ci
-> npm run lint && npm run lint:docs && npm run test:unit
-
-> lint
-> eslint .
-
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-
-> test:unit
-> node tools/run-unit-tests.mjs
-```
-
-```
-1..566
-# tests 566
-# suites 0
-# pass 566
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 120549.550479
-```
+- `03:17` - `npm run ci: exit 0`。
 - `03:18` - 指名どおり `codex-reviewer` に依頼した。出力:
 
 ```
@@ -113,26 +77,5 @@ base（origin/main）の loop-core CLI で判定します。
 # todo 0
 # duration_ms 66.110736
 ```
-- `04:55` - `npm run ci` の出力（先頭と末尾）:
-
-```
-> lint
-> eslint .
-
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-```
-
-```
-1..571
-# tests 571
-# suites 0
-# pass 571
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 120507.750385
-```
+- `04:55` - `npm run ci: exit 0`。
+- `05:03` - PR #104 の progress 共通検証 lint に先立ち、docs lint 成功文と `npm run ci` / `N>=50` の集計 dump をこの進捗から外した。作業固有の `node --test tests/check-actions-stuck.test.mjs` の集計は残す。エージェントは `allow-protected-change` を付けない。

@@ -216,6 +216,26 @@ test('定性行はスキップし、整数行の不一致だけ失敗する', (t
   assert.equal(result.rows.filter((r) => r.status === 'fail').length, 0);
 });
 
+test('CLI: stdout 不一致は非 0 でどの行かを示し、期待値は書き換えない', (t) => {
+  const root = makeRoot(t);
+  const spec = specWithExamples(
+    '検査',
+    [
+      '| 操作または入力 | 期待結果 |',
+      '|---|---|',
+      '| `echo 99` | `0` |',
+    ].join('\n'),
+  );
+  write(root, 'task/0061-mismatch/spec.md', spec);
+  const r = runCli('0061-mismatch', { cwd: root });
+  assert.notEqual(r.status, 0);
+  const out = `${r.stdout}${r.stderr}`;
+  assert.match(out, /echo 99/);
+  assert.match(out, /期待: 0/);
+  assert.match(out, /実際: 99/);
+  assert.equal(fs.readFileSync(path.join(root, 'task/0061-mismatch/spec.md'), 'utf8'), spec);
+});
+
 test('stdout 不一致は終了コード非 0。どの行かを示し、期待値は書き換えない', (t) => {
   const root = makeRoot(t);
   const spec = specWithExamples(

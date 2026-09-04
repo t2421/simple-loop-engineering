@@ -2,7 +2,7 @@
 
 - **Target Spec:** `task/0060-spec-examples-eval/spec.md`
 - **Branch:** `feat/0060-spec-examples-eval`
-- **PR:** `未作成`
+- **PR:** https://github.com/t2421/simple-loop-engineering/pull/102
 - **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/check-examples.test.mjs`)
 - [x] 実装 (`tools/check-examples.mjs`、`loop-core/ledger/archive.mjs` への配線)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -127,3 +127,29 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 ```
 
 `node --test tests/check-examples.test.mjs` は `# tests 13` / `# pass 13` / `# fail 0`。0052 spec の期待値は書き換えていない。
+- `03:08` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/102 。`allow-protected-change` は付けていない。
+- `03:10` - CLI の不一致ケース（stderr に当該行と期待/実際）を `tests/check-examples.test.mjs` に足した。`archive` の例検査が throw したら `{ok:false}` で止める。`node --test tests/check-examples.test.mjs` は `# tests 14` / `# pass 14` / `# fail 0`。
+
+```
+$ npm run ci
+
+> ci
+> npm run lint && npm run lint:docs && npm run test:unit
+
+> lint
+> eslint .
+
+> lint:docs
+> node loop-core/bin/loop.mjs lint-docs
+
+docs の形式違反はありません（56 件の作業ディレクトリを確認）。
+
+> test:unit
+> node tools/run-unit-tests.mjs
+
+# tests 567
+# pass 567
+# fail 0
+```
+
+- `03:11` - Verify (外部): `codex-reviewer` は `codex` 不在（exit 127）で承認しない。差分は読んで Critical 0 / High 0 と書いたが、CLI 不在を代替承認にしてはいけないとのこと。`grok-reviewer` は `cursor-agent` 不在（exit 127）でレビュー未実施・承認しない。レビューチェックは開けたまま。PR は作成済み。

@@ -293,7 +293,12 @@ export async function archive(
   // 評価可能な「例」が落ちている作業をアーカイブすると、Done の自己申告が残る。
   // 検査が非 0 なら、ここまで一切ファイルを変更していない状態で止める。
   // 評価可能な行が 0 件（既存 archive テストの fixture を含む）は成功とし、止めない。
-  const examples = inspectExamples(name, { root });
+  let examples;
+  try {
+    examples = inspectExamples(name, { root });
+  } catch (err) {
+    return { ok: false, reason: `「例」の検査を実行できませんでした: ${err.message}` };
+  }
   if (!examples.ok) {
     return { ok: false, reason: examples.reason ?? '「例」の検査が失敗しました' };
   }

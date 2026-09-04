@@ -2,8 +2,8 @@
 
 - **Target Spec:** `task/0059-blocked-auto-unblock/spec.md`
 - **Branch:** `feat/0059-blocked-auto-unblock`
-- **PR:** `未作成`
-- **Status:** `In Progress` (Phase: `Verify (自己)`)
+- **PR:** `https://github.com/t2421/simple-loop-engineering/pull/101`
+- **Status:** `In Progress` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -14,7 +14,7 @@
 - [x] テストの作成 (`tests/start-task.test.mjs`。置くならヘルパー用の新規テスト)
 - [x] 実装 (`loop-core/ledger/start-task.mjs`、置くなら同じ ledger の小さなヘルパー)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
-- [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
+- [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
@@ -68,3 +68,4 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 ```
 
 `loop-core/bin/loop.mjs`・`package.json`・凍結ヘルパー・`loop.manifest.json` は差分に無い。#83 / #90 には触れていない。
+- `03:10` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/101 。進捗の **PR** に書いた。Verify (外部) へ。

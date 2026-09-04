@@ -3,16 +3,16 @@
 - **Target Spec:** `task/0046-ci-evidence-freshness/spec.md`
 - **Branch:** `feat/0046-ci-evidence-freshness`
 - **PR:** `未作成`
-- **Status:** `Not Started` (Phase: `Plan`)
+- **Status:** `In Progress` (Phase: `Implement`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
 
 構文チェックとテスト実行はここに書かない。`npm run ci` が強制する。
 
-- [ ] Specの要件・受け入れ条件の確認
-- [ ] テストの作成 (任意。検証の主は定義の grep と既存 `tests/agent-defs.test.mjs`。既存テストは変更しない。新規テストを置くなら `tests/` への追加のみ)
-- [ ] 実装 (`CLAUDE.md`「トークンコスト」、`.claude/agents/codex-reviewer.md`「テスト結果の扱い」)
+- [x] Specの要件・受け入れ条件の確認
+- [x] テストの作成 (任意。検証の主は定義の grep と既存 `tests/agent-defs.test.mjs`。既存テストは変更しない。新規テストを置くなら `tests/` への追加のみ)
+- [x] 実装 (`CLAUDE.md`「トークンコスト」、`.claude/agents/codex-reviewer.md`「テスト結果の扱い」)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [ ] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
 - [ ] PRマージ後のアーカイブ
@@ -29,3 +29,4 @@
 docs の形式違反はありません（56 件の作業ディレクトリを確認）。
 ```
 - `00:50` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/93 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
+- `03:04` - `node loop-core/bin/loop.mjs start-task` が `0046-ci-evidence-freshness` を選び、ブランチ `feat/0046-ci-evidence-freshness` の worktree を作成した。実装: `CLAUDE.md`「トークンコスト」と `.claude/agents/codex-reviewer.md`「テスト結果の扱い」に鮮度の 3 事実（取得 SHA がレビュー対象 HEAD と一致、未コミット付き取得はその旨、一致が確認できないときは承認しない）を追加。0047 の再実行禁止・実測 CI 必須・スキーマ 4 項目の順は残した。任意の新規テスト `tests/ci-evidence-freshness.test.mjs` を追加（既存 `tests/agent-defs.test.mjs` は未変更）。

@@ -52,6 +52,17 @@ export const STATUS_VALUES = Object.freeze(['Not Started', 'In Progress', 'Block
  */
 export const COMPLEXITY_VALUES = Object.freeze(['S', 'M', 'L']);
 
+/**
+ * ユニットテスト全件集計とみなす `# tests N` の下限。
+ *
+ * 作業固有の `node --test <ファイル>` は数十件にしかならない。コマンド名が
+ * 無い全件貼付（`# tests 482` など）を拾うために使う。
+ */
+export const SHARED_UNIT_TEST_COUNT_FLOOR = 50;
+
+/** docs lint の成功文。作業固有の検証にはならないので、文脈を問わず違反にする */
+const DOCS_LINT_SUCCESS_RE = /docs の形式違反はありません（\d+ 件の作業ディレクトリを確認）。/;
+
 /** backlog の「完了条件」節はこの 1 行で始まる（仕様ではなく候補である印） */
 export const BACKLOG_INCOMPLETE_LINE = '未確定（incomplete）。昇格時に埋める。';
 
@@ -322,6 +333,202 @@ function readIfExists(absPath) {
 }
 
 /**
+ * 1 行から `# tests N` / `# pass N` / `# fail N` を読む。
+ *
+ * @param {string} text
+ * @returns {{tests: number | null, pass: number | null, fail: number | null}}
+ */
+function summaryTokens(text) {
+  const tests = /# tests (\d+)/.exec(text);
+  const pass = /# pass (\d+)/.exec(text);
+  const fail = /# fail (\d+)/.exec(text);
+  return {
+    tests: tests ? Number(tests[1]) : null,
+    pass: pass ? Number(pass[1]) : null,
+    fail: fail ? Number(fail[1]) : null,
+  };
+}
+
+/**
+ * 同一行または行番号が連続する行にある集計クラスタを列挙する。
+ * `# tests` を欠く断片はクラスタではない。
+ *
+ * @param {Array<{number: number, text: string}>} lines
+ * @returns {Array<{line: number, tests: number}>}
+ */
+function findSummaryClusters(lines) {
+  const clusters = [];
+  const parsed = lines.map((line) => ({ ...line, ...summaryTokens(line.text) }));
+  let i = 0;
+  while (i < parsed.length) {
+    const row = parsed[i];
+    if (row.tests !== null && row.pass !== null && row.fail !== null) {
+      clusters.push({ line: row.number, tests: row.tests });
+      i += 1;
+      continue;
+    }
+    if (row.tests === null && row.pass === null && row.fail === null) {
+      i += 1;
+      continue;
+    }
+    const run = [row];
+    let j = i + 1;
+    while (j < parsed.length) {
+      const next = parsed[j];
+      if (next.tests === null && next.pass === null && next.fail === null) break;
+      if (next.number !== run[run.length - 1].number + 1) break;
+      if (next.tests !== null && next.pass !== null && next.fail !== null) break;
+      run.push(next);
+      j += 1;
+    }
+    const tests = run.find((item) => item.tests !== null);
+    const pass = run.find((item) => item.pass !== null);
+    const fail = run.find((item) => item.fail !== null);
+    if (tests && pass && fail) {
+      clusters.push({ line: tests.number, tests: tests.tests });
+    }
+    i = j;
+  }
+  return clusters;
+}
+
+/**
+ * フェンス内外の文脈を集める。フェンス内はそのフェンス全体、フェンス外は
+ * 試行ログ項目（`- ` で始まる 1 項目と次の項目または見出しまでの継続行）
+ * または同じ段落。
+ *
+ * @param {string} markdown
+ * @returns {Array<{lines: Array<{number: number, text: string}>}>}
+ */
+function collectVerificationContexts(markdown) {
+  const rows = markdown.split('\n');
+  const fences = [];
+  const outside = [];
+  let fence = null;
+  let fenceLines = [];
+
+  rows.forEach((text, index) => {
+    const number = index + 1;
+    const opener = /^\s*(```+|~~~+)/.exec(text);
+    if (opener) {
+      const mark = opener[1][0];
+      if (fence === null) {
+        fence = mark;
+        fenceLines = [];
+      } else if (fence === mark) {
+        fences.push({ lines: fenceLines });
+        fence = null;
+        fenceLines = [];
+      }
+      return;
+    }
+    if (fence !== null) {
+      fenceLines.push({ number, text });
+      return;
+    }
+    outside.push({ number, text });
+  });
+  if (fence !== null) fences.push({ lines: fenceLines });
+
+  const outsideGroups = [];
+  let current = null;
+  let currentKind = null;
+  const flush = () => {
+    if (current && current.length > 0) outsideGroups.push({ lines: current });
+    current = null;
+    currentKind = null;
+  };
+
+  for (const line of outside) {
+    if (/^#{1,6}\s/.test(line.text)) {
+      flush();
+      continue;
+    }
+    if (/^- /.test(line.text)) {
+      flush();
+      currentKind = 'item';
+      current = [line];
+      continue;
+    }
+    if (line.text.trim() === '') {
+      if (currentKind === 'item' && current) current.push(line);
+      else flush();
+      continue;
+    }
+    if (current) {
+      current.push(line);
+      continue;
+    }
+    currentKind = 'paragraph';
+    current = [line];
+  }
+  flush();
+
+  return [...fences, ...outsideGroups];
+}
+
+/**
+ * 同じ文脈に作業固有の `node --test <ファイル>` があるか。
+ * ファイル指定の無い素の `node --test` は対象にしない。
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function hasTaskSpecificNodeTest(text) {
+  if (!/\bnode\s+--test\b/.test(text)) return false;
+  if (/\S+\.test\.mjs\b/.test(text)) return true;
+  return /(?:^|[\s`'"(])tests\/[^\s/`')]+?\.[A-Za-z0-9]+\b/.test(text);
+}
+
+/**
+ * 同じ文脈に共通検証コマンドがあるか。
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function hasSharedUnitCommand(text) {
+  return /\bnpm run ci\b/.test(text) || /\bnpm run test:unit\b/.test(text);
+}
+
+/**
+ * progress 本文に共通検証の dump が無いかを判定する純関数。
+ *
+ * **この検査だけはコードフェンスの内側と外側の両方を見る。** 既存の走査は
+ * `linesOutsideFences` の上に載せてフェンス内の偽違反を避けるが、共通検証の
+ * 貼付はフェンス内が本体であり、フェンス外の散文にも埋め込まれる
+ * （`task/archive/0053-stop-hook-block-exit-code/progress.md` 66 行目）。
+ * 両方を見たうえで、作業固有の証跡と切り分ける。
+ *
+ * `checkProgress` は `relPath` が `task/archive/` で始まる進捗にはこの関数を
+ * 呼ばない。アーカイブ済みの貼付は範囲外である。
+ *
+ * @param {string} progressMarkdown
+ * @returns {string[]} 違反の理由。空なら通過
+ */
+export function checkProgressNoSharedVerification(progressMarkdown) {
+  const reasons = [];
+  const rows = progressMarkdown.split('\n');
+  rows.forEach((text, index) => {
+    if (DOCS_LINT_SUCCESS_RE.test(text)) {
+      reasons.push(`${index + 1} 行目: 共通の検証の出力（docs lint の成功文）を progress に貼っている`);
+    }
+  });
+
+  for (const context of collectVerificationContexts(progressMarkdown)) {
+    const body = context.lines.map((line) => line.text).join('\n');
+    if (hasTaskSpecificNodeTest(body)) continue;
+    const shared = hasSharedUnitCommand(body);
+    for (const cluster of findSummaryClusters(context.lines)) {
+      if (shared || cluster.tests >= SHARED_UNIT_TEST_COUNT_FLOOR) {
+        reasons.push(`${cluster.line} 行目: 共通の検証の出力（ユニットテストの集計）を progress に貼っている`);
+      }
+    }
+  }
+
+  return reasons;
+}
+
+/**
  * progress.md を検証する純関数。
  *
  * @param {object} input
@@ -360,6 +567,10 @@ export function checkProgress({ relPath, markdown, specExists }) {
 
   for (const box of findBadCheckboxes(markdown)) {
     reasons.push(`${box.line} 行目: チェックボックスが \`${box.token}\`（\`[ ]\`・\`[/]\`・\`[x]\` のいずれか）`);
+  }
+
+  if (!relPath.startsWith('task/archive/')) {
+    reasons.push(...checkProgressNoSharedVerification(markdown));
   }
 
   return reasons;

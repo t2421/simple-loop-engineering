@@ -1,9 +1,9 @@
 # Progress: `0060-spec-examples-eval`
 
-- **Target Spec:** `task/0060-spec-examples-eval/spec.md`
+- **Target Spec:** `task/archive/0060-spec-examples-eval/spec.md`
 - **Branch:** `feat/0060-spec-examples-eval`
 - **PR:** https://github.com/t2421/simple-loop-engineering/pull/102
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Done`
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`tools/check-examples.mjs`、`loop-core/ledger/archive.mjs` への配線)
 - [ ] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に URL を書く。見た目の変更なら該当箇所のスクリーンキャプチャを本文に添付する。リポジトリには置かない）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

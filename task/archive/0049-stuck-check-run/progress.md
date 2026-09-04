@@ -1,9 +1,9 @@
 # Progress: `0049-stuck-check-run`
 
-- **Target Spec:** `task/0049-stuck-check-run/spec.md`
+- **Target Spec:** `task/archive/0049-stuck-check-run/spec.md`
 - **Branch:** `feat/0049-stuck-check-run`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/103`
-- **Status:** `In Progress` (Phase: `Record`)
+- **Status:** `Done`
 - **Complexity:** `L`
 
 ## タスクチェックリスト
@@ -15,7 +15,7 @@
 - [x] 実装 (`loop-core/gate/check-actions.mjs`)
 - [/] レビューサブエージェント (`codex-reviewer`) の承認取得
 - [x] PR作成（進捗の **PR** に実装 PR の URL を書く。`allow-protected-change` ラベルを付ける。ラベル無しで `protected-paths` が失敗し、ラベル付きで成功することを Actions の結果で確認する）
-- [ ] PRマージ後のアーカイブ
+- [x] PRマージ後のアーカイブ
 
 ## 試行ログ・エラー履歴
 

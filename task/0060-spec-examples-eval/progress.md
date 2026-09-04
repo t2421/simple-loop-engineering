@@ -125,3 +125,4 @@ check-actions: HEAD のチェックはすべて成功しています。
 ```
 - `04:54` - Copilot #102「Changes recommended」対応。`spawnSync(..., { shell: true })` を廃止し、allowlist（grep / wc / echo / true / false、`node tools/check-examples.mjs`）の argv を `shell: false` で実行。`;` `&&` `||` リダイレクト コマンド置換 `rm` は実行せず拒否。stdout-int の非 0 失敗に stderr を含め、不一致 detail は `JSON.stringify`。`node --test tests/check-examples.test.mjs` は `# tests 17` / `# pass 17` / `# fail 0`。`npm run ci: exit 0`。0052 / 0046 / 0099 の期待は維持。
 - `05:03` - 進捗から共通検証の dump（lint:docs 成功文、`npm run ci` / `test:unit` の `# tests` 全件集計）を外した。作業固有の grep・check-examples CLI・`node --test tests/check-examples.test.mjs` の小件数は残す。
+- `05:12` - Copilot #102 再指摘。`isAllowedCommand` が grep/wc の絶対パスと `..` セグメントを拒否。`splitPipelineStages` は空段（`echo 1 | | wc` / 末尾 `|`）を失敗にする。実行せず拒否するテストを追加。`node --test tests/check-examples.test.mjs` は `# tests 21` / `# pass 21` / `# fail 0`。

@@ -17,8 +17,10 @@ import {
   classifyRow,
   extractCommand,
   formatReport,
+  isAllowedCommand,
   parseSafeCommand,
   parseStdoutInt,
+  splitPipelineStages,
 } from '../tools/check-examples.mjs';
 import { archive } from '../loop-core/ledger/archive.mjs';
 
@@ -318,6 +320,28 @@ test('parseSafeCommand: grep と grep|wc は argv になり、危険なトーク
   assert.equal(parseSafeCommand('/bin/rm -rf .').ok, false);
   assert.equal(parseSafeCommand('node -e "process.exit(0)"').ok, false);
   assert.equal(parseSafeCommand('node tools/check-examples.mjs 0099-missing').ok, true);
+  assert.equal(parseSafeCommand('grep -n secret /etc/passwd').ok, false);
+  assert.equal(parseSafeCommand('grep -c x ../outside').ok, false);
+  assert.equal(parseSafeCommand('echo 1 | | wc -l').ok, false);
+  assert.equal(parseSafeCommand('echo 1 |').ok, false);
+});
+
+test('isAllowedCommand: grep/wc の絶対パスと .. セグメントを拒否する', () => {
+  assert.equal(isAllowedCommand('grep', ['-n', 'secret', '/etc/passwd']), false);
+  assert.equal(isAllowedCommand('grep', ['-c', 'x', '../outside']), false);
+  assert.equal(isAllowedCommand('grep', ['-c', 'x', 'foo/../bar']), false);
+  assert.equal(isAllowedCommand('wc', ['-l', '/etc/passwd']), false);
+  assert.equal(isAllowedCommand('grep', ['-c', '^x', '.claude/skills/loop-port/SKILL.md']), true);
+  assert.equal(isAllowedCommand('echo', ['/etc/passwd']), true);
+});
+
+test('splitPipelineStages: 空のパイプ段は失敗し、黙って落とさない', () => {
+  assert.equal(splitPipelineStages('echo 1 | | wc -l').ok, false);
+  assert.equal(splitPipelineStages('echo 1 |').ok, false);
+  assert.equal(splitPipelineStages('| echo 1').ok, false);
+  const ok = splitPipelineStages('echo 1 | wc -l');
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.stages, ['echo 1', 'wc -l']);
 });
 
 test('危険なコマンドは実行せず拒否する', (t) => {
@@ -347,6 +371,65 @@ test('危険なコマンドは実行せず拒否する', (t) => {
   for (const row of result.rows) {
     assert.equal(row.status, 'fail', row.input);
     assert.match(row.detail, /許可されていない|危険なトークン/);
+  }
+});
+
+test('grep の絶対パスと .. は実行せず拒否する', (t) => {
+  const root = makeRoot(t);
+  const token = `LEAK_${path.basename(root)}`;
+  const absLeak = path.join(os.tmpdir(), `${token}.txt`);
+  const outsideName = `${token}-outside.txt`;
+  const outside = path.join(root, '..', outsideName);
+  t.after(() => {
+    fs.rmSync(absLeak, { force: true });
+    fs.rmSync(outside, { force: true });
+  });
+  fs.writeFileSync(absLeak, `${token}\n`);
+  fs.writeFileSync(outside, `${token}\n`);
+  write(
+    root,
+    'task/0061-paths/spec.md',
+    specWithExamples(
+      'paths',
+      [
+        '| 操作または入力 | 期待結果 |',
+        '|---|---|',
+        `| \`grep -c ${token} ${absLeak}\` | \`1\` |`,
+        `| \`grep -c ${token} ../${outsideName}\` | \`1\` |`,
+      ].join('\n'),
+    ),
+  );
+  const result = checkExamples('0061-paths', { root });
+  assert.equal(result.ok, false);
+  assert.equal(result.rows.length, 2);
+  for (const row of result.rows) {
+    assert.equal(row.status, 'fail', row.input);
+    assert.match(row.detail, /リポジトリ外/);
+    assert.doesNotMatch(row.detail, /stdout/);
+  }
+});
+
+test('空のパイプ段は実行せず失敗する', (t) => {
+  const root = makeRoot(t);
+  write(
+    root,
+    'task/0061-empty-pipe/spec.md',
+    specWithExamples(
+      'empty-pipe',
+      [
+        '| 操作または入力 | 期待結果 |',
+        '|---|---|',
+        '| `echo 1 \\| \\| wc -l` | `1` |',
+        '| `echo 1 \\|` | 終了コード 0 |',
+      ].join('\n'),
+    ),
+  );
+  const result = checkExamples('0061-empty-pipe', { root });
+  assert.equal(result.ok, false);
+  assert.equal(result.rows.length, 2);
+  for (const row of result.rows) {
+    assert.equal(row.status, 'fail', row.input);
+    assert.match(row.detail, /空のパイプ段/);
   }
 });
 

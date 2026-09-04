@@ -9,6 +9,7 @@
  * 実行は allowlist（grep / wc / echo / true / false、および
  * `node tools/check-examples.mjs`）の argv を `shell: false` で回す。
  * `;` `&&` リダイレクト コマンド置換 `rm` などは実行せず拒否する。
+ * grep / wc の絶対パスと `..` セグメントも拒否する（リポジトリ外を読ませない）。
  */
 
 import fs from 'node:fs';
@@ -265,7 +266,7 @@ export function classifyRow(input, expected) {
  * @param {string} command
  * @returns {{ ok: true, stages: string[] } | { ok: false, reason: string }}
  */
-function splitPipelineStages(command) {
+export function splitPipelineStages(command) {
   const stages = [];
   let cur = '';
   let quote = null;
@@ -295,11 +296,13 @@ function splitPipelineStages(command) {
     return { ok: false, reason: '引用符が閉じていません' };
   }
   stages.push(cur.trim());
-  const nonempty = stages.filter((s) => s !== '');
-  if (nonempty.length === 0) {
+  if (stages.length === 0 || stages.every((s) => s === '')) {
     return { ok: false, reason: 'コマンドが空です' };
   }
-  return { ok: true, stages: nonempty };
+  if (stages.some((s) => s === '')) {
+    return { ok: false, reason: '空のパイプ段があります' };
+  }
+  return { ok: true, stages };
 }
 
 /**
@@ -355,6 +358,20 @@ function tokenizeStage(stage) {
 }
 
 /**
+ * grep / wc の引数がリポジトリ外を指すか。絶対パスと `..` セグメントを拒否する。
+ *
+ * @param {string} arg
+ * @returns {boolean}
+ */
+export function isUnsafePathArg(arg) {
+  if (typeof arg !== 'string' || arg === '') return false;
+  if (path.isAbsolute(arg)) return true;
+  if (arg.startsWith('/') || arg.startsWith('\\')) return true;
+  if (/^[A-Za-z]:[\\/]/.test(arg)) return true;
+  return arg.split(/[\\/]/).includes('..');
+}
+
+/**
  * 段の先頭コマンドが許可された読み取り系かを判定する純関数。
  *
  * @param {string} file
@@ -365,7 +382,12 @@ export function isAllowedCommand(file, args) {
   if (typeof file !== 'string' || file === '') return false;
   if (file.includes('/') || file.includes('\\')) return false;
   if (file === 'rm') return false;
-  if (ALLOWED_COMMANDS.includes(file)) return true;
+  if (ALLOWED_COMMANDS.includes(file)) {
+    if ((file === 'grep' || file === 'wc') && (args ?? []).some(isUnsafePathArg)) {
+      return false;
+    }
+    return true;
+  }
   if (file === 'node') {
     const script = args[0];
     if (script !== 'tools/check-examples.mjs') return false;
@@ -396,6 +418,9 @@ export function parseSafeCommand(command) {
     if (!tokens.ok) return tokens;
     const [file, ...args] = tokens.argv;
     if (!isAllowedCommand(file, args)) {
+      if ((file === 'grep' || file === 'wc') && args.some(isUnsafePathArg)) {
+        return { ok: false, reason: 'リポジトリ外を指すパスは許可されていません' };
+      }
       return { ok: false, reason: `許可されていないコマンドです: ${file}` };
     }
     pipeline.push({ file, args });

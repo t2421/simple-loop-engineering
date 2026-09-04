@@ -468,19 +468,6 @@ function collectVerificationContexts(markdown) {
 }
 
 /**
- * 同じ文脈に作業固有の `node --test <ファイル>` があるか。
- * ファイル指定の無い素の `node --test` は対象にしない。
- *
- * @param {string} text
- * @returns {boolean}
- */
-function hasTaskSpecificNodeTest(text) {
-  if (!/\bnode\s+--test\b/.test(text)) return false;
-  if (/\S+\.test\.mjs\b/.test(text)) return true;
-  return /(?:^|[\s`'"(])tests\/[^\s/`')]+?\.[A-Za-z0-9]+\b/.test(text);
-}
-
-/**
  * 同じ文脈に共通検証コマンドがあるか。
  *
  * @param {string} text
@@ -499,6 +486,10 @@ function hasSharedUnitCommand(text) {
  * （`task/archive/0053-stop-hook-block-exit-code/progress.md` 66 行目）。
  * 両方を見たうえで、作業固有の証跡と切り分ける。
  *
+ * 作業固有の `node --test <ファイル>` だけの小件集計は違反にしない。
+ * 同じ文脈に `npm run ci` / `npm run test:unit` がある、または `# tests N` が
+ * `SHARED_UNIT_TEST_COUNT_FLOOR` 以上なら、作業固有の証跡があっても違反にする。
+ *
  * `checkProgress` は `relPath` が `task/archive/` で始まる進捗にはこの関数を
  * 呼ばない。アーカイブ済みの貼付は範囲外である。
  *
@@ -516,7 +507,6 @@ export function checkProgressNoSharedVerification(progressMarkdown) {
 
   for (const context of collectVerificationContexts(progressMarkdown)) {
     const body = context.lines.map((line) => line.text).join('\n');
-    if (hasTaskSpecificNodeTest(body)) continue;
     const shared = hasSharedUnitCommand(body);
     for (const cluster of findSummaryClusters(context.lines)) {
       if (shared || cluster.tests >= SHARED_UNIT_TEST_COUNT_FLOOR) {

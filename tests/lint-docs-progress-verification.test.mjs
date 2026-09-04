@@ -291,6 +291,29 @@ test('# tests を欠く断片は集計クラスタではない', (t) => {
   assert.deepEqual(lintDocs(root), []);
 });
 
+test('同じ文脈に node --test <ファイル> と npm run ci の集計が混在したら違反', (t) => {
+  const root = makeRoot(t);
+  const extra = [
+    '',
+    '- `12:00` - 専用テストと共通検証を同じフェンスに貼った',
+    '',
+    '```',
+    'node --test tests/foo.test.mjs',
+    'ok 1 - foo',
+    '# tests 6  # pass 6  # fail 0',
+    'npm run ci',
+    '# tests 8  # pass 8  # fail 0',
+    '```',
+    '',
+  ].join('\n');
+  const progressPath = putTask(root, '0030-a', { extra });
+  const reasons = dumpReasons(lintDocs(root), progressPath);
+  assert.ok(
+    reasons.some((reason) => /ユニットテストの集計/.test(reason)),
+    JSON.stringify(reasons),
+  );
+});
+
 test('同じ文脈の npm run test:unit と小件集計は違反', (t) => {
   const root = makeRoot(t);
   const extra = [

@@ -80,3 +80,24 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 
 npx `@openai/codex review --base main` は `401 Unauthorized`（未ログイン）。エージェント定義どおり独自レビューを承認の代用にしない。チェックは `[/]` のまま。進捗は Done にしない。アーカイブしない。
 - `03:20` - 実装 PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/103 。**人間が `allow-protected-change` を付ける。** エージェントはラベルを付けない。ラベル無しでは Guard `protected-paths` が `loop-core/gate/check-actions.mjs` を違反として失敗する（正しい挙動・例 9）。
+- `03:24` - 例 9 の Actions 実測（ラベル無し、HEAD `2fd8eb8`）。`gh pr checks 103` の出力:
+
+```
+protected-paths	fail	4s	https://github.com/t2421/simple-loop-engineering/actions/runs/33832577019/job/100898474365	
+e2e	pass	9s	https://github.com/t2421/simple-loop-engineering/actions/runs/33832577014/job/100898474177	
+preview	pass	7m22s	https://github.com/t2421/simple-loop-engineering/actions/runs/33832577015/job/100898474570	
+progress-coupling	pass	4s	https://github.com/t2421/simple-loop-engineering/actions/runs/33832577019/job/100898474198	
+verify	pass	1m34s	https://github.com/t2421/simple-loop-engineering/actions/runs/33832577014/job/100898474303	
+```
+
+`protected-paths` ジョブ（run 33832577019）のログ。`PR_LABELS: []`。違反に `loop-core/gate/check-actions.mjs` が出る:
+
+```
+base（origin/main）の loop-core CLI で判定します。
+保護パスの変更を 1 件検知しました:
+  - loop-core/gate/check-actions.mjs: 検証の委譲先は変更も移動もできない
+
+変更が正当なら、改訂内容と理由を spec に書いたうえで PR に allow-protected-change ラベルを付けてください。
+```
+
+例 10（ラベル付きで `protected-paths` 成功）は人間が `allow-protected-change` を付けたあとの再実行を待つ。

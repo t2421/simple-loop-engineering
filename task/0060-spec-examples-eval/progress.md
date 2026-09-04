@@ -28,14 +28,6 @@ $ grep -c '^### 2\.' .claude/skills/loop-port/SKILL.md
 ```
 
 終了コード 0。0052 の期待 `18` と一致。期待値は書き換えていない。`node tools/check-examples.mjs` は未実装（docs 昇格のため存在しない）。`0046-ci-evidence-freshness` は backlog のまま「例」が `<昇格時に記入>` で、この検査の必須対象にしない。`0099-missing` は task / archive / backlog のどれにも無い。
-- `00:50` - `npm run lint:docs` の出力:
-
-```
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-```
 - `00:52` - 昇格用 docs PR を作成した: https://github.com/t2421/simple-loop-engineering/pull/98 。進捗の **PR** には書かない（実装 PR 用）。人間のマージを待つ。
 - `01:03` - push した HEAD `916e32a` の GitHub Actions:
 
@@ -105,25 +97,7 @@ $ git diff main --stat
 （未追跡の `tools/check-examples.mjs`・`tests/check-examples.test.mjs`・本 progress は `git add` 前のため `--stat` に出ていない。）
 
 ```
-$ npm run ci
-
-> ci
-> npm run lint && npm run lint:docs && npm run test:unit
-
-> lint
-> eslint .
-
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-
-> test:unit
-> node tools/run-unit-tests.mjs
-
-# tests 566
-# pass 566
-# fail 0
+$ npm run ci: exit 0
 ```
 
 `node --test tests/check-examples.test.mjs` は `# tests 13` / `# pass 13` / `# fail 0`。0052 spec の期待値は書き換えていない。
@@ -131,25 +105,7 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 - `03:10` - CLI の不一致ケース（stderr に当該行と期待/実際）を `tests/check-examples.test.mjs` に足した。`archive` の例検査が throw したら `{ok:false}` で止める。`node --test tests/check-examples.test.mjs` は `# tests 14` / `# pass 14` / `# fail 0`。
 
 ```
-$ npm run ci
-
-> ci
-> npm run lint && npm run lint:docs && npm run test:unit
-
-> lint
-> eslint .
-
-> lint:docs
-> node loop-core/bin/loop.mjs lint-docs
-
-docs の形式違反はありません（56 件の作業ディレクトリを確認）。
-
-> test:unit
-> node tools/run-unit-tests.mjs
-
-# tests 567
-# pass 567
-# fail 0
+$ npm run ci: exit 0
 ```
 
 - `03:11` - Verify (外部): `codex-reviewer` は `codex` 不在（exit 127）で承認しない。差分は読んで Critical 0 / High 0 と書いたが、CLI 不在を代替承認にしてはいけないとのこと。`grok-reviewer` は `cursor-agent` 不在（exit 127）でレビュー未実施・承認しない。レビューチェックは開けたまま。PR は作成済み。
@@ -167,4 +123,5 @@ preview	pass	2m5s	https://github.com/t2421/simple-loop-engineering/actions/runs/
 $ node loop-core/bin/loop.mjs check-actions
 check-actions: HEAD のチェックはすべて成功しています。
 ```
-- `04:54` - Copilot #102「Changes recommended」対応。`spawnSync(..., { shell: true })` を廃止し、allowlist（grep / wc / echo / true / false、`node tools/check-examples.mjs`）の argv を `shell: false` で実行。`;` `&&` `||` リダイレクト コマンド置換 `rm` は実行せず拒否。stdout-int の非 0 失敗に stderr を含め、不一致 detail は `JSON.stringify`。`node --test tests/check-examples.test.mjs` は `# tests 17` / `# pass 17` / `# fail 0`。`npm run ci` は `# tests 570` / `# pass 570` / `# fail 0`。0052 / 0046 / 0099 の期待は維持。
+- `04:54` - Copilot #102「Changes recommended」対応。`spawnSync(..., { shell: true })` を廃止し、allowlist（grep / wc / echo / true / false、`node tools/check-examples.mjs`）の argv を `shell: false` で実行。`;` `&&` `||` リダイレクト コマンド置換 `rm` は実行せず拒否。stdout-int の非 0 失敗に stderr を含め、不一致 detail は `JSON.stringify`。`node --test tests/check-examples.test.mjs` は `# tests 17` / `# pass 17` / `# fail 0`。`npm run ci: exit 0`。0052 / 0046 / 0099 の期待は維持。
+- `05:03` - 進捗から共通検証の dump（lint:docs 成功文、`npm run ci` / `test:unit` の `# tests` 全件集計）を外した。作業固有の grep・check-examples CLI・`node --test tests/check-examples.test.mjs` の小件数は残す。

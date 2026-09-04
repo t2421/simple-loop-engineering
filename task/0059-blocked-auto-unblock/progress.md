@@ -3,7 +3,7 @@
 - **Target Spec:** `task/0059-blocked-auto-unblock/spec.md`
 - **Branch:** `feat/0059-blocked-auto-unblock`
 - **PR:** `https://github.com/t2421/simple-loop-engineering/pull/101`
-- **Status:** `In Progress` (Phase: `Verify (外部)`)
+- **Status:** `Blocked` (Phase: `Verify (外部)`)
 - **Complexity:** `M`
 
 ## タスクチェックリスト
@@ -103,3 +103,24 @@ docs の形式違反はありません（56 件の作業ディレクトリを確
 ```
 
 終了コード 0。
+- `03:12` - Verify (外部) 1 回目。`codex` は PATH に無い（`command not found`、終了コード 127）。規定どおり承認しない。`--uncommitted` にはフォールバックしていない。
+- `03:12` - Verify (外部) 2 回目。`npx --yes @openai/codex review --base main` は 401 Unauthorized（Missing bearer or basic authentication）。差分は見ていない。エージェント定義どおり **承認しない**。Status を `Blocked` にし、人間の Codex ログインまたは照合結果の扱い判断を待つ。実装差分は直していない。コマンド出力:
+
+```
+OpenAI Codex v0.153.2
+--------
+workdir: /workspace/.worktrees/feat/0059-blocked-auto-unblock
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: read-only
+session id: 01a06a66-e40e-7ec3-9421-3aba548dfc3d
+--------
+user
+changes against 'main'
+ERROR: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses
+codex
+Review was interrupted. Please re-run /review and wait for it to complete.
+```
+
+終了コード 1。レビュー不承認は通算 2 回（上限 5）。追加の Fix は実装側には無い。PR は https://github.com/t2421/simple-loop-engineering/pull/101 。
